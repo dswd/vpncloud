@@ -1,8 +1,6 @@
 use std::fs;
 use std::io::{Read, Write, Result as IoResult, Error as IoError};
-use std::os::unix::io::AsRawFd;
-
-use libc;
+use std::os::unix::io::{AsRawFd, FromRawFd};
 
 extern {
     fn setup_tap_device(fd: i32, ifname: *mut u8) -> i32;
@@ -20,17 +18,15 @@ impl TapDevice {
         ifname_string.push_str(ifname);
         ifname_string.push('\0');
         let mut ifname_c = ifname_string.into_bytes();
-        let mut res: i32;
-        unsafe {
-            res = setup_tap_device(fd.as_raw_fd(), ifname_c.as_mut_ptr());
-            if res == 0 {
-                res = libc::fcntl(fd.as_raw_fd(), libc::consts::os::posix01::F_SETFL, libc::consts::os::extra::O_NONBLOCK);
-            }
-        }
-        match res {
+        match unsafe { setup_tap_device(fd.as_raw_fd(), ifname_c.as_mut_ptr()) } {
             0 => Ok(TapDevice{fd: fd, ifname: String::from_utf8(ifname_c).unwrap()}),
             _ => Err(IoError::last_os_error())
         }
+    }
+
+    pub fn clone(&self) -> TapDevice {
+        let fd = unsafe { fs::File::from_raw_fd(self.fd.as_raw_fd()) };
+        TapDevice{fd: fd, ifname: self.ifname.clone()}
     }
 
     pub fn ifname(&self) -> &str {

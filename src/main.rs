@@ -1,8 +1,5 @@
-#![feature(libc)]
-
 #[macro_use] extern crate log;
 extern crate time;
-extern crate libc;
 extern crate docopt;
 extern crate rustc_serialize;
 
@@ -72,7 +69,7 @@ fn main() {
         Box::new(SimpleLogger)
     }).unwrap();
     debug!("Args: {:?}", args);
-    let mut tapcloud = EthCloud::new(
+    let tapcloud = EthCloud::new(
         &args.flag_device,
         args.flag_listen,
         args.flag_token,
