@@ -2,16 +2,14 @@ use std::{mem, ptr, fmt};
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
 use std::u16;
 
-pub use super::{Mac, Error, Token, EthernetFrame, eth_decode, eth_encode};
+use super::ethcloud::{Mac, Error, Token};
+use super::ethernet;
+use super::util::as_obj;
 
-unsafe fn as_obj<T>(data: &[u8]) -> &T {
-    assert!(data.len() >= mem::size_of::<T>());
-    mem::transmute(data.as_ptr())
-}
 
 #[derive(PartialEq)]
 pub enum Message<'a> {
-    Frame(EthernetFrame<'a>),
+    Frame(ethernet::Frame<'a>),
     Peers(Vec<SocketAddr>),
     GetPeers,
     Close,
@@ -49,7 +47,7 @@ pub fn decode(data: &[u8]) -> Result<(Token, Message), Error> {
     match data[pos] {
         0 => {
             pos += 1;
-            Ok((token, Message::Frame(try!(eth_decode(&data[pos..])))))
+            Ok((token, Message::Frame(try!(ethernet::decode(&data[pos..])))))
         },
         1 => {
             pos += 1;
@@ -93,7 +91,7 @@ pub fn encode(token: Token, msg: &Message, buf: &mut [u8]) -> usize {
         &Message::Frame(ref frame) => {
             buf[pos] = 0;
             pos += 1;
-            pos += eth_encode(&frame, &mut buf[pos..])
+            pos += ethernet::encode(&frame, &mut buf[pos..])
         },
         &Message::Peers(ref peers) => {
             buf[pos] = 1;
@@ -140,7 +138,7 @@ fn encode_message_packet() {
     let src = Mac([1,2,3,4,5,6]);
     let dst = Mac([7,8,9,10,11,12]);
     let payload = [1,2,3,4,5];
-    let msg = Message::Frame(EthernetFrame{src: &src, dst: &dst, vlan: 0, payload: &payload});
+    let msg = Message::Frame(ethernet::Frame{src: &src, dst: &dst, vlan: 0, payload: &payload});
     let mut buf = [0; 1024];
     let size = encode(token, &msg, &mut buf[..]);
     assert_eq!(size, 26);

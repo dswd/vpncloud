@@ -1,15 +1,7 @@
-use std::{mem, slice, ptr, fmt};
+use std::{mem, ptr, fmt};
 
-pub use super::{Mac, Error};
-
-unsafe fn as_bytes<T>(obj: &T) -> &[u8] {
-    slice::from_raw_parts(mem::transmute::<&T, *const u8>(obj), mem::size_of::<T>())
-}
-
-unsafe fn as_obj<T>(data: &[u8]) -> &T {
-    assert!(data.len() >= mem::size_of::<T>());
-    mem::transmute(data.as_ptr())
-}
+use super::ethcloud::{Mac, Error};
+use super::util::{as_bytes, as_obj};
 
 #[derive(PartialEq)]
 pub struct Frame<'a> {

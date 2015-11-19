@@ -3,6 +3,7 @@ extern crate time;
 extern crate docopt;
 extern crate rustc_serialize;
 
+mod util;
 mod udpmessage;
 mod tapdev;
 mod ethernet;
@@ -11,11 +12,12 @@ mod ethcloud;
 use time::Duration;
 use docopt::Docopt;
 
-pub use ethcloud::{Error, Mac, Token, EthCloud};
-pub use ethernet::{encode as eth_encode, decode as eth_decode, Frame as EthernetFrame};
-pub use tapdev::TapDevice;
-pub use udpmessage::{encode as udp_encode, decode as udp_decode, Message as UdpMessage};
+use ethcloud::{Error, Token, EthCloud};
 
+
+//FIXME: Send peer list in several packets when too large. The current behaviour panics at about
+//       10000 peers.
+//TODO: Implement IPv6
 
 
 struct SimpleLogger;

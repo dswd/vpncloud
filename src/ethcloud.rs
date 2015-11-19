@@ -11,9 +11,8 @@ use std::time::Duration as StdDuration;
 
 use time::{Duration, SteadyTime};
 
-pub use ethernet::{encode as eth_encode, decode as eth_decode, Frame as EthernetFrame};
-pub use tapdev::TapDevice;
-pub use udpmessage::{encode as udp_encode, decode as udp_decode, Message as UdpMessage};
+use super::{ethernet, udpmessage};
+use super::tapdev::TapDevice;
 
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -180,10 +179,10 @@ impl EthCloud {
         }))
     }
 
-    fn send_msg<A: ToSocketAddrs + fmt::Display>(&self, addr: A, msg: &UdpMessage) -> Result<(), Error> {
+    fn send_msg<A: ToSocketAddrs + fmt::Display>(&self, addr: A, msg: &udpmessage::Message) -> Result<(), Error> {
         debug!("Sending {:?} to {}", msg, addr);
         let mut buffer = [0u8; 64*1024];
-        let size = udp_encode(self.token, msg, &mut buffer);
+        let size = udpmessage::encode(self.token, msg, &mut buffer);
         match self.socket.lock().expect("Lock poisoned").send_to(&buffer[..size], addr) {
             Ok(written) if written == size => Ok(()),
             Ok(_) => Err(Error::SocketError("Sent out truncated packet")),
@@ -196,7 +195,7 @@ impl EthCloud {
 
     pub fn connect<A: ToSocketAddrs + fmt::Display>(&self, addr: A) -> Result<(), Error> {
         info!("Connecting to {}", addr);
-        self.send_msg(addr, &UdpMessage::GetPeers)
+        self.send_msg(addr, &udpmessage::Message::GetPeers)
     }
 
     fn housekeep(&self) -> Result<(), Error> {
@@ -206,7 +205,7 @@ impl EthCloud {
         if *next_peerlist <= SteadyTime::now() {
             debug!("Send peer list to all peers");
             let peers = self.peers.lock().expect("Lock poisoned").as_vec();
-            let msg = UdpMessage::Peers(peers.clone());
+            let msg = udpmessage::Message::Peers(peers.clone());
             for addr in &peers {
                 try!(self.send_msg(addr, &msg));
             }
@@ -215,16 +214,16 @@ impl EthCloud {
         Ok(())
     }
 
-    fn handle_ethernet_frame(&self, frame: EthernetFrame) -> Result<(), Error> {
+    fn handle_ethernet_frame(&self, frame: ethernet::Frame) -> Result<(), Error> {
         debug!("Read ethernet frame from tap {:?}", frame);
         match self.mactable.lock().expect("Lock poisoned").lookup(frame.dst, frame.vlan) {
             Some(addr) => {
                 debug!("Found destination for {:?} (vlan {}) => {}", frame.dst, frame.vlan, addr);
-                try!(self.send_msg(addr, &UdpMessage::Frame(frame)))
+                try!(self.send_msg(addr, &udpmessage::Message::Frame(frame)))
             },
             None => {
                 debug!("No destination for {:?} (vlan {}) found, broadcasting", frame.dst, frame.vlan);
-                let msg = UdpMessage::Frame(frame);
+                let msg = udpmessage::Message::Frame(frame);
                 for addr in &self.peers.lock().expect("Lock poisoned").as_vec() {
                     try!(self.send_msg(addr, &msg));
                 }
@@ -233,16 +232,16 @@ impl EthCloud {
         Ok(())
     }
 
-    fn handle_net_message(&self, peer: SocketAddr, token: Token, msg: UdpMessage) -> Result<(), Error> {
+    fn handle_net_message(&self, peer: SocketAddr, token: Token, msg: udpmessage::Message) -> Result<(), Error> {
         if token != self.token {
             info!("Ignoring message from {} with wrong token {}", peer, token);
             return Err(Error::WrongToken(token));
         }
         debug!("Recieved {:?} from {}", msg, peer);
         match msg {
-            UdpMessage::Frame(frame) => {
+            udpmessage::Message::Frame(frame) => {
                 let mut buffer = [0u8; 64*1024];
-                let size = eth_encode(&frame, &mut buffer);
+                let size = ethernet::encode(&frame, &mut buffer);
                 debug!("Writing ethernet frame to tap: {:?}", frame);
                 match self.tapdev.lock().expect("Lock poisoned").write(&buffer[..size]) {
                     Ok(()) => (),
@@ -254,7 +253,7 @@ impl EthCloud {
                 self.peers.lock().expect("Lock poisoned").add(&peer);
                 self.mactable.lock().expect("Lock poisoned").learn(frame.src, frame.vlan, &peer);
             },
-            UdpMessage::Peers(peers) => {
+            udpmessage::Message::Peers(peers) => {
                 self.peers.lock().expect("Lock poisoned").add(&peer);
                 for p in &peers {
                     if ! self.peers.lock().expect("Lock poisoned").contains(p) {
@@ -262,12 +261,12 @@ impl EthCloud {
                     }
                 }
             },
-            UdpMessage::GetPeers => {
+            udpmessage::Message::GetPeers => {
                 self.peers.lock().expect("Lock poisoned").add(&peer);
                 let peers = self.peers.lock().expect("Lock poisoned").as_vec();
-                try!(self.send_msg(peer, &UdpMessage::Peers(peers)));
+                try!(self.send_msg(peer, &udpmessage::Message::Peers(peers)));
             },
-            UdpMessage::Close => self.peers.lock().expect("Lock poisoned").remove(&peer)
+            udpmessage::Message::Close => self.peers.lock().expect("Lock poisoned").remove(&peer)
         }
         Ok(())
     }
@@ -278,7 +277,7 @@ impl EthCloud {
         loop {
             match tapdev.read(&mut buffer) {
                 Ok(size) => {
-                    match eth_decode(&buffer[..size]).and_then(|frame| self.handle_ethernet_frame(frame)) {
+                    match ethernet::decode(&mut buffer[..size]).and_then(|frame| self.handle_ethernet_frame(frame)) {
                         Ok(_) => (),
                         Err(e) => error!("Error: {:?}", e)
                     }
@@ -294,7 +293,7 @@ impl EthCloud {
         loop {
             match socket.recv_from(&mut buffer) {
                 Ok((size, src)) => {
-                    match udp_decode(&buffer[..size]).and_then(|(token, msg)| self.handle_net_message(src, token, msg)) {
+                    match udpmessage::decode(&buffer[..size]).and_then(|(token, msg)| self.handle_net_message(src, token, msg)) {
                         Ok(_) => (),
                         Err(e) => error!("Error: {:?}", e)
                     }
