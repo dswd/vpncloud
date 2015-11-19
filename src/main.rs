@@ -35,34 +35,39 @@ impl log::Log for SimpleLogger {
 
 static USAGE: &'static str = "
 Usage:
-  ethcloud [options]
+    ethcloud [options]
 
 Options:
-  -d <device>, --device <device>         Name of the tap device [default: ethcloud%d]
-  -l <listen>, --listen <listen>         Address to listen on [default: 0.0.0.0:3210]
-  -t <token>, --token <token>            Token that identifies the network [default: 0]
-  -c <connect>, --connect <connect>      List of peers (addr:port) to connect to
-  --peer-timeout <peer_timeout>          Peer timeout in seconds [default: 300]
-  --mac-timeout <mac_timeout>            Mac table entry timeout in seconds [default: 60]
-  -v, --verbose                          Log verbosely
+    -d <device>, --device <device>         Name of the tap device [default: ethcloud%d]
+    -l <listen>, --listen <listen>         Address to listen on [default: 0.0.0.0:3210]
+    -t <token>, --token <token>            Token that identifies the network [default: 0]
+    -c <connect>, --connect <connect>      List of peers (addr:port) to connect to
+    --peer-timeout <peer_timeout>          Peer timeout in seconds [default: 300]
+    --mac-timeout <mac_timeout>            Mac table entry timeout in seconds [default: 60]
+    -v, --verbose                          Log verbosely
+    -q, --quiet                            Only print error messages
 ";
 
 #[derive(RustcDecodable, Debug)]
 struct Args {
-  flag_device: String,
-  flag_listen: String,
-  flag_token: Token,
-  flag_connect: Vec<String>,
-  flag_peer_timeout: usize,
-  flag_mac_timeout: usize,
-  flag_verbose: bool
+    flag_device: String,
+    flag_listen: String,
+    flag_token: Token,
+    flag_connect: Vec<String>,
+    flag_peer_timeout: usize,
+    flag_mac_timeout: usize,
+    flag_verbose: bool,
+    flag_quiet: bool
 }
 
 fn main() {
     let args: Args = Docopt::new(USAGE).and_then(|d| d.decode()).unwrap_or_else(|e| e.exit());
     log::set_logger(|max_log_level| {
+        assert!(!args.flag_verbose || !args.flag_quiet);
         if args.flag_verbose {
             max_log_level.set(log::LogLevelFilter::Debug);
+        } else if args.flag_quiet {
+            max_log_level.set(log::LogLevelFilter::Error);
         } else {
             max_log_level.set(log::LogLevelFilter::Info);
         }
