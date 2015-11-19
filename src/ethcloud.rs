@@ -136,7 +136,6 @@ impl MacTable {
     }
 }
 
-
 pub struct EthCloudInner {
     peers: Mutex<PeerList>,
     mactable: Mutex<MacTable>,
@@ -165,13 +164,6 @@ impl EthCloud {
             Ok(socket) => socket,
             _ => panic!("Failed to open socket")
         };
-        /*let res: i32;
-        unsafe {
-            res = libc::fcntl(socket.as_raw_fd(), libc::consts::os::posix01::F_SETFL, libc::consts::os::extra::O_NONBLOCK);
-        }
-        if res != 0 {
-            panic!("Failed to set socket to non-blocking");
-        }*/
         let tapdev = match TapDevice::new(device) {
             Ok(tapdev) => tapdev,
             _ => panic!("Failed to open tap device")
@@ -249,8 +241,6 @@ impl EthCloud {
         debug!("Recieved {:?} from {}", msg, peer);
         match msg {
             UdpMessage::Frame(frame) => {
-                self.peers.lock().expect("Lock poisoned").add(&peer);
-                self.mactable.lock().expect("Lock poisoned").learn(frame.src, frame.vlan, &peer);
                 let mut buffer = [0u8; 64*1024];
                 let size = eth_encode(&frame, &mut buffer);
                 debug!("Writing ethernet frame to tap: {:?}", frame);
@@ -261,6 +251,8 @@ impl EthCloud {
                         return Err(Error::TapdevError("Failed to write to tap device"));
                     }
                 }
+                self.peers.lock().expect("Lock poisoned").add(&peer);
+                self.mactable.lock().expect("Lock poisoned").learn(frame.src, frame.vlan, &peer);
             },
             UdpMessage::Peers(peers) => {
                 self.peers.lock().expect("Lock poisoned").add(&peer);
