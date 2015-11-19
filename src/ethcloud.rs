@@ -319,7 +319,7 @@ impl EthCloud {
                 Ok(_) => (),
                 Err(e) => error!("Error: {:?}", e)
             }
-            thread::sleep(StdDuration::new(1, 0));
+            thread::sleep(StdDuration::new(10, 0));
         }
     }
 

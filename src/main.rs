@@ -20,6 +20,7 @@ use ethcloud::{Error, Token, EthCloud};
 //TODO: Implement IPv6
 //TODO: Encryption
 //TODO: Call close
+//TODO: Reconnect to peers given on command line
 
 
 struct SimpleLogger;
@@ -46,8 +47,8 @@ Options:
     -l <listen>, --listen <listen>         Address to listen on [default: 0.0.0.0:3210]
     -t <token>, --token <token>            Token that identifies the network [default: 0]
     -c <connect>, --connect <connect>      List of peers (addr:port) to connect to
-    --peer-timeout <peer_timeout>          Peer timeout in seconds [default: 300]
-    --mac-timeout <mac_timeout>            Mac table entry timeout in seconds [default: 60]
+    --peer-timeout <peer_timeout>          Peer timeout in seconds [default: 1800]
+    --mac-timeout <mac_timeout>            Mac table entry timeout in seconds [default: 300]
     -v, --verbose                          Log verbosely
     -q, --quiet                            Only print error messages
 ";

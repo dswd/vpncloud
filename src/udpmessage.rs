@@ -118,6 +118,8 @@ pub fn encode(token: Token, msg: &Message, buf: &mut [u8]) -> usize {
                 }
             };
             buf[count_pos] = count;
+            buf[pos] = 0;
+            pos += 1;
         },
         &Message::GetPeers => {
             buf[pos] = 2;
@@ -156,8 +158,8 @@ fn encode_message_peers() {
     let msg = Message::Peers(vec![SocketAddr::from_str("1.2.3.4:123").unwrap(), SocketAddr::from_str("5.6.7.8:12345").unwrap()]);
     let mut buf = [0; 1024];
     let size = encode(token, &msg, &mut buf[..]);
-    assert_eq!(size, 22);
-    assert_eq!(&buf[..size], &[0,0,0,0,0,0,0,134,1,2,1,2,3,4,0,123,5,6,7,8,48,57]);
+    assert_eq!(size, 23);
+    assert_eq!(&buf[..size], &[0,0,0,0,0,0,0,134,1,2,1,2,3,4,0,123,5,6,7,8,48,57,0]);
     let (token2, msg2) = decode(&buf[..size]).unwrap();
     assert_eq!(token, token2);
     assert_eq!(msg, msg2);
