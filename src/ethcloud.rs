@@ -142,7 +142,8 @@ pub struct EthCloudInner {
     tapdev: Mutex<TapDevice>,
     token: Token,
     next_peerlist: Mutex<SteadyTime>,
-    update_freq: Duration
+    update_freq: Duration,
+    running: Mutex<bool>
 }
 
 #[derive(Clone)]
@@ -175,7 +176,8 @@ impl EthCloud {
             tapdev: Mutex::new(tapdev),
             token: token,
             next_peerlist: Mutex::new(SteadyTime::now()),
-            update_freq: peer_timeout/2
+            update_freq: peer_timeout/2,
+            running: Mutex::new(true)
         }))
     }
 
@@ -312,12 +314,23 @@ impl EthCloud {
         thread::spawn(move || {
             clone.run_tapdev()
         });
-        loop {
+        while *self.running.lock().expect("Lock poisoned") {
             match self.housekeep() {
                 Ok(_) => (),
                 Err(e) => error!("Error: {:?}", e)
             }
             thread::sleep(StdDuration::new(1, 0));
         }
+    }
+
+    pub fn close(&self) {
+        info!("Shutting down...");
+        for p in self.peers.lock().expect("Lock poisoned").as_vec() {
+            match self.send_msg(p, &udpmessage::Message::Close) {
+                Ok(()) => (),
+                Err(e) => error!("Failed to send close message to {}: {:?}", p, e)
+            }
+        }
+        *self.running.lock().expect("Lock poisoned") = false;
     }
 }

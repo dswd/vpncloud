@@ -2,7 +2,7 @@ use std::{mem, ptr, fmt};
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
 use std::u16;
 
-use super::ethcloud::{Mac, Error, Token};
+use super::ethcloud::{Error, Token};
 use super::ethernet;
 use super::util::as_obj;
 
@@ -134,6 +134,7 @@ pub fn encode(token: Token, msg: &Message, buf: &mut [u8]) -> usize {
 
 #[test]
 fn encode_message_packet() {
+    use super::ethcloud::Mac;
     let token = 134;
     let src = Mac([1,2,3,4,5,6]);
     let dst = Mac([7,8,9,10,11,12]);

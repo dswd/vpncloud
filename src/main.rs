@@ -18,6 +18,8 @@ use ethcloud::{Error, Token, EthCloud};
 //FIXME: Send peer list in several packets when too large. The current behaviour panics at about
 //       10000 peers.
 //TODO: Implement IPv6
+//TODO: Encryption
+//TODO: Call close
 
 
 struct SimpleLogger;
@@ -86,5 +88,5 @@ fn main() {
     for addr in args.flag_connect {
         tapcloud.connect(&addr as &str).expect("Failed to send");
     }
-    tapcloud.run();
+    tapcloud.run()
 }
