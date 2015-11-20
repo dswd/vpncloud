@@ -38,7 +38,7 @@ impl log::Log for SimpleLogger {
 
 static USAGE: &'static str = "
 Usage:
-    ethcloud [options]
+    ethcloud [options] [-d <device>] [-l <listen>] [-t <token>] [-c <connect>...]
 
 Options:
     -d <device>, --device <device>         Name of the tap device [default: ethcloud%d]
@@ -49,6 +49,7 @@ Options:
     --mac-timeout <mac_timeout>            Mac table entry timeout in seconds [default: 300]
     -v, --verbose                          Log verbosely
     -q, --quiet                            Only print error messages
+    -h, --help                             Display the help
 ";
 
 #[derive(RustcDecodable, Debug)]
