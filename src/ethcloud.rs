@@ -237,11 +237,9 @@ impl EthCloud {
                     peer_num = 10;
                 }
             }
-            let mut seed = precise_time_ns() as u32;
-            let peers = self.peers.subset(peer_num, seed);
+            let peers = self.peers.subset(peer_num, precise_time_ns() as u32);
             let msg = udpmessage::Message::Peers(peers);
-            seed ^= (precise_time_ns() >> 32) as u32;
-            for addr in &self.peers.subset(peer_num, seed) {
+            for addr in &self.peers.as_vec() {
                 try!(self.send_msg(addr, &msg));
             }
             self.next_peerlist = SteadyTime::now() + self.update_freq;
