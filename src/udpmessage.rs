@@ -38,19 +38,19 @@ impl<'a> fmt::Debug for Message<'a> {
 }
 
 pub fn decode(data: &[u8]) -> Result<(Token, Message), Error> {
-    if data.len() < 1 + mem::size_of::<Token>() {
+    if data.len() < mem::size_of::<Token>() {
         return Err(Error::ParseError("Empty message"));
     }
     let mut pos = 0;
-    let token = Token::from_be(* unsafe { as_obj::<Token>(&data[pos..]) });
+    let mut token = Token::from_be(* unsafe { as_obj::<Token>(&data[pos..]) });
     pos += mem::size_of::<Token>();
-    match data[pos] {
+    let switch = token & 0xff;
+    token = token >> 8;
+    match switch {
         0 => {
-            pos += 1;
             Ok((token, Message::Frame(try!(ethernet::decode(&data[pos..])))))
         },
         1 => {
-            pos += 1;
             if data.len() < pos + 1 {
                 return Err(Error::ParseError("Empty peers"));
             }
@@ -82,20 +82,23 @@ pub fn decode(data: &[u8]) -> Result<(Token, Message), Error> {
 }
 
 pub fn encode(token: Token, msg: &Message, buf: &mut [u8]) -> usize {
-    assert!(buf.len() >= mem::size_of::<Token>() + 1);
+    assert!(buf.len() >= mem::size_of::<Token>());
     let mut pos = 0;
+    let switch = match msg {
+        &Message::Frame(_) => 0,
+        &Message::Peers(_) => 1,
+        &Message::GetPeers => 2,
+        &Message::Close => 3
+    };
+    let token = (token << 8) | switch;
     let token_dat = unsafe { mem::transmute::<Token, [u8; 8]>(token.to_be()) };
     unsafe { ptr::copy_nonoverlapping(token_dat.as_ptr(), buf[pos..].as_mut_ptr(), token_dat.len()) };
     pos += token_dat.len();
     match msg {
         &Message::Frame(ref frame) => {
-            buf[pos] = 0;
-            pos += 1;
             pos += ethernet::encode(&frame, &mut buf[pos..])
         },
         &Message::Peers(ref peers) => {
-            buf[pos] = 1;
-            pos += 1;
             let count_pos = pos;
             pos += 1;
             assert!(buf.len() >= 2 + peers.len() * mem::size_of::<SocketAddrV4>());
@@ -122,12 +125,8 @@ pub fn encode(token: Token, msg: &Message, buf: &mut [u8]) -> usize {
             pos += 1;
         },
         &Message::GetPeers => {
-            buf[pos] = 2;
-            pos += 1;
         },
         &Message::Close => {
-            buf[pos] = 3;
-            pos += 1;
         }
     }
     pos

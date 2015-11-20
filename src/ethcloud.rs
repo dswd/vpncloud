@@ -1,5 +1,5 @@
 use std::net::{SocketAddr, ToSocketAddrs};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::hash::Hasher;
 use std::net::UdpSocket;
 use std::io::Read;
@@ -141,6 +141,7 @@ pub struct EthCloud {
     token: Token,
     next_peerlist: SteadyTime,
     update_freq: Duration,
+    cache: VecDeque<(SocketAddr, Mac, u16)>,
     buffer_out: [u8; 64*1024]
 }
 
@@ -163,6 +164,7 @@ impl EthCloud {
             token: token,
             next_peerlist: SteadyTime::now(),
             update_freq: peer_timeout/2,
+            cache: VecDeque::new(),
             buffer_out: [0; 64*1024]
         }
     }
@@ -202,7 +204,23 @@ impl EthCloud {
 
     fn handle_ethernet_frame(&mut self, frame: ethernet::Frame) -> Result<(), Error> {
         debug!("Read ethernet frame from tap {:?}", frame);
-        match self.mactable.lookup(frame.dst, frame.vlan) {
+        let mut addr = None;
+        for &(ref peer, ref mac, vlan) in &self.cache {
+            if mac == frame.dst && vlan == frame.vlan {
+                addr = Some(*peer);
+                break;
+            }
+        }
+        if addr.is_none() {
+            addr = self.mactable.lookup(frame.dst, frame.vlan);
+            if let Some(addr) = addr {
+                self.cache.push_front((addr, *frame.dst, frame.vlan));
+                if self.cache.len() > 3 {
+                    self.cache.pop_back();
+                }
+            }
+        }
+        match addr {
             Some(addr) => {
                 debug!("Found destination for {:?} (vlan {}) => {}", frame.dst, frame.vlan, addr);
                 try!(self.send_msg(addr, &udpmessage::Message::Frame(frame)))
@@ -235,8 +253,21 @@ impl EthCloud {
                         return Err(Error::TapdevError("Failed to write to tap device"));
                     }
                 }
-                self.peers.add(&peer);
-                self.mactable.learn(frame.src, frame.vlan, &peer);
+                let mut in_cache = false;
+                for &(ref addr, ref mac, vlan) in &self.cache {
+                    if mac == frame.src && vlan == frame.vlan && addr == &peer {
+                        in_cache = true;
+                        break;
+                    }
+                }
+                if !in_cache {
+                    self.peers.add(&peer);
+                    self.mactable.learn(frame.src, frame.vlan, &peer);
+                    self.cache.push_front((peer, *frame.src, frame.vlan));
+                    if self.cache.len() > 3 {
+                        self.cache.pop_back();
+                    }
+                }
             },
             udpmessage::Message::Peers(peers) => {
                 self.peers.add(&peer);
