@@ -2,9 +2,32 @@ use std::{mem, ptr, fmt};
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
 use std::u16;
 
-use super::ethcloud::{Error, Token};
+use super::ethcloud::{Error, NetworkId};
 use super::ethernet;
-use super::util::as_obj;
+use super::util::{as_obj, as_bytes};
+
+const MAGIC: [u8; 3] = [0x76, 0x70, 0x6e];
+const VERSION: u8 = 0;
+
+#[repr(packed)]
+struct TopHeader {
+    magic: [u8; 3],
+    version: u8,
+    _reserved: [u8; 2],
+    option_count: u8,
+    msgtype: u8
+}
+
+impl Default for TopHeader {
+    fn default() -> Self {
+        TopHeader{magic: MAGIC, version: VERSION, _reserved: [0; 2], option_count: 0, msgtype: 0}
+    }
+}
+
+#[derive(Default, Debug, PartialEq, Eq)]
+pub struct Options {
+    pub network_id: Option<NetworkId>
+}
 
 
 #[derive(PartialEq)]
@@ -37,19 +60,44 @@ impl<'a> fmt::Debug for Message<'a> {
     }
 }
 
-pub fn decode(data: &[u8]) -> Result<(Token, Message), Error> {
-    if data.len() < mem::size_of::<Token>() {
+pub fn decode(data: &[u8]) -> Result<(Options, Message), Error> {
+    if data.len() < mem::size_of::<TopHeader>() {
         return Err(Error::ParseError("Empty message"));
     }
     let mut pos = 0;
-    let mut token = Token::from_be(* unsafe { as_obj::<Token>(&data[pos..]) });
-    pos += mem::size_of::<Token>();
-    let switch = token & 0xff;
-    token = token >> 8;
-    match switch {
-        0 => {
-            Ok((token, Message::Frame(try!(ethernet::decode(&data[pos..])))))
-        },
+    let header = unsafe { as_obj::<TopHeader>(&data[pos..]) };
+    pos += mem::size_of::<TopHeader>();
+    if header.magic != MAGIC {
+        return Err(Error::ParseError("Wrong protocol"));
+    }
+    if header.version != VERSION {
+        return Err(Error::ParseError("Wrong version"));
+    }
+    let mut options = Options::default();
+    for _ in 0..header.option_count {
+        if data.len() < pos + 2 {
+            return Err(Error::ParseError("Truncated options"));
+        }
+        let opt_type = data[pos];
+        let opt_len = data[pos+1];
+        pos += 2;
+        if data.len() < pos + opt_len as usize {
+            return Err(Error::ParseError("Truncated options"));
+        }
+        match opt_type {
+            0 => {
+                if opt_len != 8 {
+                    return Err(Error::ParseError("Invalid message_id length"));
+                }
+                let id = u64::from_be(*unsafe { as_obj::<u64>(&data[pos..]) });
+                options.network_id = Some(id);
+            },
+            _ => return Err(Error::ParseError("Unknown option"))
+        }
+        pos += opt_len as usize;
+    }
+    let msg = match header.msgtype {
+        0 => Message::Frame(try!(ethernet::decode(&data[pos..]))),
         1 => {
             if data.len() < pos + 1 {
                 return Err(Error::ParseError("Empty peers"));
@@ -73,27 +121,42 @@ pub fn decode(data: &[u8]) -> Result<(Token, Message), Error> {
                 let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(ip[0], ip[1], ip[2], ip[3]), port));
                 peers.push(addr);
             }
-            Ok((token, Message::Peers(peers)))
+            Message::Peers(peers)
         },
-        2 => Ok((token, Message::GetPeers)),
-        3 => Ok((token, Message::Close)),
-        _ => Err(Error::ParseError("Unknown message type"))
-    }
+        2 => Message::GetPeers,
+        3 => Message::Close,
+        _ => return Err(Error::ParseError("Unknown message type"))
+    };
+    Ok((options, msg))
 }
 
-pub fn encode(token: Token, msg: &Message, buf: &mut [u8]) -> usize {
-    assert!(buf.len() >= mem::size_of::<Token>());
+pub fn encode(options: &Options, msg: &Message, buf: &mut [u8]) -> usize {
+    assert!(buf.len() >= mem::size_of::<TopHeader>());
     let mut pos = 0;
-    let switch = match msg {
+    let mut header = TopHeader::default();
+    header.msgtype = match msg {
         &Message::Frame(_) => 0,
         &Message::Peers(_) => 1,
         &Message::GetPeers => 2,
         &Message::Close => 3
     };
-    let token = (token << 8) | switch;
-    let token_dat = unsafe { mem::transmute::<Token, [u8; 8]>(token.to_be()) };
-    unsafe { ptr::copy_nonoverlapping(token_dat.as_ptr(), buf[pos..].as_mut_ptr(), token_dat.len()) };
-    pos += token_dat.len();
+    if options.network_id.is_some() {
+        header.option_count += 1;
+    }
+    let header_dat = unsafe { as_bytes(&header) };
+    unsafe { ptr::copy_nonoverlapping(header_dat.as_ptr(), buf[pos..].as_mut_ptr(), header_dat.len()) };
+    pos += header_dat.len();
+    if let Some(id) = options.network_id {
+        assert!(buf.len() >= pos + 2 + 8);
+        buf[pos] = 0;
+        buf[pos+1] = 8;
+        pos += 2;
+        unsafe {
+            let id_dat = mem::transmute::<u64, [u8; 8]>(id.to_be());
+            ptr::copy_nonoverlapping(id_dat.as_ptr(), buf[pos..].as_mut_ptr(), id_dat.len());
+        }
+        pos += 8;
+    }
     match msg {
         &Message::Frame(ref frame) => {
             pos += ethernet::encode(&frame, &mut buf[pos..])
@@ -136,56 +199,70 @@ pub fn encode(token: Token, msg: &Message, buf: &mut [u8]) -> usize {
 #[test]
 fn encode_message_packet() {
     use super::ethcloud::Mac;
-    let token = 134;
+    let options = Options::default();
     let src = Mac([1,2,3,4,5,6]);
     let dst = Mac([7,8,9,10,11,12]);
     let payload = [1,2,3,4,5];
     let msg = Message::Frame(ethernet::Frame{src: &src, dst: &dst, vlan: 0, payload: &payload});
     let mut buf = [0; 1024];
-    let size = encode(token, &msg, &mut buf[..]);
+    let size = encode(&options, &msg, &mut buf[..]);
     assert_eq!(size, 25);
-    assert_eq!(&buf[..8], &[0,0,0,0,0,0,134,0]);
-    let (token2, msg2) = decode(&buf[..size]).unwrap();
-    assert_eq!(token, token2);
+    assert_eq!(&buf[..8], &[118,112,110,0,0,0,0,0]);
+    let (options2, msg2) = decode(&buf[..size]).unwrap();
+    assert_eq!(options, options2);
     assert_eq!(msg, msg2);
 }
 
 #[test]
 fn encode_message_peers() {
     use std::str::FromStr;
-    let token = 134;
+    let options = Options::default();
     let msg = Message::Peers(vec![SocketAddr::from_str("1.2.3.4:123").unwrap(), SocketAddr::from_str("5.6.7.8:12345").unwrap()]);
     let mut buf = [0; 1024];
-    let size = encode(token, &msg, &mut buf[..]);
+    let size = encode(&options, &msg, &mut buf[..]);
     assert_eq!(size, 22);
-    assert_eq!(&buf[..size], &[0,0,0,0,0,0,134,1,2,1,2,3,4,0,123,5,6,7,8,48,57,0]);
-    let (token2, msg2) = decode(&buf[..size]).unwrap();
-    assert_eq!(token, token2);
+    assert_eq!(&buf[..size], &[118,112,110,0,0,0,0,1,2,1,2,3,4,0,123,5,6,7,8,48,57,0]);
+    let (options2, msg2) = decode(&buf[..size]).unwrap();
+    assert_eq!(options, options2);
+    assert_eq!(msg, msg2);
+}
+
+#[test]
+fn encode_option_network_id() {
+    let mut options = Options::default();
+    options.network_id = Some(134);
+    let msg = Message::GetPeers;
+    let mut buf = [0; 1024];
+    let size = encode(&options, &msg, &mut buf[..]);
+    assert_eq!(size, 18);
+    assert_eq!(&buf[..size], &[118,112,110,0,0,0,1,2,0,8,0,0,0,0,0,0,0,134]);
+    let (options2, msg2) = decode(&buf[..size]).unwrap();
+    assert_eq!(options, options2);
     assert_eq!(msg, msg2);
 }
 
 #[test]
 fn encode_message_getpeers() {
-    let token = 134;
+    let options = Options::default();
     let msg = Message::GetPeers;
     let mut buf = [0; 1024];
-    let size = encode(token, &msg, &mut buf[..]);
+    let size = encode(&options, &msg, &mut buf[..]);
     assert_eq!(size, 8);
-    assert_eq!(&buf[..size], &[0,0,0,0,0,0,134,2]);
-    let (token2, msg2) = decode(&buf[..size]).unwrap();
-    assert_eq!(token, token2);
+    assert_eq!(&buf[..size], &[118,112,110,0,0,0,0,2]);
+    let (options2, msg2) = decode(&buf[..size]).unwrap();
+    assert_eq!(options, options2);
     assert_eq!(msg, msg2);
 }
 
 #[test]
 fn encode_message_close() {
-    let token = 134;
+    let options = Options::default();
     let msg = Message::Close;
     let mut buf = [0; 1024];
-    let size = encode(token, &msg, &mut buf[..]);
+    let size = encode(&options, &msg, &mut buf[..]);
     assert_eq!(size, 8);
-    assert_eq!(&buf[..size], &[0,0,0,0,0,0,134,3]);
-    let (token2, msg2) = decode(&buf[..size]).unwrap();
-    assert_eq!(token, token2);
+    assert_eq!(&buf[..size], &[118,112,110,0,0,0,0,3]);
+    let (options2, msg2) = decode(&buf[..size]).unwrap();
+    assert_eq!(options, options2);
     assert_eq!(msg, msg2);
 }

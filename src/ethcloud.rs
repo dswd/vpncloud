@@ -10,6 +10,8 @@ use time::{Duration, SteadyTime, precise_time_ns};
 use epoll;
 
 use super::{ethernet, udpmessage};
+use super::udpmessage::{Options, Message};
+use super::ethernet::VlanId;
 use super::tapdev::TapDevice;
 
 
@@ -23,13 +25,12 @@ impl fmt::Debug for Mac {
     }
 }
 
-
-pub type Token = u64;
+pub type NetworkId = u64;
 
 #[derive(Debug)]
 pub enum Error {
     ParseError(&'static str),
-    WrongToken(Token),
+    WrongNetwork(Option<NetworkId>),
     SocketError(&'static str),
     TapdevError(&'static str),
 }
@@ -106,7 +107,7 @@ impl PeerList {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct MacTableKey {
     mac: Mac,
-    vlan: u16
+    vlan: VlanId
 }
 
 struct MacTableValue {
@@ -139,7 +140,7 @@ impl MacTable {
     }
 
     #[inline]
-    fn learn(&mut self, mac: &Mac, vlan: u16, addr: &SocketAddr) {
+    fn learn(&mut self, mac: &Mac, vlan: VlanId, addr: &SocketAddr) {
        let key = MacTableKey{mac: *mac, vlan: vlan};
        let value = MacTableValue{address: *addr, timeout: SteadyTime::now()+self.timeout};
        if self.table.insert(key, value).is_none() {
@@ -148,7 +149,7 @@ impl MacTable {
     }
 
     #[inline]
-    fn lookup(&self, mac: &Mac, vlan: u16) -> Option<SocketAddr> {
+    fn lookup(&self, mac: &Mac, vlan: VlanId) -> Option<SocketAddr> {
        let key = MacTableKey{mac: *mac, vlan: vlan};
        match self.table.get(&key) {
            Some(value) => Some(value.address),
@@ -163,7 +164,7 @@ pub struct EthCloud {
     mactable: MacTable,
     socket: UdpSocket,
     tapdev: TapDevice,
-    token: Token,
+    network_id: Option<NetworkId>,
     next_peerlist: SteadyTime,
     update_freq: Duration,
     buffer_out: [u8; 64*1024],
@@ -171,7 +172,7 @@ pub struct EthCloud {
 }
 
 impl EthCloud {
-    pub fn new(device: &str, listen: String, token: Token, mac_timeout: Duration, peer_timeout: Duration) -> Self {
+    pub fn new(device: &str, listen: String, network_id: Option<NetworkId>, mac_timeout: Duration, peer_timeout: Duration) -> Self {
         let socket = match UdpSocket::bind(&listen as &str) {
             Ok(socket) => socket,
             _ => panic!("Failed to open socket")
@@ -187,7 +188,7 @@ impl EthCloud {
             mactable: MacTable::new(mac_timeout),
             socket: socket,
             tapdev: tapdev,
-            token: token,
+            network_id: network_id,
             next_peerlist: SteadyTime::now(),
             update_freq: peer_timeout/2,
             buffer_out: [0; 64*1024],
@@ -195,9 +196,11 @@ impl EthCloud {
         }
     }
 
-    fn send_msg<A: ToSocketAddrs + fmt::Display>(&mut self, addr: A, msg: &udpmessage::Message) -> Result<(), Error> {
+    fn send_msg<A: ToSocketAddrs + fmt::Display>(&mut self, addr: A, msg: &Message) -> Result<(), Error> {
         debug!("Sending {:?} to {}", msg, addr);
-        let size = udpmessage::encode(self.token, msg, &mut self.buffer_out);
+        let mut options = Options::default();
+        options.network_id = self.network_id;
+        let size = udpmessage::encode(&options, msg, &mut self.buffer_out);
         match self.socket.send_to(&self.buffer_out[..size], addr) {
             Ok(written) if written == size => Ok(()),
             Ok(_) => Err(Error::SocketError("Sent out truncated packet")),
@@ -209,7 +212,6 @@ impl EthCloud {
     }
 
     pub fn connect<A: ToSocketAddrs + fmt::Display>(&mut self, addr: A, reconnect: bool) -> Result<(), Error> {
-        info!("Connecting to {}", addr);
         if let Ok(mut addrs) = addr.to_socket_addrs() {
             while let Some(addr) = addrs.next() {
                 if self.peers.contains(&addr) {
@@ -217,11 +219,12 @@ impl EthCloud {
                 }
             }
         }
+        info!("Connecting to {}", addr);
         if reconnect {
             let addr = addr.to_socket_addrs().unwrap().next().unwrap();
             self.reconnect_peers.push(addr);
         }
-        self.send_msg(addr, &udpmessage::Message::GetPeers)
+        self.send_msg(addr, &Message::GetPeers)
     }
 
     fn housekeep(&mut self) -> Result<(), Error> {
@@ -238,7 +241,7 @@ impl EthCloud {
                 }
             }
             let peers = self.peers.subset(peer_num, precise_time_ns() as u32);
-            let msg = udpmessage::Message::Peers(peers);
+            let msg = Message::Peers(peers);
             for addr in &self.peers.as_vec() {
                 try!(self.send_msg(addr, &msg));
             }
@@ -255,11 +258,11 @@ impl EthCloud {
         match self.mactable.lookup(frame.dst, frame.vlan) {
             Some(addr) => {
                 debug!("Found destination for {:?} (vlan {}) => {}", frame.dst, frame.vlan, addr);
-                try!(self.send_msg(addr, &udpmessage::Message::Frame(frame)))
+                try!(self.send_msg(addr, &Message::Frame(frame)))
             },
             None => {
                 debug!("No destination for {:?} (vlan {}) found, broadcasting", frame.dst, frame.vlan);
-                let msg = udpmessage::Message::Frame(frame);
+                let msg = Message::Frame(frame);
                 for addr in &self.peers.as_vec() {
                     try!(self.send_msg(addr, &msg));
                 }
@@ -268,14 +271,16 @@ impl EthCloud {
         Ok(())
     }
 
-    fn handle_net_message(&mut self, peer: SocketAddr, token: Token, msg: udpmessage::Message) -> Result<(), Error> {
-        if token != self.token {
-            info!("Ignoring message from {} with wrong token {}", peer, token);
-            return Err(Error::WrongToken(token));
+    fn handle_net_message(&mut self, peer: SocketAddr, options: Options, msg: Message) -> Result<(), Error> {
+        if let Some(id) = self.network_id {
+            if options.network_id != Some(id) {
+                info!("Ignoring message from {} with wrong token {:?}", peer, options.network_id);
+                return Err(Error::WrongNetwork(options.network_id));
+            }
         }
         debug!("Recieved {:?} from {}", msg, peer);
         match msg {
-            udpmessage::Message::Frame(frame) => {
+            Message::Frame(frame) => {
                 let size = ethernet::encode(&frame, &mut self.buffer_out);
                 debug!("Writing ethernet frame to tap: {:?}", frame);
                 match self.tapdev.write(&self.buffer_out[..size]) {
@@ -288,7 +293,7 @@ impl EthCloud {
                 self.peers.add(&peer);
                 self.mactable.learn(frame.src, frame.vlan, &peer);
             },
-            udpmessage::Message::Peers(peers) => {
+            Message::Peers(peers) => {
                 self.peers.add(&peer);
                 for p in &peers {
                     if ! self.peers.contains(p) {
@@ -296,12 +301,12 @@ impl EthCloud {
                     }
                 }
             },
-            udpmessage::Message::GetPeers => {
+            Message::GetPeers => {
                 self.peers.add(&peer);
                 let peers = self.peers.as_vec();
-                try!(self.send_msg(peer, &udpmessage::Message::Peers(peers)));
+                try!(self.send_msg(peer, &Message::Peers(peers)));
             },
-            udpmessage::Message::Close => {
+            Message::Close => {
                 self.peers.remove(&peer);
             }
         }
@@ -325,7 +330,7 @@ impl EthCloud {
                 match &events[i as usize].data {
                     &0 => match self.socket.recv_from(&mut buffer) {
                         Ok((size, src)) => {
-                            match udpmessage::decode(&buffer[..size]).and_then(|(token, msg)| self.handle_net_message(src, token, msg)) {
+                            match udpmessage::decode(&buffer[..size]).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
                                 Ok(_) => (),
                                 Err(e) => error!("Error: {:?}", e)
                             }

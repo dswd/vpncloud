@@ -13,7 +13,7 @@ mod ethcloud;
 use time::Duration;
 use docopt::Docopt;
 
-use ethcloud::{Error, Token, EthCloud};
+use ethcloud::{Error, NetworkId, EthCloud};
 
 
 //TODO: Implement IPv6
@@ -38,13 +38,13 @@ impl log::Log for SimpleLogger {
 
 static USAGE: &'static str = "
 Usage:
-    ethcloud [options] [-d <device>] [-l <listen>] [-t <token>] [-c <connect>...]
+    ethcloud [options] [-d <device>] [-l <listen>] [-c <connect>...]
 
 Options:
     -d <device>, --device <device>         Name of the tap device [default: ethcloud%d]
     -l <listen>, --listen <listen>         Address to listen on [default: 0.0.0.0:3210]
-    -t <token>, --token <token>            Token that identifies the network [default: 0]
     -c <connect>, --connect <connect>      List of peers (addr:port) to connect to
+    --network-id <network_id>              Optional token that identifies the network
     --peer-timeout <peer_timeout>          Peer timeout in seconds [default: 1800]
     --mac-timeout <mac_timeout>            Mac table entry timeout in seconds [default: 300]
     -v, --verbose                          Log verbosely
@@ -56,7 +56,7 @@ Options:
 struct Args {
     flag_device: String,
     flag_listen: String,
-    flag_token: Token,
+    flag_network_id: Option<NetworkId>,
     flag_connect: Vec<String>,
     flag_peer_timeout: usize,
     flag_mac_timeout: usize,
@@ -81,7 +81,7 @@ fn main() {
     let mut tapcloud = EthCloud::new(
         &args.flag_device,
         args.flag_listen,
-        args.flag_token,
+        args.flag_network_id,
         Duration::seconds(args.flag_mac_timeout as i64),
         Duration::seconds(args.flag_peer_timeout as i64)
     );

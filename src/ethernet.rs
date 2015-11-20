@@ -3,9 +3,11 @@ use std::{mem, ptr, fmt};
 use super::ethcloud::{Mac, Error};
 use super::util::{as_bytes, as_obj};
 
+pub type VlanId = u16;
+
 #[derive(PartialEq)]
 pub struct Frame<'a> {
-    pub vlan: u16,
+    pub vlan: VlanId,
     pub src: &'a Mac,
     pub dst: &'a Mac,
     pub payload: &'a [u8]
