@@ -49,10 +49,10 @@ peers. For nodes behind a firewall or a NAT, this can function as hole-punching.
 The protocol of `ethcloud` is kept as simple as possible to allow other
 implementations and to maximize the performance.
 
-The first 8 bytes of each packet are the token that is used to distinguish
+The first 7 bytes of each packet are the token that is used to distinguish
 different networks and sort out stray packets that do not belong.
 
-After that, the 9th byte is a switch that determines the structure of the rest
+After that, the 8th byte is a switch that determines the structure of the rest
 of the packet:
 
   * **Frame packet** (value `0`):

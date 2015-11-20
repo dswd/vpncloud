@@ -143,8 +143,8 @@ fn encode_message_packet() {
     let msg = Message::Frame(ethernet::Frame{src: &src, dst: &dst, vlan: 0, payload: &payload});
     let mut buf = [0; 1024];
     let size = encode(token, &msg, &mut buf[..]);
-    assert_eq!(size, 26);
-    assert_eq!(&buf[..9], &[0,0,0,0,0,0,0,134,0]);
+    assert_eq!(size, 25);
+    assert_eq!(&buf[..8], &[0,0,0,0,0,0,134,0]);
     let (token2, msg2) = decode(&buf[..size]).unwrap();
     assert_eq!(token, token2);
     assert_eq!(msg, msg2);
@@ -157,8 +157,8 @@ fn encode_message_peers() {
     let msg = Message::Peers(vec![SocketAddr::from_str("1.2.3.4:123").unwrap(), SocketAddr::from_str("5.6.7.8:12345").unwrap()]);
     let mut buf = [0; 1024];
     let size = encode(token, &msg, &mut buf[..]);
-    assert_eq!(size, 23);
-    assert_eq!(&buf[..size], &[0,0,0,0,0,0,0,134,1,2,1,2,3,4,0,123,5,6,7,8,48,57,0]);
+    assert_eq!(size, 22);
+    assert_eq!(&buf[..size], &[0,0,0,0,0,0,134,1,2,1,2,3,4,0,123,5,6,7,8,48,57,0]);
     let (token2, msg2) = decode(&buf[..size]).unwrap();
     assert_eq!(token, token2);
     assert_eq!(msg, msg2);
@@ -170,8 +170,8 @@ fn encode_message_getpeers() {
     let msg = Message::GetPeers;
     let mut buf = [0; 1024];
     let size = encode(token, &msg, &mut buf[..]);
-    assert_eq!(size, 9);
-    assert_eq!(&buf[..size], &[0,0,0,0,0,0,0,134,2]);
+    assert_eq!(size, 8);
+    assert_eq!(&buf[..size], &[0,0,0,0,0,0,134,2]);
     let (token2, msg2) = decode(&buf[..size]).unwrap();
     assert_eq!(token, token2);
     assert_eq!(msg, msg2);
@@ -183,8 +183,8 @@ fn encode_message_close() {
     let msg = Message::Close;
     let mut buf = [0; 1024];
     let size = encode(token, &msg, &mut buf[..]);
-    assert_eq!(size, 9);
-    assert_eq!(&buf[..size], &[0,0,0,0,0,0,0,134,3]);
+    assert_eq!(size, 8);
+    assert_eq!(&buf[..size], &[0,0,0,0,0,0,134,3]);
     let (token2, msg2) = decode(&buf[..size]).unwrap();
     assert_eq!(token, token2);
     assert_eq!(msg, msg2);
