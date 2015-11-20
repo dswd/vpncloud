@@ -16,8 +16,6 @@ use docopt::Docopt;
 use ethcloud::{Error, Token, EthCloud};
 
 
-//FIXME: Send peer list in several packets when too large. The current behaviour panics at about
-//       10000 peers.
 //TODO: Implement IPv6
 //TODO: Encryption
 //TODO: Call close

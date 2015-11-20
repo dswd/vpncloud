@@ -43,6 +43,11 @@ MAC tables. All frames without a tag will be treated as having tag `0`.
 The peer-to-peer protocol will cause nodes to exchange information about their
 peers. For nodes behind a firewall or a NAT, this can function as hole-punching.
 
+Ethcloud should be able to scale to a few thousand nodes with reasonable
+management traffic (below 10 KiB/s for 10.000 nodes). However, such huge
+networks will cause a lot of traffic due to broadcasts. At this point, a routed
+approach should be preferred.
+
 
 ## NETWORK PROTOCOL
 
@@ -83,11 +88,11 @@ of the packet:
 Nodes are expected to request the peer list from the initial nodes they are
 connecting to. After that, they should periodically send their peer list to all
 of their peers to spread this information and to avoid peer timeouts.
-To avoid the cubic growth of management traffic, nodes should select a subset of
-peers and send them a subset of their peer information. A reasonable number
-would be the square root of the number of peers. The subsets can be selected
-using round robin (making sure all peers eventually receive all information)
-or randomly.
+To avoid the cubic growth of management traffic, nodes should at a certain
+network size start sending partial peer lists instead of the full list.
+A reasonable number would be the square root of the number of peers.
+The subsets can be selected using round robin (making sure all peers eventually
+receive all information) or randomly.
 
 Nodes should remove peers from their peer list after a certain period of
 inactivity or when receiving a `Close` message. Before shutting down, nodes
