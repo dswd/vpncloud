@@ -6,7 +6,7 @@ use std::io::Read;
 use std::fmt;
 use std::os::unix::io::AsRawFd;
 
-use time::{Duration, SteadyTime};
+use time::{Duration, SteadyTime, precise_time_ns};
 use epoll;
 
 use super::{ethernet, udpmessage};
@@ -60,20 +60,41 @@ impl PeerList {
         del
     }
 
+    #[inline(always)]
     fn contains(&mut self, addr: &SocketAddr) -> bool {
         self.peers.contains_key(addr)
     }
 
+    #[inline]
     fn add(&mut self, addr: &SocketAddr) {
         if self.peers.insert(*addr, SteadyTime::now()+self.timeout).is_none() {
             info!("New peer: {:?}", addr);
         }
     }
 
+    #[inline]
     fn as_vec(&self) -> Vec<SocketAddr> {
         self.peers.keys().map(|addr| *addr).collect()
     }
 
+    #[inline(always)]
+    fn len(&self) -> usize {
+        self.peers.len()
+    }
+
+    #[inline]
+    fn subset(&self, size: usize, seed: u32) -> Vec<SocketAddr> {
+        let mut peers = self.as_vec();
+        let mut psrng = seed;
+        let len = peers.len();
+        for i in size..len {
+            peers.swap_remove(psrng as usize % (len - i));
+            psrng = ((1664525 as u64) * (psrng as u64) + (1013904223 as u64)) as u32;
+        }
+        peers
+    }
+
+    #[inline]
     fn remove(&mut self, addr: &SocketAddr) {
         if self.peers.remove(&addr).is_some() {
             info!("Removed peer: {:?}", addr);
@@ -117,6 +138,7 @@ impl MacTable {
         }
     }
 
+    #[inline]
     fn learn(&mut self, mac: &Mac, vlan: u16, addr: &SocketAddr) {
        let key = MacTableKey{mac: *mac, vlan: vlan};
        let value = MacTableValue{address: *addr, timeout: SteadyTime::now()+self.timeout};
@@ -125,6 +147,7 @@ impl MacTable {
        }
     }
 
+    #[inline]
     fn lookup(&self, mac: &Mac, vlan: u16) -> Option<SocketAddr> {
        let key = MacTableKey{mac: *mac, vlan: vlan};
        match self.table.get(&key) {
@@ -207,9 +230,18 @@ impl EthCloud {
         self.mactable.timeout();
         if self.next_peerlist <= SteadyTime::now() {
             debug!("Send peer list to all peers");
-            let peers = self.peers.as_vec();
-            let msg = udpmessage::Message::Peers(peers.clone());
-            for addr in &peers {
+            let mut peer_num = self.peers.len();
+            if peer_num > 10 {
+                peer_num = (peer_num as f32).sqrt().ceil() as usize;
+                if peer_num < 10 {
+                    peer_num = 10;
+                }
+            }
+            let mut seed = precise_time_ns() as u32;
+            let peers = self.peers.subset(peer_num, seed);
+            let msg = udpmessage::Message::Peers(peers);
+            seed ^= (precise_time_ns() >> 32) as u32;
+            for addr in &self.peers.subset(peer_num, seed) {
                 try!(self.send_msg(addr, &msg));
             }
             self.next_peerlist = SteadyTime::now() + self.update_freq;

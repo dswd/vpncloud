@@ -24,6 +24,7 @@ impl TapDevice {
         }
     }
 
+    #[inline(always)]
     pub fn ifname(&self) -> &str {
         &self.ifname
     }
@@ -40,6 +41,7 @@ impl TapDevice {
 }
 
 impl AsRawFd for TapDevice {
+    #[inline(always)]
     fn as_raw_fd(&self) -> RawFd {
         self.fd.as_raw_fd()
     }
