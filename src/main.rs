@@ -2,6 +2,7 @@
 extern crate time;
 extern crate docopt;
 extern crate rustc_serialize;
+extern crate epoll;
 
 mod util;
 mod udpmessage;
@@ -79,7 +80,7 @@ fn main() {
         Box::new(SimpleLogger)
     }).unwrap();
     debug!("Args: {:?}", args);
-    let tapcloud = EthCloud::new(
+    let mut tapcloud = EthCloud::new(
         &args.flag_device,
         args.flag_listen,
         args.flag_token,

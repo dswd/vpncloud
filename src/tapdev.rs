@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{Read, Write, Result as IoResult, Error as IoError};
-use std::os::unix::io::{AsRawFd, FromRawFd};
+use std::os::unix::io::{AsRawFd, RawFd};
 
 extern {
     fn setup_tap_device(fd: i32, ifname: *mut u8) -> i32;
@@ -24,11 +24,6 @@ impl TapDevice {
         }
     }
 
-    pub fn clone(&self) -> TapDevice {
-        let fd = unsafe { fs::File::from_raw_fd(self.fd.as_raw_fd()) };
-        TapDevice{fd: fd, ifname: self.ifname.clone()}
-    }
-
     pub fn ifname(&self) -> &str {
         &self.ifname
     }
@@ -41,5 +36,11 @@ impl TapDevice {
     #[inline(always)]
     pub fn write(&mut self, buffer: &[u8]) -> IoResult<()> {
         self.fd.write_all(buffer)
+    }
+}
+
+impl AsRawFd for TapDevice {
+    fn as_raw_fd(&self) -> RawFd {
+        self.fd.as_raw_fd()
     }
 }

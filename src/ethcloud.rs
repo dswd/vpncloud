@@ -4,12 +4,10 @@ use std::hash::Hasher;
 use std::net::UdpSocket;
 use std::io::Read;
 use std::fmt;
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::ops::Deref;
-use std::time::Duration as StdDuration;
+use std::os::unix::io::AsRawFd;
 
 use time::{Duration, SteadyTime};
+use epoll;
 
 use super::{ethernet, udpmessage};
 use super::tapdev::TapDevice;
@@ -135,27 +133,15 @@ impl MacTable {
     }
 }
 
-pub struct EthCloudInner {
-    peers: Mutex<PeerList>,
-    mactable: Mutex<MacTable>,
-    socket: Mutex<UdpSocket>,
-    tapdev: Mutex<TapDevice>,
+pub struct EthCloud {
+    peers: PeerList,
+    mactable: MacTable,
+    socket: UdpSocket,
+    tapdev: TapDevice,
     token: Token,
-    next_peerlist: Mutex<SteadyTime>,
+    next_peerlist: SteadyTime,
     update_freq: Duration,
-    running: Mutex<bool>
-}
-
-#[derive(Clone)]
-pub struct EthCloud(Arc<EthCloudInner>);
-
-impl Deref for EthCloud {
-    type Target = EthCloudInner;
-
-    #[inline(always)]
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+    buffer_out: [u8; 64*1024]
 }
 
 impl EthCloud {
@@ -169,23 +155,22 @@ impl EthCloud {
             _ => panic!("Failed to open tap device")
         };
         info!("Opened tap device {}", tapdev.ifname());
-        EthCloud(Arc::new(EthCloudInner{
-            peers: Mutex::new(PeerList::new(peer_timeout)),
-            mactable: Mutex::new(MacTable::new(mac_timeout)),
-            socket: Mutex::new(socket),
-            tapdev: Mutex::new(tapdev),
+        EthCloud{
+            peers: PeerList::new(peer_timeout),
+            mactable: MacTable::new(mac_timeout),
+            socket: socket,
+            tapdev: tapdev,
             token: token,
-            next_peerlist: Mutex::new(SteadyTime::now()),
+            next_peerlist: SteadyTime::now(),
             update_freq: peer_timeout/2,
-            running: Mutex::new(true)
-        }))
+            buffer_out: [0; 64*1024]
+        }
     }
 
-    fn send_msg<A: ToSocketAddrs + fmt::Display>(&self, addr: A, msg: &udpmessage::Message) -> Result<(), Error> {
+    fn send_msg<A: ToSocketAddrs + fmt::Display>(&mut self, addr: A, msg: &udpmessage::Message) -> Result<(), Error> {
         debug!("Sending {:?} to {}", msg, addr);
-        let mut buffer = [0u8; 64*1024];
-        let size = udpmessage::encode(self.token, msg, &mut buffer);
-        match self.socket.lock().expect("Lock poisoned").send_to(&buffer[..size], addr) {
+        let size = udpmessage::encode(self.token, msg, &mut self.buffer_out);
+        match self.socket.send_to(&self.buffer_out[..size], addr) {
             Ok(written) if written == size => Ok(()),
             Ok(_) => Err(Error::SocketError("Sent out truncated packet")),
             Err(e) => {
@@ -195,30 +180,29 @@ impl EthCloud {
         }
     }
 
-    pub fn connect<A: ToSocketAddrs + fmt::Display>(&self, addr: A) -> Result<(), Error> {
+    pub fn connect<A: ToSocketAddrs + fmt::Display>(&mut self, addr: A) -> Result<(), Error> {
         info!("Connecting to {}", addr);
         self.send_msg(addr, &udpmessage::Message::GetPeers)
     }
 
-    fn housekeep(&self) -> Result<(), Error> {
-        self.peers.lock().expect("Lock poisoned").timeout();
-        self.mactable.lock().expect("Lock poisoned").timeout();
-        let mut next_peerlist = self.next_peerlist.lock().expect("Lock poisoned");
-        if *next_peerlist <= SteadyTime::now() {
+    fn housekeep(&mut self) -> Result<(), Error> {
+        self.peers.timeout();
+        self.mactable.timeout();
+        if self.next_peerlist <= SteadyTime::now() {
             debug!("Send peer list to all peers");
-            let peers = self.peers.lock().expect("Lock poisoned").as_vec();
+            let peers = self.peers.as_vec();
             let msg = udpmessage::Message::Peers(peers.clone());
             for addr in &peers {
                 try!(self.send_msg(addr, &msg));
             }
-            *next_peerlist = SteadyTime::now() + self.update_freq;
+            self.next_peerlist = SteadyTime::now() + self.update_freq;
         }
         Ok(())
     }
 
-    fn handle_ethernet_frame(&self, frame: ethernet::Frame) -> Result<(), Error> {
+    fn handle_ethernet_frame(&mut self, frame: ethernet::Frame) -> Result<(), Error> {
         debug!("Read ethernet frame from tap {:?}", frame);
-        match self.mactable.lock().expect("Lock poisoned").lookup(frame.dst, frame.vlan) {
+        match self.mactable.lookup(frame.dst, frame.vlan) {
             Some(addr) => {
                 debug!("Found destination for {:?} (vlan {}) => {}", frame.dst, frame.vlan, addr);
                 try!(self.send_msg(addr, &udpmessage::Message::Frame(frame)))
@@ -226,7 +210,7 @@ impl EthCloud {
             None => {
                 debug!("No destination for {:?} (vlan {}) found, broadcasting", frame.dst, frame.vlan);
                 let msg = udpmessage::Message::Frame(frame);
-                for addr in &self.peers.lock().expect("Lock poisoned").as_vec() {
+                for addr in &self.peers.as_vec() {
                     try!(self.send_msg(addr, &msg));
                 }
             }
@@ -234,7 +218,7 @@ impl EthCloud {
         Ok(())
     }
 
-    fn handle_net_message(&self, peer: SocketAddr, token: Token, msg: udpmessage::Message) -> Result<(), Error> {
+    fn handle_net_message(&mut self, peer: SocketAddr, token: Token, msg: udpmessage::Message) -> Result<(), Error> {
         if token != self.token {
             info!("Ignoring message from {} with wrong token {}", peer, token);
             return Err(Error::WrongToken(token));
@@ -242,95 +226,75 @@ impl EthCloud {
         debug!("Recieved {:?} from {}", msg, peer);
         match msg {
             udpmessage::Message::Frame(frame) => {
-                let mut buffer = [0u8; 64*1024];
-                let size = ethernet::encode(&frame, &mut buffer);
+                let size = ethernet::encode(&frame, &mut self.buffer_out);
                 debug!("Writing ethernet frame to tap: {:?}", frame);
-                match self.tapdev.lock().expect("Lock poisoned").write(&buffer[..size]) {
+                match self.tapdev.write(&self.buffer_out[..size]) {
                     Ok(()) => (),
                     Err(e) => {
                         error!("Failed to send via tap device {:?}", e);
                         return Err(Error::TapdevError("Failed to write to tap device"));
                     }
                 }
-                self.peers.lock().expect("Lock poisoned").add(&peer);
-                self.mactable.lock().expect("Lock poisoned").learn(frame.src, frame.vlan, &peer);
+                self.peers.add(&peer);
+                self.mactable.learn(frame.src, frame.vlan, &peer);
             },
             udpmessage::Message::Peers(peers) => {
-                self.peers.lock().expect("Lock poisoned").add(&peer);
+                self.peers.add(&peer);
                 for p in &peers {
-                    if ! self.peers.lock().expect("Lock poisoned").contains(p) {
+                    if ! self.peers.contains(p) {
                         try!(self.connect(p));
                     }
                 }
             },
             udpmessage::Message::GetPeers => {
-                self.peers.lock().expect("Lock poisoned").add(&peer);
-                let peers = self.peers.lock().expect("Lock poisoned").as_vec();
+                self.peers.add(&peer);
+                let peers = self.peers.as_vec();
                 try!(self.send_msg(peer, &udpmessage::Message::Peers(peers)));
             },
-            udpmessage::Message::Close => self.peers.lock().expect("Lock poisoned").remove(&peer)
+            udpmessage::Message::Close => self.peers.remove(&peer)
         }
         Ok(())
     }
 
-    fn run_tapdev(&self) {
-        let mut buffer = [0u8; 64*1024];
-        let mut tapdev = self.tapdev.lock().expect("Lock poisoned").clone();
+    pub fn run(&mut self) {
+        let epoll_handle = epoll::create1(0).expect("Failed to create epoll handle");
+        let socket_fd = self.socket.as_raw_fd();
+        let tapdev_fd = self.tapdev.as_raw_fd();
+        let mut socket_event = epoll::EpollEvent{events: epoll::util::event_type::EPOLLIN, data: 0};
+        let mut tapdev_event = epoll::EpollEvent{events: epoll::util::event_type::EPOLLIN, data: 1};
+        epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, socket_fd, &mut socket_event).expect("Failed to add socket to epoll handle");
+        epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, tapdev_fd, &mut tapdev_event).expect("Failed to add tapdev to epoll handle");
+        let mut events = [epoll::EpollEvent{events: 0, data: 0}; 2];
+        let mut buffer = [0; 64*1024];
         loop {
-            match tapdev.read(&mut buffer) {
-                Ok(size) => {
-                    match ethernet::decode(&mut buffer[..size]).and_then(|frame| self.handle_ethernet_frame(frame)) {
-                        Ok(_) => (),
-                        Err(e) => error!("Error: {:?}", e)
-                    }
-                },
-                Err(_error) => panic!("Failed to read from tap device")
+            let count = epoll::wait(epoll_handle, &mut events, 1000).expect("Epoll wait failed");
+            for i in 0..count {
+                match &events[i as usize].data {
+                    &0 => match self.socket.recv_from(&mut buffer) {
+                        Ok((size, src)) => {
+                            match udpmessage::decode(&buffer[..size]).and_then(|(token, msg)| self.handle_net_message(src, token, msg)) {
+                                Ok(_) => (),
+                                Err(e) => error!("Error: {:?}", e)
+                            }
+                        },
+                        Err(_error) => panic!("Failed to read from network socket")
+                    },
+                    &1 => match self.tapdev.read(&mut buffer) {
+                        Ok(size) => {
+                            match ethernet::decode(&mut buffer[..size]).and_then(|frame| self.handle_ethernet_frame(frame)) {
+                                Ok(_) => (),
+                                Err(e) => error!("Error: {:?}", e)
+                            }
+                        },
+                        Err(_error) => panic!("Failed to read from tap device")
+                    },
+                    _ => unreachable!()
+                }
             }
         }
-    }
-
-    fn run_socket(&self) {
-        let mut buffer = [0u8; 64*1024];
-        let socket = self.socket.lock().expect("Lock poisoned").try_clone().expect("Failed to clone socket");
-        loop {
-            match socket.recv_from(&mut buffer) {
-                Ok((size, src)) => {
-                    match udpmessage::decode(&buffer[..size]).and_then(|(token, msg)| self.handle_net_message(src, token, msg)) {
-                        Ok(_) => (),
-                        Err(e) => error!("Error: {:?}", e)
-                    }
-                },
-                Err(_error) => panic!("Failed to read from network socket")
-            }
+        match self.housekeep() {
+            Ok(_) => (),
+            Err(e) => error!("Error: {:?}", e)
         }
-    }
-
-    pub fn run(&self) {
-        let clone = self.clone();
-        thread::spawn(move || {
-            clone.run_socket()
-        });
-        let clone = self.clone();
-        thread::spawn(move || {
-            clone.run_tapdev()
-        });
-        while *self.running.lock().expect("Lock poisoned") {
-            match self.housekeep() {
-                Ok(_) => (),
-                Err(e) => error!("Error: {:?}", e)
-            }
-            thread::sleep(StdDuration::new(10, 0));
-        }
-    }
-
-    pub fn close(&self) {
-        info!("Shutting down...");
-        for p in self.peers.lock().expect("Lock poisoned").as_vec() {
-            match self.send_msg(p, &udpmessage::Message::Close) {
-                Ok(()) => (),
-                Err(e) => error!("Failed to send close message to {}: {:?}", p, e)
-            }
-        }
-        *self.running.lock().expect("Lock poisoned") = false;
     }
 }
