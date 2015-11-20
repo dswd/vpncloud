@@ -1,5 +1,5 @@
 use std::net::{SocketAddr, ToSocketAddrs};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::hash::Hasher;
 use std::net::UdpSocket;
 use std::io::Read;
@@ -141,8 +141,8 @@ pub struct EthCloud {
     token: Token,
     next_peerlist: SteadyTime,
     update_freq: Duration,
-    cache: VecDeque<(SocketAddr, Mac, u16)>,
-    buffer_out: [u8; 64*1024]
+    buffer_out: [u8; 64*1024],
+    last_housekeep: SteadyTime,
 }
 
 impl EthCloud {
@@ -164,8 +164,8 @@ impl EthCloud {
             token: token,
             next_peerlist: SteadyTime::now(),
             update_freq: peer_timeout/2,
-            cache: VecDeque::new(),
-            buffer_out: [0; 64*1024]
+            buffer_out: [0; 64*1024],
+            last_housekeep: SteadyTime::now()
         }
     }
 
@@ -188,6 +188,8 @@ impl EthCloud {
     }
 
     fn housekeep(&mut self) -> Result<(), Error> {
+        debug!("Running housekeeping...");
+        //self.cache.clear();
         self.peers.timeout();
         self.mactable.timeout();
         if self.next_peerlist <= SteadyTime::now() {
@@ -204,23 +206,7 @@ impl EthCloud {
 
     fn handle_ethernet_frame(&mut self, frame: ethernet::Frame) -> Result<(), Error> {
         debug!("Read ethernet frame from tap {:?}", frame);
-        let mut addr = None;
-        for &(ref peer, ref mac, vlan) in &self.cache {
-            if mac == frame.dst && vlan == frame.vlan {
-                addr = Some(*peer);
-                break;
-            }
-        }
-        if addr.is_none() {
-            addr = self.mactable.lookup(frame.dst, frame.vlan);
-            if let Some(addr) = addr {
-                self.cache.push_front((addr, *frame.dst, frame.vlan));
-                if self.cache.len() > 3 {
-                    self.cache.pop_back();
-                }
-            }
-        }
-        match addr {
+        match self.mactable.lookup(frame.dst, frame.vlan) {
             Some(addr) => {
                 debug!("Found destination for {:?} (vlan {}) => {}", frame.dst, frame.vlan, addr);
                 try!(self.send_msg(addr, &udpmessage::Message::Frame(frame)))
@@ -253,21 +239,8 @@ impl EthCloud {
                         return Err(Error::TapdevError("Failed to write to tap device"));
                     }
                 }
-                let mut in_cache = false;
-                for &(ref addr, ref mac, vlan) in &self.cache {
-                    if mac == frame.src && vlan == frame.vlan && addr == &peer {
-                        in_cache = true;
-                        break;
-                    }
-                }
-                if !in_cache {
-                    self.peers.add(&peer);
-                    self.mactable.learn(frame.src, frame.vlan, &peer);
-                    self.cache.push_front((peer, *frame.src, frame.vlan));
-                    if self.cache.len() > 3 {
-                        self.cache.pop_back();
-                    }
-                }
+                self.peers.add(&peer);
+                self.mactable.learn(frame.src, frame.vlan, &peer);
             },
             udpmessage::Message::Peers(peers) => {
                 self.peers.add(&peer);
@@ -282,7 +255,9 @@ impl EthCloud {
                 let peers = self.peers.as_vec();
                 try!(self.send_msg(peer, &udpmessage::Message::Peers(peers)));
             },
-            udpmessage::Message::Close => self.peers.remove(&peer)
+            udpmessage::Message::Close => {
+                self.peers.remove(&peer);
+            }
         }
         Ok(())
     }
@@ -299,6 +274,7 @@ impl EthCloud {
         let mut buffer = [0; 64*1024];
         loop {
             let count = epoll::wait(epoll_handle, &mut events, 1000).expect("Epoll wait failed");
+            // Process events
             for i in 0..count {
                 match &events[i as usize].data {
                     &0 => match self.socket.recv_from(&mut buffer) {
@@ -322,10 +298,14 @@ impl EthCloud {
                     _ => unreachable!()
                 }
             }
-        }
-        match self.housekeep() {
-            Ok(_) => (),
-            Err(e) => error!("Error: {:?}", e)
+            // Do the housekeeping
+            if self.last_housekeep < SteadyTime::now() + Duration::seconds(1) {
+                match self.housekeep() {
+                    Ok(_) => (),
+                    Err(e) => error!("Error: {:?}", e)
+                }
+                self.last_housekeep = SteadyTime::now()
+            }
         }
     }
 }
