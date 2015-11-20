@@ -45,7 +45,7 @@ impl PeerList {
         PeerList{peers: HashMap::new(), timeout: timeout}
     }
 
-    fn timeout(&mut self) {
+    fn timeout(&mut self) -> Vec<SocketAddr> {
         let now = SteadyTime::now();
         let mut del: Vec<SocketAddr> = Vec::new();
         for (&addr, &timeout) in &self.peers {
@@ -53,10 +53,11 @@ impl PeerList {
                 del.push(addr);
             }
         }
-        for addr in del {
+        for addr in &del {
             debug!("Forgot peer: {:?}", addr);
-            self.peers.remove(&addr);
+            self.peers.remove(addr);
         }
+        del
     }
 
     fn contains(&mut self, addr: &SocketAddr) -> bool {
@@ -135,6 +136,7 @@ impl MacTable {
 
 pub struct EthCloud {
     peers: PeerList,
+    reconnect_peers: Vec<SocketAddr>,
     mactable: MacTable,
     socket: UdpSocket,
     tapdev: TapDevice,
@@ -142,7 +144,7 @@ pub struct EthCloud {
     next_peerlist: SteadyTime,
     update_freq: Duration,
     buffer_out: [u8; 64*1024],
-    last_housekeep: SteadyTime,
+    next_housekeep: SteadyTime,
 }
 
 impl EthCloud {
@@ -158,6 +160,7 @@ impl EthCloud {
         info!("Opened tap device {}", tapdev.ifname());
         EthCloud{
             peers: PeerList::new(peer_timeout),
+            reconnect_peers: Vec::new(),
             mactable: MacTable::new(mac_timeout),
             socket: socket,
             tapdev: tapdev,
@@ -165,7 +168,7 @@ impl EthCloud {
             next_peerlist: SteadyTime::now(),
             update_freq: peer_timeout/2,
             buffer_out: [0; 64*1024],
-            last_housekeep: SteadyTime::now()
+            next_housekeep: SteadyTime::now()
         }
     }
 
@@ -182,14 +185,24 @@ impl EthCloud {
         }
     }
 
-    pub fn connect<A: ToSocketAddrs + fmt::Display>(&mut self, addr: A) -> Result<(), Error> {
+    pub fn connect<A: ToSocketAddrs + fmt::Display>(&mut self, addr: A, reconnect: bool) -> Result<(), Error> {
         info!("Connecting to {}", addr);
+        if let Ok(mut addrs) = addr.to_socket_addrs() {
+            while let Some(addr) = addrs.next() {
+                if self.peers.contains(&addr) {
+                    return Ok(());
+                }
+            }
+        }
+        if reconnect {
+            let addr = addr.to_socket_addrs().unwrap().next().unwrap();
+            self.reconnect_peers.push(addr);
+        }
         self.send_msg(addr, &udpmessage::Message::GetPeers)
     }
 
     fn housekeep(&mut self) -> Result<(), Error> {
         debug!("Running housekeeping...");
-        //self.cache.clear();
         self.peers.timeout();
         self.mactable.timeout();
         if self.next_peerlist <= SteadyTime::now() {
@@ -200,6 +213,9 @@ impl EthCloud {
                 try!(self.send_msg(addr, &msg));
             }
             self.next_peerlist = SteadyTime::now() + self.update_freq;
+        }
+        for addr in self.reconnect_peers.clone() {
+            try!(self.connect(addr, false));
         }
         Ok(())
     }
@@ -246,7 +262,7 @@ impl EthCloud {
                 self.peers.add(&peer);
                 for p in &peers {
                     if ! self.peers.contains(p) {
-                        try!(self.connect(p));
+                        try!(self.connect(p, false));
                     }
                 }
             },
@@ -299,12 +315,12 @@ impl EthCloud {
                 }
             }
             // Do the housekeeping
-            if self.last_housekeep < SteadyTime::now() + Duration::seconds(1) {
+            if self.next_housekeep < SteadyTime::now() {
                 match self.housekeep() {
                     Ok(_) => (),
                     Err(e) => error!("Error: {:?}", e)
                 }
-                self.last_housekeep = SteadyTime::now()
+                self.next_housekeep = SteadyTime::now() + Duration::seconds(1)
             }
         }
     }

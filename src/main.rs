@@ -21,7 +21,6 @@ use ethcloud::{Error, Token, EthCloud};
 //TODO: Implement IPv6
 //TODO: Encryption
 //TODO: Call close
-//TODO: Reconnect to peers given on command line
 
 
 struct SimpleLogger;
@@ -88,7 +87,7 @@ fn main() {
         Duration::seconds(args.flag_peer_timeout as i64)
     );
     for addr in args.flag_connect {
-        tapcloud.connect(&addr as &str).expect("Failed to send");
+        tapcloud.connect(&addr as &str, true).expect("Failed to send");
     }
     tapcloud.run()
 }
