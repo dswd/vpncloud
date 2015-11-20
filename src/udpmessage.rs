@@ -217,8 +217,8 @@ fn encode_option_network_id() {
     let msg = Message::GetPeers;
     let mut buf = [0; 1024];
     let size = encode(&options, &msg, &mut buf[..]);
-    assert_eq!(size, 18);
-    assert_eq!(&buf[..size], &[118,112,110,0,0,0,1,2,0,8,0,0,0,0,0,0,0,134]);
+    assert_eq!(size, 16);
+    assert_eq!(&buf[..size], &[118,112,110,0,0,0,1,2,0,0,0,0,0,0,0,134]);
     let (options2, msg2) = decode(&buf[..size]).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
