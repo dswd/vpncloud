@@ -13,7 +13,9 @@ mod ethcloud;
 use time::Duration;
 use docopt::Docopt;
 
-use ethcloud::{Error, NetworkId, EthCloud};
+use std::hash::{Hash, SipHasher, Hasher};
+
+use ethcloud::{Error, EthCloud};
 
 
 //TODO: Implement IPv6
@@ -56,7 +58,7 @@ Options:
 struct Args {
     flag_device: String,
     flag_listen: String,
-    flag_network_id: Option<NetworkId>,
+    flag_network_id: Option<String>,
     flag_connect: Vec<String>,
     flag_peer_timeout: usize,
     flag_mac_timeout: usize,
@@ -81,7 +83,11 @@ fn main() {
     let mut tapcloud = EthCloud::new(
         &args.flag_device,
         args.flag_listen,
-        args.flag_network_id,
+        args.flag_network_id.map(|name| {
+            let mut s = SipHasher::new();
+            name.hash(&mut s);
+            s.finish()
+        }),
         Duration::seconds(args.flag_mac_timeout as i64),
         Duration::seconds(args.flag_peer_timeout as i64)
     );
