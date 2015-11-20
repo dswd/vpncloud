@@ -14,13 +14,13 @@ struct TopHeader {
     magic: [u8; 3],
     version: u8,
     _reserved: [u8; 2],
-    option_count: u8,
+    flags: u8,
     msgtype: u8
 }
 
 impl Default for TopHeader {
     fn default() -> Self {
-        TopHeader{magic: MAGIC, version: VERSION, _reserved: [0; 2], option_count: 0, msgtype: 0}
+        TopHeader{magic: MAGIC, version: VERSION, _reserved: [0; 2], flags: 0, msgtype: 0}
     }
 }
 
@@ -74,27 +74,13 @@ pub fn decode(data: &[u8]) -> Result<(Options, Message), Error> {
         return Err(Error::ParseError("Wrong version"));
     }
     let mut options = Options::default();
-    for _ in 0..header.option_count {
-        if data.len() < pos + 2 {
+    if header.flags & 0x01 > 0 {
+        if data.len() < pos + 8 {
             return Err(Error::ParseError("Truncated options"));
         }
-        let opt_type = data[pos];
-        let opt_len = data[pos+1];
-        pos += 2;
-        if data.len() < pos + opt_len as usize {
-            return Err(Error::ParseError("Truncated options"));
-        }
-        match opt_type {
-            0 => {
-                if opt_len != 8 {
-                    return Err(Error::ParseError("Invalid message_id length"));
-                }
-                let id = u64::from_be(*unsafe { as_obj::<u64>(&data[pos..]) });
-                options.network_id = Some(id);
-            },
-            _ => return Err(Error::ParseError("Unknown option"))
-        }
-        pos += opt_len as usize;
+        let id = u64::from_be(*unsafe { as_obj::<u64>(&data[pos..]) });
+        options.network_id = Some(id);
+        pos += 8;
     }
     let msg = match header.msgtype {
         0 => Message::Frame(try!(ethernet::decode(&data[pos..]))),
@@ -141,16 +127,13 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8]) -> usize {
         &Message::Close => 3
     };
     if options.network_id.is_some() {
-        header.option_count += 1;
+        header.flags |= 0x01;
     }
     let header_dat = unsafe { as_bytes(&header) };
     unsafe { ptr::copy_nonoverlapping(header_dat.as_ptr(), buf[pos..].as_mut_ptr(), header_dat.len()) };
     pos += header_dat.len();
     if let Some(id) = options.network_id {
-        assert!(buf.len() >= pos + 2 + 8);
-        buf[pos] = 0;
-        buf[pos+1] = 8;
-        pos += 2;
+        assert!(buf.len() >= pos + 8);
         unsafe {
             let id_dat = mem::transmute::<u64, [u8; 8]>(id.to_be());
             ptr::copy_nonoverlapping(id_dat.as_ptr(), buf[pos..].as_mut_ptr(), id_dat.len());
