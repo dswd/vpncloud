@@ -12,7 +12,7 @@ use epoll;
 use super::{ethernet, udpmessage};
 use super::udpmessage::{Options, Message};
 use super::ethernet::MacTable;
-use super::tapdev::TapDevice;
+use super::tuntap::{TunTapDevice, DeviceType};
 
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -109,7 +109,7 @@ pub struct EthCloud {
     reconnect_peers: Vec<SocketAddr>,
     mactable: MacTable,
     socket: UdpSocket,
-    tapdev: TapDevice,
+    tapdev: TunTapDevice,
     network_id: Option<NetworkId>,
     next_peerlist: SteadyTime,
     update_freq: Duration,
@@ -123,7 +123,7 @@ impl EthCloud {
             Ok(socket) => socket,
             _ => panic!("Failed to open socket")
         };
-        let tapdev = match TapDevice::new(device) {
+        let tapdev = match TunTapDevice::new(device, DeviceType::TapDevice) {
             Ok(tapdev) => tapdev,
             _ => panic!("Failed to open tap device")
         };

@@ -1,9 +1,7 @@
-default: libtapdev.a
+default: libtuntap.a
 
-tapdev.o: tapdev.c
-	gcc -Os -c tapdev.c
+tapdev.o: tuntap.c
+	gcc -Os -c tuntap.c
 
-libtapdev.a: tapdev.o
-	ar rcs libtapdev.a tapdev.o
-
-
+libtapdev.a: tuntap.o
+	ar rcs libtuntap.a tuntap.o

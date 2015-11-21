@@ -6,7 +6,7 @@ extern crate epoll;
 
 mod util;
 mod udpmessage;
-mod tapdev;
+mod tuntap;
 mod ethernet;
 mod ip;
 mod ethcloud;
