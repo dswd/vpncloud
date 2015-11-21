@@ -25,7 +25,11 @@ impl TunTapDevice {
         ifname_string.push_str(ifname);
         ifname_string.push('\0');
         let mut ifname_c = ifname_string.into_bytes();
-        match unsafe { setup_tap_device(fd.as_raw_fd(), ifname_c.as_mut_ptr()) } {
+        let res = match iftype {
+            DeviceType::TapDevice => unsafe { setup_tap_device(fd.as_raw_fd(), ifname_c.as_mut_ptr()) },
+            DeviceType::TunDevice => unsafe { setup_tun_device(fd.as_raw_fd(), ifname_c.as_mut_ptr()) }
+        };
+        match res {
             0 => Ok(TunTapDevice{fd: fd, ifname: String::from_utf8(ifname_c).unwrap(), iftype: iftype}),
             _ => Err(IoError::last_os_error())
         }

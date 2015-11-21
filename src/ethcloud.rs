@@ -5,6 +5,7 @@ use std::net::UdpSocket;
 use std::io::Read;
 use std::fmt;
 use std::os::unix::io::AsRawFd;
+use std::marker::PhantomData;
 
 use time::{Duration, SteadyTime, precise_time_ns};
 use epoll;
@@ -15,16 +16,6 @@ use super::ethernet::MacTable;
 use super::tuntap::{TunTapDevice, DeviceType};
 
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Mac(pub [u8; 6]);
-
-impl fmt::Debug for Mac {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(formatter, "{:x}:{:x}:{:x}:{:x}:{:x}:{:x}",
-            self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5])
-    }
-}
-
 pub type NetworkId = u64;
 
 #[derive(Debug)]
@@ -32,7 +23,7 @@ pub enum Error {
     ParseError(&'static str),
     WrongNetwork(Option<NetworkId>),
     SocketError(&'static str),
-    TapdevError(&'static str),
+    TunTapDevError(&'static str),
 }
 
 
@@ -103,11 +94,29 @@ impl PeerList {
     }
 }
 
+pub trait Table {
+    type Address;
+    fn learn(&mut self, Self::Address, SocketAddr);
+    fn lookup(&self, Self::Address) -> Option<SocketAddr>;
+    fn housekeep(&mut self);
+}
 
-pub struct EthCloud {
+pub trait InterfaceMessage {
+    type Address;
+    fn src(&self) -> Self::Address;
+    fn dst(&self) -> Self::Address;
+}
+
+pub trait VirtualInterface {
+    type Message: InterfaceMessage;
+    fn read(&mut self) -> Result<Self::Message, Error>;
+    fn write(&mut self, Self::Message) -> Result<(), Error>;
+}
+
+pub struct EthCloud<A, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: VirtualInterface<Message=M>> {
     peers: PeerList,
     reconnect_peers: Vec<SocketAddr>,
-    mactable: MacTable,
+    table: MacTable,
     socket: UdpSocket,
     tapdev: TunTapDevice,
     network_id: Option<NetworkId>,
@@ -115,9 +124,12 @@ pub struct EthCloud {
     update_freq: Duration,
     buffer_out: [u8; 64*1024],
     next_housekeep: SteadyTime,
+    _dummy_t: PhantomData<T>,
+    _dummy_m: PhantomData<M>,
+    _dummy_i: PhantomData<I>,
 }
 
-impl EthCloud {
+impl<A, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: VirtualInterface<Message=M>> EthCloud<A, T, M, I> {
     pub fn new(device: &str, listen: String, network_id: Option<NetworkId>, mac_timeout: Duration, peer_timeout: Duration) -> Self {
         let socket = match UdpSocket::bind(&listen as &str) {
             Ok(socket) => socket,
@@ -131,18 +143,21 @@ impl EthCloud {
         EthCloud{
             peers: PeerList::new(peer_timeout),
             reconnect_peers: Vec::new(),
-            mactable: MacTable::new(mac_timeout),
+            table: MacTable::new(mac_timeout),
             socket: socket,
             tapdev: tapdev,
             network_id: network_id,
             next_peerlist: SteadyTime::now(),
             update_freq: peer_timeout/2,
             buffer_out: [0; 64*1024],
-            next_housekeep: SteadyTime::now()
+            next_housekeep: SteadyTime::now(),
+            _dummy_t: PhantomData,
+            _dummy_m: PhantomData,
+            _dummy_i: PhantomData
         }
     }
 
-    fn send_msg<A: ToSocketAddrs + fmt::Display>(&mut self, addr: A, msg: &Message) -> Result<(), Error> {
+    fn send_msg<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr, msg: &Message) -> Result<(), Error> {
         debug!("Sending {:?} to {}", msg, addr);
         let mut options = Options::default();
         options.network_id = self.network_id;
@@ -157,7 +172,7 @@ impl EthCloud {
         }
     }
 
-    pub fn connect<A: ToSocketAddrs + fmt::Display>(&mut self, addr: A, reconnect: bool) -> Result<(), Error> {
+    pub fn connect<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr, reconnect: bool) -> Result<(), Error> {
         if let Ok(mut addrs) = addr.to_socket_addrs() {
             while let Some(addr) = addrs.next() {
                 if self.peers.contains(&addr) {
@@ -176,7 +191,7 @@ impl EthCloud {
     fn housekeep(&mut self) -> Result<(), Error> {
         debug!("Running housekeeping...");
         self.peers.timeout();
-        self.mactable.timeout();
+        self.table.housekeep();
         if self.next_peerlist <= SteadyTime::now() {
             debug!("Send peer list to all peers");
             let mut peer_num = self.peers.len();
@@ -199,15 +214,15 @@ impl EthCloud {
         Ok(())
     }
 
-    fn handle_ethernet_frame(&mut self, frame: ethernet::Frame) -> Result<(), Error> {
+    fn handle_interface_data(&mut self, frame: ethernet::Frame) -> Result<(), Error> {
         debug!("Read ethernet frame from tap {:?}", frame);
-        match self.mactable.lookup(frame.dst, frame.vlan) {
+        match self.table.lookup(frame.dst()) {
             Some(addr) => {
-                debug!("Found destination for {:?} (vlan {}) => {}", frame.dst, frame.vlan, addr);
+                debug!("Found destination for {:?} => {}", frame.dst(), addr);
                 try!(self.send_msg(addr, &Message::Frame(frame)))
             },
             None => {
-                debug!("No destination for {:?} (vlan {}) found, broadcasting", frame.dst, frame.vlan);
+                debug!("No destination for {:?} found, broadcasting", frame.dst());
                 let msg = Message::Frame(frame);
                 for addr in &self.peers.as_vec() {
                     try!(self.send_msg(addr, &msg));
@@ -233,11 +248,11 @@ impl EthCloud {
                     Ok(()) => (),
                     Err(e) => {
                         error!("Failed to send via tap device {:?}", e);
-                        return Err(Error::TapdevError("Failed to write to tap device"));
+                        return Err(Error::TunTapDevError("Failed to write to tap device"));
                     }
                 }
                 self.peers.add(&peer);
-                self.mactable.learn(frame.src, frame.vlan, &peer);
+                self.table.learn(frame.src, peer);
             },
             Message::Peers(peers) => {
                 self.peers.add(&peer);
@@ -285,7 +300,7 @@ impl EthCloud {
                     },
                     &1 => match self.tapdev.read(&mut buffer) {
                         Ok(size) => {
-                            match ethernet::decode(&mut buffer[..size]).and_then(|frame| self.handle_ethernet_frame(frame)) {
+                            match ethernet::decode(&mut buffer[..size]).and_then(|frame| self.handle_interface_data(frame)) {
                                 Ok(_) => (),
                                 Err(e) => error!("Error: {:?}", e)
                             }

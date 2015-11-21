@@ -181,12 +181,13 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8]) -> usize {
 
 #[test]
 fn encode_message_packet() {
-    use super::ethcloud::Mac;
+    use super::ethernet::Mac;
     let options = Options::default();
     let src = Mac([1,2,3,4,5,6]);
     let dst = Mac([7,8,9,10,11,12]);
     let payload = [1,2,3,4,5];
-    let msg = Message::Frame(ethernet::Frame{src: &src, dst: &dst, vlan: 0, payload: &payload});
+    let frame = ethernet::Frame{src: ethernet::EthAddr{mac: src, vlan: 0}, dst: ethernet::EthAddr{mac: dst, vlan: 0}, payload: &payload};
+    let msg = Message::Frame(frame);
     let mut buf = [0; 1024];
     let size = encode(&options, &msg, &mut buf[..]);
     assert_eq!(size, 25);

@@ -81,7 +81,7 @@ fn main() {
         Box::new(SimpleLogger)
     }).unwrap();
     debug!("Args: {:?}", args);
-    let mut tapcloud = EthCloud::new(
+    let mut tapcloud = EthCloud::<ethernet::EthAddr, ethernet::MacTable, ethernet::Frame, ethernet::TapDevice>::new(
         &args.flag_device,
         args.flag_listen,
         args.flag_network_id.map(|name| {
