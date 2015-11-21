@@ -11,7 +11,7 @@ use epoll;
 
 use super::{ethernet, udpmessage};
 use super::udpmessage::{Options, Message};
-use super::ethernet::VlanId;
+use super::ethernet::MacTable;
 use super::tapdev::TapDevice;
 
 
@@ -103,60 +103,6 @@ impl PeerList {
     }
 }
 
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct MacTableKey {
-    mac: Mac,
-    vlan: VlanId
-}
-
-struct MacTableValue {
-    address: SocketAddr,
-    timeout: SteadyTime
-}
-
-struct MacTable {
-    table: HashMap<MacTableKey, MacTableValue>,
-    timeout: Duration
-}
-
-impl MacTable {
-    fn new(timeout: Duration) -> MacTable {
-        MacTable{table: HashMap::new(), timeout: timeout}
-    }
-
-    fn timeout(&mut self) {
-        let now = SteadyTime::now();
-        let mut del: Vec<MacTableKey> = Vec::new();
-        for (&key, val) in &self.table {
-            if val.timeout < now {
-                del.push(key);
-            }
-        }
-        for key in del {
-            info!("Forgot mac: {:?} (vlan {})", key.mac, key.vlan);
-            self.table.remove(&key);
-        }
-    }
-
-    #[inline]
-    fn learn(&mut self, mac: &Mac, vlan: VlanId, addr: &SocketAddr) {
-       let key = MacTableKey{mac: *mac, vlan: vlan};
-       let value = MacTableValue{address: *addr, timeout: SteadyTime::now()+self.timeout};
-       if self.table.insert(key, value).is_none() {
-           info!("Learned mac: {:?} (vlan {}) => {}", mac, vlan, addr);
-       }
-    }
-
-    #[inline]
-    fn lookup(&self, mac: &Mac, vlan: VlanId) -> Option<SocketAddr> {
-       let key = MacTableKey{mac: *mac, vlan: vlan};
-       match self.table.get(&key) {
-           Some(value) => Some(value.address),
-           None => None
-       }
-    }
-}
 
 pub struct EthCloud {
     peers: PeerList,

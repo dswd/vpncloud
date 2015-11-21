@@ -1,7 +1,12 @@
 use std::{mem, ptr, fmt};
+use std::net::SocketAddr;
+use std::collections::HashMap;
 
 use super::ethcloud::{Mac, Error};
 use super::util::{as_bytes, as_obj};
+
+use time::{Duration, SteadyTime};
+
 
 pub type VlanId = u16;
 
@@ -64,6 +69,61 @@ pub fn encode(frame: &Frame, buf: &mut [u8]) -> usize {
     }
     pos += frame.payload.len();
     pos
+}
+
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct MacTableKey {
+    mac: Mac,
+    vlan: VlanId
+}
+
+struct MacTableValue {
+    address: SocketAddr,
+    timeout: SteadyTime
+}
+
+pub struct MacTable {
+    table: HashMap<MacTableKey, MacTableValue>,
+    timeout: Duration
+}
+
+impl MacTable {
+    pub fn new(timeout: Duration) -> MacTable {
+        MacTable{table: HashMap::new(), timeout: timeout}
+    }
+
+    pub fn timeout(&mut self) {
+        let now = SteadyTime::now();
+        let mut del: Vec<MacTableKey> = Vec::new();
+        for (&key, val) in &self.table {
+            if val.timeout < now {
+                del.push(key);
+            }
+        }
+        for key in del {
+            info!("Forgot mac: {:?} (vlan {})", key.mac, key.vlan);
+            self.table.remove(&key);
+        }
+    }
+
+    #[inline]
+    pub fn learn(&mut self, mac: &Mac, vlan: VlanId, addr: &SocketAddr) {
+       let key = MacTableKey{mac: *mac, vlan: vlan};
+       let value = MacTableValue{address: *addr, timeout: SteadyTime::now()+self.timeout};
+       if self.table.insert(key, value).is_none() {
+           info!("Learned mac: {:?} (vlan {}) => {}", mac, vlan, addr);
+       }
+    }
+
+    #[inline]
+    pub fn lookup(&self, mac: &Mac, vlan: VlanId) -> Option<SocketAddr> {
+       let key = MacTableKey{mac: *mac, vlan: vlan};
+       match self.table.get(&key) {
+           Some(value) => Some(value.address),
+           None => None
+       }
+    }
 }
 
 

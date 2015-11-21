@@ -8,6 +8,7 @@ mod util;
 mod udpmessage;
 mod tapdev;
 mod ethernet;
+mod ip;
 mod ethcloud;
 
 use time::Duration;
