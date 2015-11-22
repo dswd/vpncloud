@@ -1,44 +1,111 @@
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::{SocketAddr, ToSocketAddrs, Ipv4Addr, Ipv6Addr};
 use std::collections::HashMap;
 use std::hash::Hasher;
 use std::net::UdpSocket;
 use std::io::Read;
-use std::fmt;
+use std::{fmt, ptr};
 use std::os::unix::io::AsRawFd;
 use std::marker::PhantomData;
+use std::str::FromStr;
 
 use time::{Duration, SteadyTime, precise_time_ns};
 use epoll;
 
 use super::device::{TunDevice, TapDevice};
 use super::udpmessage::{encode, decode, Options, Message};
-use super::ethernet::{Frame, EthAddr, MacTable};
-use super::ip::{InternetProtocol, IpAddress, RoutingTable};
+use super::ethernet::{Frame, MacTable};
+use super::ip::{InternetProtocol, RoutingTable};
+use super::util::as_bytes;
 
 
 pub type NetworkId = u64;
+
+#[derive(PartialEq, PartialOrd, Eq, Ord, Hash, Clone)]
+pub struct Address(pub Vec<u8>);
+
+impl fmt::Debug for Address {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self.0.len() {
+            4 => write!(formatter, "{}.{}.{}.{}", self.0[0], self.0[1], self.0[2], self.0[3]),
+            6 => write!(formatter, "{:x}:{:x}:{:x}:{:x}:{:x}:{:x}",
+                self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]),
+            16 => write!(formatter, "{:x}{:x}:{:x}{:x}:{:x}{:x}:{:x}{:x}:{:x}{:x}:{:x}{:x}:{:x}{:x}:{:x}{:x}",
+                self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], self.0[6], self.0[7],
+                self.0[8], self.0[9], self.0[10], self.0[11], self.0[12], self.0[13], self.0[14], self.0[15]
+            ),
+            _ => self.0.fmt(formatter)
+        }
+    }
+}
+
+impl FromStr for Address {
+    type Err=Error;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        if let Ok(addr) = Ipv4Addr::from_str(text) {
+            let ip = addr.octets();
+            let mut res = Vec::with_capacity(4);
+            unsafe {
+                res.set_len(4);
+                ptr::copy_nonoverlapping(ip.as_ptr(), res.as_mut_ptr(), ip.len());
+            }
+            return Ok(Address(res));
+        }
+        if let Ok(addr) = Ipv6Addr::from_str(text) {
+            let mut segments = addr.segments();
+            for i in 0..8 {
+                segments[i] = segments[i].to_be();
+            }
+            let bytes = unsafe { as_bytes(&segments) };
+            let mut res = Vec::with_capacity(16);
+            unsafe {
+                res.set_len(16);
+                ptr::copy_nonoverlapping(bytes.as_ptr(), res.as_mut_ptr(), bytes.len());
+            }
+            return Ok(Address(res));
+        }
+        //FIXME: implement for mac addresses
+        return Err(Error::ParseError("Failed to parse address"))
+    }
+}
+
+
+#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Hash, Clone)]
+pub struct Range {
+    pub base: Address,
+    pub prefix_len: u8
+}
+
+impl FromStr for Range {
+    type Err=Error;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        let pos = match text.find("/") {
+            Some(pos) => pos,
+            None => return Err(Error::ParseError("Invalid range format"))
+        };
+        let prefix_len = try!(u8::from_str(&text[pos+1..])
+            .map_err(|_| Error::ParseError("Failed to parse prefix length")));
+        let base = try!(Address::from_str(&text[..pos]));
+        Ok(Range{base: base, prefix_len: prefix_len})
+    }
+}
+
 
 #[derive(RustcDecodable, Debug)]
 pub enum Behavior {
     Normal, Hub, Switch, Router
 }
 
-pub trait Address: Sized + fmt::Debug + Clone {
-    fn from_bytes(&[u8]) -> Result<Self, Error>;
-    fn to_bytes(&self) -> Vec<u8>;
-}
-
 pub trait Table {
-    type Address: Address;
-    fn learn(&mut self, Self::Address, SocketAddr);
-    fn lookup(&self, &Self::Address) -> Option<SocketAddr>;
+    fn learn(&mut self, Address, Option<u8>, SocketAddr);
+    fn lookup(&self, &Address) -> Option<SocketAddr>;
     fn housekeep(&mut self);
     fn remove_all(&mut self, SocketAddr);
 }
 
 pub trait Protocol: Sized {
-    type Address: Address;
-    fn parse(&[u8]) -> Result<(Self::Address, Self::Address), Error>;
+    fn parse(&[u8]) -> Result<(Address, Address), Error>;
 }
 
 pub trait VirtualInterface: AsRawFd {
@@ -124,9 +191,9 @@ impl PeerList {
 }
 
 
-pub struct GenericCloud<A: Address, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterface> {
+pub struct GenericCloud<T: Table, P: Protocol, I: VirtualInterface> {
     peers: PeerList,
-    addresses: Vec<A>,
+    addresses: Vec<Range>,
     learning: bool,
     broadcast: bool,
     reconnect_peers: Vec<SocketAddr>,
@@ -138,12 +205,12 @@ pub struct GenericCloud<A: Address, T: Table<Address=A>, M: Protocol<Address=A>,
     update_freq: Duration,
     buffer_out: [u8; 64*1024],
     next_housekeep: SteadyTime,
-    _dummy_m: PhantomData<M>,
+    _dummy_m: PhantomData<P>,
 }
 
-impl<A: Address, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterface> GenericCloud<A, T, M, I> {
+impl<T: Table, P: Protocol, I: VirtualInterface> GenericCloud<T, P, I> {
     pub fn new(device: I, listen: String, network_id: Option<NetworkId>, table: T,
-        peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<A>) -> Self {
+        peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>) -> Self {
         let socket = match UdpSocket::bind(&listen as &str) {
             Ok(socket) => socket,
             _ => panic!("Failed to open socket")
@@ -166,7 +233,7 @@ impl<A: Address, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterfac
         }
     }
 
-    fn send_msg<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr, msg: &Message<A>) -> Result<(), Error> {
+    fn send_msg<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr, msg: &Message) -> Result<(), Error> {
         debug!("Sending {:?} to {}", msg, addr);
         let mut options = Options::default();
         options.network_id = self.network_id;
@@ -224,7 +291,7 @@ impl<A: Address, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterfac
     }
 
     fn handle_interface_data(&mut self, payload: &[u8]) -> Result<(), Error> {
-        let (src, dst) = try!(M::parse(payload));
+        let (src, dst) = try!(P::parse(payload));
         debug!("Read data from interface: src: {:?}, dst: {:?}, {} bytes", src, dst, payload.len());
         match self.table.lookup(&dst) {
             Some(addr) => {
@@ -250,7 +317,7 @@ impl<A: Address, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterfac
         Ok(())
     }
 
-    fn handle_net_message(&mut self, peer: SocketAddr, options: Options, msg: Message<A>) -> Result<(), Error> {
+    fn handle_net_message(&mut self, peer: SocketAddr, options: Options, msg: Message) -> Result<(), Error> {
         if let Some(id) = self.network_id {
             if options.network_id != Some(id) {
                 info!("Ignoring message from {} with wrong token {:?}", peer, options.network_id);
@@ -260,7 +327,7 @@ impl<A: Address, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterfac
         debug!("Recieved {:?} from {}", msg, peer);
         match msg {
             Message::Data(payload) => {
-                let (src, _dst) = try!(M::parse(payload));
+                let (src, _dst) = try!(P::parse(payload));
                 debug!("Writing data to device: {} bytes", payload.len());
                 match self.device.write(&payload) {
                     Ok(()) => (),
@@ -271,7 +338,8 @@ impl<A: Address, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterfac
                 }
                 self.peers.add(&peer);
                 if self.learning {
-                    self.table.learn(src, peer);
+                    //learn single address
+                    self.table.learn(src, None, peer);
                 }
             },
             Message::Peers(peers) => {
@@ -282,7 +350,7 @@ impl<A: Address, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterfac
                     }
                 }
             },
-            Message::Init(addrs) => {
+            Message::Init(ranges) => {
                 if self.peers.contains(&peer) {
                     return Ok(());
                 }
@@ -291,8 +359,8 @@ impl<A: Address, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterfac
                 let own_addrs = self.addresses.clone();
                 try!(self.send_msg(peer, &Message::Init(own_addrs)));
                 try!(self.send_msg(peer, &Message::Peers(peers)));
-                for addr in addrs {
-                    self.table.learn(addr, peer.clone());
+                for range in ranges {
+                    self.table.learn(range.base, Some(range.prefix_len), peer.clone());
                 }
             },
             Message::Close => {
@@ -349,7 +417,7 @@ impl<A: Address, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterfac
 }
 
 
-pub type TapCloud = GenericCloud<EthAddr, MacTable, Frame, TapDevice>;
+pub type TapCloud = GenericCloud<MacTable, Frame, TapDevice>;
 
 impl TapCloud {
     pub fn new_tap_cloud(device: &str, listen: String, behavior: Behavior, network_id: Option<NetworkId>, mac_timeout: Duration, peer_timeout: Duration) -> Self {
@@ -370,19 +438,19 @@ impl TapCloud {
 }
 
 
-pub type TunCloud = GenericCloud<IpAddress, RoutingTable, InternetProtocol, TunDevice>;
+pub type TunCloud = GenericCloud<RoutingTable, InternetProtocol, TunDevice>;
 
 impl TunCloud {
-    pub fn new_tun_cloud(device: &str, listen: String, behavior: Behavior, network_id: Option<NetworkId>, subnets: Vec<String>, peer_timeout: Duration) -> Self {
+    pub fn new_tun_cloud(device: &str, listen: String, behavior: Behavior, network_id: Option<NetworkId>, range_strs: Vec<String>, peer_timeout: Duration) -> Self {
         let device = match TunDevice::new(device) {
             Ok(device) => device,
             _ => panic!("Failed to open tun device")
         };
         info!("Opened tun device {}", device.ifname());
         let table = RoutingTable::new();
-        let mut addrs = Vec::with_capacity(subnets.len());
-        for s in subnets {
-            addrs.push(IpAddress::from_str(&s).expect("Invalid subnet"));
+        let mut ranges = Vec::with_capacity(range_strs.len());
+        for s in range_strs {
+            ranges.push(Range::from_str(&s).expect("Invalid subnet"));
         }
         let (learning, broadcasting) = match behavior {
             Behavior::Normal => (false, false),
@@ -390,6 +458,6 @@ impl TunCloud {
             Behavior::Hub => (false, true),
             Behavior::Router => (false, false)
         };
-        Self::new(device, listen, network_id, table, peer_timeout, learning, broadcasting, addrs)
+        Self::new(device, listen, network_id, table, peer_timeout, learning, broadcasting, ranges)
     }
 }

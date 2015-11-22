@@ -2,9 +2,8 @@ use std::{mem, ptr, fmt};
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
 use std::u16;
 
-use super::cloud::{Error, NetworkId, Address};
-use super::util::{as_obj, as_bytes};
-#[cfg(test)] use super::ethernet;
+use super::cloud::{Error, NetworkId, Range, Address};
+use super::util::{as_obj, as_bytes, to_vec};
 
 const MAGIC: [u8; 3] = [0x76, 0x70, 0x6e];
 const VERSION: u8 = 0;
@@ -31,14 +30,14 @@ pub struct Options {
 
 
 #[derive(PartialEq)]
-pub enum Message<'a, A: Address> {
+pub enum Message<'a> {
     Data(&'a[u8]),
     Peers(Vec<SocketAddr>),
-    Init(Vec<A>),
+    Init(Vec<Range>),
     Close,
 }
 
-impl<'a, A: Address> fmt::Debug for Message<'a, A> {
+impl<'a> fmt::Debug for Message<'a> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
             &Message::Data(ref data) => write!(formatter, "Data(data: {} bytes)", data.len()),
@@ -60,7 +59,7 @@ impl<'a, A: Address> fmt::Debug for Message<'a, A> {
     }
 }
 
-pub fn decode<A: Address>(data: &[u8]) -> Result<(Options, Message<A>), Error> {
+pub fn decode(data: &[u8]) -> Result<(Options, Message), Error> {
     if data.len() < mem::size_of::<TopHeader>() {
         return Err(Error::ParseError("Empty message"));
     }
@@ -125,8 +124,14 @@ pub fn decode<A: Address>(data: &[u8]) -> Result<(Options, Message<A>), Error> {
                 if data.len() < pos + len {
                     return Err(Error::ParseError("Init data too short"));
                 }
-                addrs.push(try!(A::from_bytes(&data[pos..pos+len])));
+                let base = Address(to_vec(&data[pos..pos+len]));
                 pos += len;
+                if data.len() < pos + 1 {
+                    return Err(Error::ParseError("Init data too short"));
+                }
+                let prefix_len = data[pos];
+                pos += 1;
+                addrs.push(Range{base: base, prefix_len: prefix_len});
             }
             Message::Init(addrs)
         },
@@ -136,7 +141,7 @@ pub fn decode<A: Address>(data: &[u8]) -> Result<(Options, Message<A>), Error> {
     Ok((options, msg))
 }
 
-pub fn encode<A: Address>(options: &Options, msg: &Message<A>, buf: &mut [u8]) -> usize {
+pub fn encode(options: &Options, msg: &Message, buf: &mut [u8]) -> usize {
     assert!(buf.len() >= mem::size_of::<TopHeader>());
     let mut pos = 0;
     let mut header = TopHeader::default();
@@ -192,19 +197,22 @@ pub fn encode<A: Address>(options: &Options, msg: &Message<A>, buf: &mut [u8]) -
             buf[pos] = 0;
             pos += 1;
         },
-        &Message::Init(ref addrs) => {
+        &Message::Init(ref ranges) => {
             assert!(buf.len() >= pos + 1);
-            assert!(addrs.len() <= 255);
-            buf[pos] = addrs.len() as u8;
+            assert!(ranges.len() <= 255);
+            buf[pos] = ranges.len() as u8;
             pos += 1;
-            for addr in addrs {
-                let bytes = addr.to_bytes();
-                assert!(bytes.len() <= 255);
-                assert!(buf.len() >= pos + 1 + bytes.len());
-                buf[pos] = bytes.len() as u8;
+            for range in ranges {
+                let base = &range.base;
+                let len = base.0.len();
+                assert!(len <= 255);
+                assert!(buf.len() >= pos + 1 + len + 1);
+                buf[pos] = len as u8;
                 pos += 1;
-                unsafe { ptr::copy_nonoverlapping(bytes.as_ptr(), buf[pos..].as_mut_ptr(), bytes.len()) };
-                pos += bytes.len();
+                unsafe { ptr::copy_nonoverlapping(base.0.as_ptr(), buf[pos..].as_mut_ptr(), base.0.len()) };
+                pos += base.0.len();
+                buf[pos] = range.prefix_len;
+                pos += 1;
             }
         },
         &Message::Close => {
@@ -218,7 +226,7 @@ pub fn encode<A: Address>(options: &Options, msg: &Message<A>, buf: &mut [u8]) -
 fn encode_message_packet() {
     let options = Options::default();
     let payload = [1,2,3,4,5];
-    let msg: Message<ethernet::EthAddr> = Message::Data(&payload);
+    let msg = Message::Data(&payload);
     let mut buf = [0; 1024];
     let size = encode(&options, &msg, &mut buf[..]);
     assert_eq!(size, 13);
@@ -232,7 +240,7 @@ fn encode_message_packet() {
 fn encode_message_peers() {
     use std::str::FromStr;
     let options = Options::default();
-    let msg: Message<ethernet::EthAddr> = Message::Peers(vec![SocketAddr::from_str("1.2.3.4:123").unwrap(), SocketAddr::from_str("5.6.7.8:12345").unwrap()]);
+    let msg = Message::Peers(vec![SocketAddr::from_str("1.2.3.4:123").unwrap(), SocketAddr::from_str("5.6.7.8:12345").unwrap()]);
     let mut buf = [0; 1024];
     let size = encode(&options, &msg, &mut buf[..]);
     assert_eq!(size, 22);
@@ -246,7 +254,7 @@ fn encode_message_peers() {
 fn encode_option_network_id() {
     let mut options = Options::default();
     options.network_id = Some(134);
-    let msg: Message<ethernet::EthAddr> = Message::Close;
+    let msg = Message::Close;
     let mut buf = [0; 1024];
     let size = encode(&options, &msg, &mut buf[..]);
     assert_eq!(size, 16);
@@ -260,7 +268,7 @@ fn encode_option_network_id() {
 fn encode_message_init() {
     let options = Options::default();
     let addrs = vec![];
-    let msg: Message<ethernet::EthAddr> = Message::Init(addrs);
+    let msg = Message::Init(addrs);
     let mut buf = [0; 1024];
     let size = encode(&options, &msg, &mut buf[..]);
     assert_eq!(size, 13);
@@ -273,7 +281,7 @@ fn encode_message_init() {
 #[test]
 fn encode_message_close() {
     let options = Options::default();
-    let msg: Message<ethernet::EthAddr> = Message::Close;
+    let msg = Message::Close;
     let mut buf = [0; 1024];
     let size = encode(&options, &msg, &mut buf[..]);
     assert_eq!(size, 8);
