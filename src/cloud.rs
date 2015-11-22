@@ -18,6 +18,11 @@ use super::ip::{InternetProtocol, IpAddress, RoutingTable};
 
 pub type NetworkId = u64;
 
+#[derive(RustcDecodable, Debug)]
+pub enum Behavior {
+    Normal, Hub, Switch, Router
+}
+
 pub trait Address: Sized + fmt::Debug + Clone {
     fn from_bytes(&[u8]) -> Result<Self, Error>;
     fn to_bytes(&self) -> Vec<u8>;
@@ -347,14 +352,20 @@ impl<A: Address, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterfac
 pub type TapCloud = GenericCloud<EthAddr, MacTable, Frame, TapDevice>;
 
 impl TapCloud {
-    pub fn new_tap_cloud(device: &str, listen: String, network_id: Option<NetworkId>, mac_timeout: Duration, peer_timeout: Duration) -> Self {
+    pub fn new_tap_cloud(device: &str, listen: String, behavior: Behavior, network_id: Option<NetworkId>, mac_timeout: Duration, peer_timeout: Duration) -> Self {
         let device = match TapDevice::new(device) {
             Ok(device) => device,
             _ => panic!("Failed to open tap device")
         };
         info!("Opened tap device {}", device.ifname());
         let table = MacTable::new(mac_timeout);
-        Self::new(device, listen, network_id, table, peer_timeout, true, true, vec![])
+        let (learning, broadcasting) = match behavior {
+            Behavior::Normal => (true, true),
+            Behavior::Switch => (true, true),
+            Behavior::Hub => (false, true),
+            Behavior::Router => (false, false)
+        };
+        Self::new(device, listen, network_id, table, peer_timeout, learning, broadcasting, vec![])
     }
 }
 
@@ -362,14 +373,23 @@ impl TapCloud {
 pub type TunCloud = GenericCloud<IpAddress, RoutingTable, InternetProtocol, TunDevice>;
 
 impl TunCloud {
-    pub fn new_tun_cloud(device: &str, listen: String, network_id: Option<NetworkId>, subnet: String, peer_timeout: Duration) -> Self {
+    pub fn new_tun_cloud(device: &str, listen: String, behavior: Behavior, network_id: Option<NetworkId>, subnets: Vec<String>, peer_timeout: Duration) -> Self {
         let device = match TunDevice::new(device) {
             Ok(device) => device,
             _ => panic!("Failed to open tun device")
         };
         info!("Opened tun device {}", device.ifname());
         let table = RoutingTable::new();
-        let subnet = IpAddress::from_str(&subnet).expect("Invalid subnet");
-        Self::new(device, listen, network_id, table, peer_timeout, false, false, vec![subnet])
+        let mut addrs = Vec::with_capacity(subnets.len());
+        for s in subnets {
+            addrs.push(IpAddress::from_str(&s).expect("Invalid subnet"));
+        }
+        let (learning, broadcasting) = match behavior {
+            Behavior::Normal => (false, false),
+            Behavior::Switch => (true, true),
+            Behavior::Hub => (false, true),
+            Behavior::Router => (false, false)
+        };
+        Self::new(device, listen, network_id, table, peer_timeout, learning, broadcasting, addrs)
     }
 }

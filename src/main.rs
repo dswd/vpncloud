@@ -16,9 +16,11 @@ use docopt::Docopt;
 
 use std::hash::{Hash, SipHasher, Hasher};
 
-use cloud::{Error, TapCloud, TunCloud};
+use cloud::{Error, TapCloud, TunCloud, Behavior};
 
 
+//TODO: hub behavior
+//TODO: L2 routing/L3 switching
 //TODO: Implement IPv6
 //TODO: Encryption
 //TODO: Call close
@@ -44,18 +46,18 @@ Usage:
 
 Options:
     -t <type>, --type <type>               Set the type of network [default: tap]
+    --behavior <behavior>                  The behavior of the vpn [default: normal]
     -d <device>, --device <device>         Name of the virtual device [default: cloud%d]
     -l <listen>, --listen <listen>         Address to listen on [default: 0.0.0.0:3210]
     -c <connect>, --connect <connect>      List of peers (addr:port) to connect to
     --network-id <network_id>              Optional token that identifies the network
     --peer-timeout <peer_timeout>          Peer timeout in seconds [default: 1800]
-    --subnet <subnet>                      The local subnet to use (only for tun)
+    --subnet <subnet>...                   The local subnets to use (only for tun)
     --mac-timeout <mac_timeout>            Mac table entry timeout in seconds (only for tap) [default: 300]
     -v, --verbose                          Log verbosely
     -q, --quiet                            Only print error messages
     -h, --help                             Display the help
 ";
-
 
 #[derive(RustcDecodable, Debug)]
 enum Type {
@@ -65,7 +67,8 @@ enum Type {
 #[derive(RustcDecodable, Debug)]
 struct Args {
     flag_type: Type,
-    flag_subnet: String,
+    flag_behavior: Behavior,
+    flag_subnet: Vec<String>,
     flag_device: String,
     flag_listen: String,
     flag_network_id: Option<String>,
@@ -80,6 +83,7 @@ fn tap_cloud(args: Args) {
     let mut tapcloud = TapCloud::new_tap_cloud(
         &args.flag_device,
         args.flag_listen,
+        args.flag_behavior,
         args.flag_network_id.map(|name| {
             let mut s = SipHasher::new();
             name.hash(&mut s);
@@ -98,6 +102,7 @@ fn tun_cloud(args: Args) {
     let mut tuncloud = TunCloud::new_tun_cloud(
         &args.flag_device,
         args.flag_listen,
+        args.flag_behavior,
         args.flag_network_id.map(|name| {
             let mut s = SipHasher::new();
             name.hash(&mut s);
