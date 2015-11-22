@@ -10,9 +10,9 @@ use std::marker::PhantomData;
 use time::{Duration, SteadyTime, precise_time_ns};
 use epoll;
 
-use super::{ethernet, udpmessage};
-use super::udpmessage::{Options, Message};
-use super::ethernet::{TapDevice, MacTable};
+use super::udpmessage::{encode, decode, Options, Message};
+use super::ethernet::{Frame, EthAddr, TapDevice, MacTable};
+
 
 pub type NetworkId = u64;
 
@@ -113,7 +113,8 @@ impl PeerList {
     }
 }
 
-pub struct EthCloud<A, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: VirtualInterface> {
+
+pub struct GenericCloud<A, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: VirtualInterface> {
     peers: PeerList,
     reconnect_peers: Vec<SocketAddr>,
     table: T,
@@ -127,13 +128,13 @@ pub struct EthCloud<A, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: V
     _dummy_m: PhantomData<M>,
 }
 
-impl<A: fmt::Debug, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: VirtualInterface> EthCloud<A, T, M, I> {
+impl<A: fmt::Debug, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: VirtualInterface> GenericCloud<A, T, M, I> {
     pub fn new(device: I, listen: String, network_id: Option<NetworkId>, table: T, peer_timeout: Duration) -> Self {
         let socket = match UdpSocket::bind(&listen as &str) {
             Ok(socket) => socket,
             _ => panic!("Failed to open socket")
         };
-        EthCloud{
+        GenericCloud{
             peers: PeerList::new(peer_timeout),
             reconnect_peers: Vec::new(),
             table: table,
@@ -152,7 +153,7 @@ impl<A: fmt::Debug, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: Virt
         debug!("Sending {:?} to {}", msg, addr);
         let mut options = Options::default();
         options.network_id = self.network_id;
-        let size = udpmessage::encode(&options, msg, &mut self.buffer_out);
+        let size = encode(&options, msg, &mut self.buffer_out);
         match self.socket.send_to(&self.buffer_out[..size], addr) {
             Ok(written) if written == size => Ok(()),
             Ok(_) => Err(Error::SocketError("Sent out truncated packet")),
@@ -281,7 +282,7 @@ impl<A: fmt::Debug, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: Virt
                 match &events[i as usize].data {
                     &0 => match self.socket.recv_from(&mut buffer) {
                         Ok((size, src)) => {
-                            match udpmessage::decode(&buffer[..size]).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
+                            match decode(&buffer[..size]).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
                                 Ok(_) => (),
                                 Err(e) => error!("Error: {:?}", e)
                             }
@@ -310,7 +311,8 @@ impl<A: fmt::Debug, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: Virt
     }
 }
 
-pub type TapCloud = EthCloud<ethernet::EthAddr, MacTable, ethernet::Frame, ethernet::TapDevice>;
+
+pub type TapCloud = GenericCloud<EthAddr, MacTable, Frame, TapDevice>;
 
 impl TapCloud {
     pub fn new_tap_cloud(device: &str, listen: String, network_id: Option<NetworkId>, mac_timeout: Duration, peer_timeout: Duration) -> Self {

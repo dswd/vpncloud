@@ -8,14 +8,14 @@ mod util;
 mod udpmessage;
 mod ethernet;
 mod ip;
-mod ethcloud;
+mod cloud;
 
 use time::Duration;
 use docopt::Docopt;
 
 use std::hash::{Hash, SipHasher, Hasher};
 
-use ethcloud::{Error, TapCloud};
+use cloud::{Error, TapCloud};
 
 
 //TODO: Implement IPv6

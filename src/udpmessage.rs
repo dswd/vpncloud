@@ -2,7 +2,7 @@ use std::{mem, ptr, fmt};
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
 use std::u16;
 
-use super::ethcloud::{Error, NetworkId, InterfaceMessage};
+use super::cloud::{Error, NetworkId, InterfaceMessage};
 use super::ethernet;
 use super::util::{as_obj, as_bytes};
 

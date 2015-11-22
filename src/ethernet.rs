@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::io::{Result as IoResult, Error as IoError, Read, Write};
 
-use super::ethcloud::{Error, Table, InterfaceMessage, VirtualInterface};
+use super::cloud::{Error, Table, InterfaceMessage, VirtualInterface};
 use super::util::{as_bytes, as_obj};
 
 use time::{Duration, SteadyTime};
@@ -12,6 +12,7 @@ use time::{Duration, SteadyTime};
 extern {
     fn setup_tap_device(fd: i32, ifname: *mut u8) -> i32;
 }
+
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Mac(pub [u8; 6]);
@@ -30,6 +31,7 @@ pub struct EthAddr {
     pub mac: Mac,
     pub vlan: Option<VlanId>
 }
+
 
 #[derive(PartialEq)]
 pub struct Frame {
@@ -101,6 +103,7 @@ impl InterfaceMessage for Frame {
     }
 }
 
+
 pub struct TapDevice {
     fd: fs::File,
     ifname: String
@@ -151,10 +154,12 @@ impl VirtualInterface for TapDevice {
     }
 }
 
+
 struct MacTableValue {
     address: SocketAddr,
     timeout: SteadyTime
 }
+
 
 pub struct MacTable {
     table: HashMap<EthAddr, MacTableValue>,
