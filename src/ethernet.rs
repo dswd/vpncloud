@@ -1,17 +1,13 @@
-use std::{mem, ptr, fmt, fs};
+use std::{mem, fmt, fs};
 use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::io::{Result as IoResult, Error as IoError, Read, Write};
 
 use super::cloud::{Error, Table, Protocol, VirtualInterface};
-use super::util::{as_bytes, as_obj};
+use super::util::as_obj;
 
 use time::{Duration, SteadyTime};
-
-extern {
-    fn setup_tap_device(fd: i32, ifname: *mut u8) -> i32;
-}
 
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -57,51 +53,6 @@ impl Protocol for Frame {
             vlan = Some(u16::from_be(* unsafe { as_obj::<u16>(&data[pos..]) }));
         }
         Ok((EthAddr{mac: src, vlan: vlan}, EthAddr{mac: dst, vlan: vlan}))
-    }
-}
-
-
-pub struct TapDevice {
-    fd: fs::File,
-    ifname: String
-}
-
-impl TapDevice {
-    pub fn new(ifname: &str) -> IoResult<Self> {
-        let fd = try!(fs::OpenOptions::new().read(true).write(true).open("/dev/net/tun"));
-        let mut ifname_string = String::with_capacity(32);
-        ifname_string.push_str(ifname);
-        ifname_string.push('\0');
-        let mut ifname_c = ifname_string.into_bytes();
-        let res = unsafe { setup_tap_device(fd.as_raw_fd(), ifname_c.as_mut_ptr()) };
-        match res {
-            0 => Ok(TapDevice{fd: fd, ifname: String::from_utf8(ifname_c).unwrap()}),
-            _ => Err(IoError::last_os_error())
-        }
-    }
-
-    #[inline(always)]
-    pub fn ifname(&self) -> &str {
-        &self.ifname
-    }
-}
-
-impl AsRawFd for TapDevice {
-    fn as_raw_fd(&self) -> RawFd {
-        self.fd.as_raw_fd()
-    }
-}
-
-impl VirtualInterface for TapDevice {
-    fn read(&mut self, mut buffer: &mut [u8]) -> Result<usize, Error> {
-        self.fd.read(&mut buffer).map_err(|_| Error::TunTapDevError("Read error"))
-    }
-
-    fn write(&mut self, data: &[u8]) -> Result<(), Error> {
-        match self.fd.write_all(&data) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(Error::TunTapDevError("Write error"))
-        }
     }
 }
 

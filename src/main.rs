@@ -9,6 +9,7 @@ mod udpmessage;
 mod ethernet;
 mod ip;
 mod cloud;
+mod device;
 
 use time::Duration;
 use docopt::Docopt;

@@ -10,8 +10,10 @@ use std::marker::PhantomData;
 use time::{Duration, SteadyTime, precise_time_ns};
 use epoll;
 
+use super::device::{TunDevice, TapDevice};
 use super::udpmessage::{encode, decode, Options, Message};
-use super::ethernet::{Frame, EthAddr, TapDevice, MacTable};
+use super::ethernet::{Frame, EthAddr, MacTable};
+use super::ip::{InternetProtocol, IpAddress, RoutingTable};
 
 
 pub type NetworkId = u64;
@@ -321,6 +323,20 @@ impl TapCloud {
         };
         info!("Opened tap device {}", device.ifname());
         let table = MacTable::new(mac_timeout);
+        Self::new(device, listen, network_id, table, peer_timeout)
+    }
+}
+
+
+pub type TunCloud = GenericCloud<IpAddress, RoutingTable, InternetProtocol, TunDevice>;
+
+impl TunCloud {
+    pub fn new_tun_cloud(device: &str, listen: String, network_id: Option<NetworkId>, table: RoutingTable, peer_timeout: Duration) -> Self {
+        let device = match TunDevice::new(device) {
+            Ok(device) => device,
+            _ => panic!("Failed to open tun device")
+        };
+        info!("Opened tun device {}", device.ifname());
         Self::new(device, listen, network_id, table, peer_timeout)
     }
 }
