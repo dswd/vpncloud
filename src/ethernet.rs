@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::io::{Result as IoResult, Error as IoError, Read, Write};
 
-use super::cloud::{Error, Table, InterfaceMessage, VirtualInterface};
+use super::cloud::{Error, Table, Protocol, VirtualInterface};
 use super::util::{as_bytes, as_obj};
 
 use time::{Duration, SteadyTime};
@@ -34,52 +34,12 @@ pub struct EthAddr {
 
 
 #[derive(PartialEq)]
-pub struct Frame {
-    pub src: EthAddr,
-    pub dst: EthAddr
-}
+pub struct Frame;
 
-impl fmt::Debug for Frame {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(formatter, "src: {:?}, dst: {:?}, vlan: {:?}", self.src.mac, self.dst.mac, self.src.vlan)
-    }
-}
-
-impl InterfaceMessage for Frame {
+impl Protocol for Frame {
     type Address = EthAddr;
 
-    fn src(&self) -> Self::Address {
-        self.src
-    }
-
-    fn dst(&self) -> Self::Address {
-        self.dst
-    }
-
-    fn encode_to(&self, payload: &[u8], data: &mut [u8]) -> usize {
-        assert!(data.len() >= 16 + payload.len());
-        let mut pos = 0;
-        unsafe {
-            let dst_dat = as_bytes::<Mac>(&self.dst.mac);
-            ptr::copy_nonoverlapping(dst_dat.as_ptr(), data[pos..].as_mut_ptr(), dst_dat.len());
-            pos += dst_dat.len();
-            let src_dat = as_bytes::<Mac>(&self.src.mac);
-            ptr::copy_nonoverlapping(src_dat.as_ptr(), data[pos..].as_mut_ptr(), src_dat.len());
-            pos += src_dat.len();
-            if let Some(vlan) = self.src.vlan {
-                data[pos] = 0x81; data[pos+1] = 0x00;
-                pos += 2;
-                let vlan_dat = mem::transmute::<u16, [u8; 2]>(vlan.to_be());
-                ptr::copy_nonoverlapping(vlan_dat.as_ptr(), data[pos..].as_mut_ptr(), vlan_dat.len());
-                pos += vlan_dat.len();
-            }
-            ptr::copy_nonoverlapping(payload.as_ptr(), data[pos..].as_mut_ptr(), payload.len());
-        }
-        pos += payload.len();
-        pos
-    }
-
-    fn parse_from(data: &[u8]) -> Result<(Frame, &[u8]), Error> {
+    fn parse(data: &[u8]) -> Result<(EthAddr, EthAddr), Error> {
         if data.len() < 14 {
             return Err(Error::ParseError("Frame is too short"));
         }
@@ -89,17 +49,14 @@ impl InterfaceMessage for Frame {
         let src = *unsafe { as_obj::<Mac>(&data[pos..]) };
         pos += mem::size_of::<Mac>();
         let mut vlan = None;
-        let mut payload = &data[pos..];
         if data[pos] == 0x81 && data[pos+1] == 0x00 {
             pos += 2;
             if data.len() < pos + 2 {
                 return Err(Error::ParseError("Vlan frame is too short"));
             }
             vlan = Some(u16::from_be(* unsafe { as_obj::<u16>(&data[pos..]) }));
-            pos += 2;
-            payload = &data[pos..];
         }
-        Ok((Frame{src: EthAddr{mac: src, vlan: vlan}, dst: EthAddr{mac: dst, vlan: vlan}}, payload))
+        Ok((EthAddr{mac: src, vlan: vlan}, EthAddr{mac: dst, vlan: vlan}))
     }
 }
 
@@ -136,18 +93,12 @@ impl AsRawFd for TapDevice {
 }
 
 impl VirtualInterface for TapDevice {
-    fn read<'a, T: InterfaceMessage>(&mut self, mut buffer: &'a mut [u8]) -> Result<(T, &'a[u8]), Error> {
-        let size = match self.fd.read(&mut buffer) {
-            Ok(size) => size,
-            Err(_) => return Err(Error::TunTapDevError("Read error"))
-        };
-        T::parse_from(&buffer[..size])
+    fn read(&mut self, mut buffer: &mut [u8]) -> Result<usize, Error> {
+        self.fd.read(&mut buffer).map_err(|_| Error::TunTapDevError("Read error"))
     }
 
-    fn write<T: InterfaceMessage>(&mut self, msg: &T, payload: &[u8]) -> Result<(), Error> {
-        let mut buffer = [0u8; 64*1024];
-        let size = msg.encode_to(payload, &mut buffer);
-        match self.fd.write_all(&buffer[..size]) {
+    fn write(&mut self, data: &[u8]) -> Result<(), Error> {
+        match self.fd.write_all(&data) {
             Ok(_) => Ok(()),
             Err(_) => Err(Error::TunTapDevError("Write error"))
         }
@@ -196,8 +147,8 @@ impl Table for MacTable {
        }
     }
 
-    fn lookup(&self, key: Self::Address) -> Option<SocketAddr> {
-       match self.table.get(&key) {
+    fn lookup(&self, key: &Self::Address) -> Option<SocketAddr> {
+       match self.table.get(key) {
            Some(value) => Some(value.address),
            None => None
        }
@@ -207,30 +158,16 @@ impl Table for MacTable {
 
 #[test]
 fn without_vlan() {
-    let src = Mac([1,2,3,4,5,6]);
-    let dst = Mac([6,5,4,3,2,1]);
-    let payload = [1,2,3,4,5,6,7,8];
-    let mut buf = [0u8; 1024];
-    let frame = Frame{src: EthAddr{mac: src, vlan: None}, dst: EthAddr{mac: dst, vlan: None}};
-    let size = frame.encode_to(&payload, &mut buf);
-    assert_eq!(size, 20);
-    assert_eq!(&buf[..size], &[6,5,4,3,2,1,1,2,3,4,5,6,1,2,3,4,5,6,7,8]);
-    let (frame2, payload2) = Frame::parse_from(&buf[..size]).unwrap();
-    assert_eq!(frame, frame2);
-    assert_eq!(payload, payload2);
+    let data = [6,5,4,3,2,1,1,2,3,4,5,6,1,2,3,4,5,6,7,8];
+    let (src, dst) = Frame::parse(&data).unwrap();
+    assert_eq!(src, EthAddr{mac: Mac([1,2,3,4,5,6]), vlan: None});
+    assert_eq!(dst, EthAddr{mac: Mac([6,5,4,3,2,1]), vlan: None});
 }
 
 #[test]
 fn with_vlan() {
-    let src = Mac([1,2,3,4,5,6]);
-    let dst = Mac([6,5,4,3,2,1]);
-    let payload = [1,2,3,4,5,6,7,8];
-    let mut buf = [0u8; 1024];
-    let frame = Frame{src: EthAddr{mac: src, vlan: Some(1234)}, dst: EthAddr{mac: dst, vlan: Some(1234)}};
-    let size = frame.encode_to(&payload, &mut buf);
-    assert_eq!(size, 24);
-    assert_eq!(&buf[..size], &[6,5,4,3,2,1,1,2,3,4,5,6,0x81,0,4,210,1,2,3,4,5,6,7,8]);
-    let (frame2, payload2) = Frame::parse_from(&buf[..size]).unwrap();
-    assert_eq!(frame, frame2);
-    assert_eq!(payload, payload2);
+    let data = [6,5,4,3,2,1,1,2,3,4,5,6,0x81,0,4,210,1,2,3,4,5,6,7,8];
+    let (src, dst) = Frame::parse(&data).unwrap();
+    assert_eq!(src, EthAddr{mac: Mac([1,2,3,4,5,6]), vlan: Some(1234)});
+    assert_eq!(dst, EthAddr{mac: Mac([6,5,4,3,2,1]), vlan: Some(1234)});
 }

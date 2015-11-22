@@ -1,8 +1,7 @@
 use std::net::{SocketAddr, Ipv4Addr, Ipv6Addr};
 use std::collections::{hash_map, HashMap};
-use std::fmt;
 
-use super::cloud::{InterfaceMessage, Error};
+use super::cloud::{Protocol, Error};
 use super::util::{as_obj, as_bytes};
 
 
@@ -12,43 +11,12 @@ pub enum IpAddress {
     V6(Ipv6Addr)
 }
 
-#[derive(PartialEq)]
-pub enum IpHeader {
-    V4{src: Ipv4Addr, dst: Ipv4Addr},
-    V6{src: Ipv6Addr, dst: Ipv6Addr}
-}
+pub struct InternetProtocol;
 
-impl fmt::Debug for IpHeader {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match self {
-            &IpHeader::V4{src, dst} => write!(formatter, "src: {}, dst: {}", src, dst),
-            &IpHeader::V6{src, dst} => write!(formatter, "src: {}, dst: {}", src, dst)
-        }
-    }
-}
-
-impl InterfaceMessage for IpHeader {
+impl Protocol for InternetProtocol {
     type Address = IpAddress;
 
-    fn src(&self) -> Self::Address {
-        match self {
-            &IpHeader::V4{src, dst: _} => IpAddress::V4(src),
-            &IpHeader::V6{src, dst: _} => IpAddress::V6(src)
-        }
-    }
-
-    fn dst(&self) -> Self::Address {
-        match self {
-            &IpHeader::V4{src: _, dst} => IpAddress::V4(dst),
-            &IpHeader::V6{src: _, dst} => IpAddress::V6(dst)
-        }
-    }
-
-    fn encode_to(&self, payload: &[u8], data: &mut [u8]) -> usize {
-        unimplemented!()
-    }
-
-    fn parse_from(data: &[u8]) -> Result<(Self, &[u8]), Error> {
+    fn parse(data: &[u8]) -> Result<(IpAddress, IpAddress), Error> {
         unimplemented!()
     }
 }

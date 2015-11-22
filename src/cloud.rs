@@ -19,21 +19,18 @@ pub type NetworkId = u64;
 pub trait Table {
     type Address;
     fn learn(&mut self, Self::Address, SocketAddr);
-    fn lookup(&self, Self::Address) -> Option<SocketAddr>;
+    fn lookup(&self, &Self::Address) -> Option<SocketAddr>;
     fn housekeep(&mut self);
 }
 
-pub trait InterfaceMessage: fmt::Debug + Sized {
+pub trait Protocol: Sized {
     type Address;
-    fn src(&self) -> Self::Address;
-    fn dst(&self) -> Self::Address;
-    fn encode_to(&self, &[u8], &mut [u8]) -> usize;
-    fn parse_from(&[u8]) -> Result<(Self, &[u8]), Error>;
+    fn parse(&[u8]) -> Result<(Self::Address, Self::Address), Error>;
 }
 
 pub trait VirtualInterface: AsRawFd {
-    fn read<'a, T: InterfaceMessage>(&mut self, &'a mut [u8]) -> Result<(T, &'a[u8]), Error>;
-    fn write<T: InterfaceMessage>(&mut self, &T, &[u8]) -> Result<(), Error>;
+    fn read(&mut self, &mut [u8]) -> Result<usize, Error>;
+    fn write(&mut self, &[u8]) -> Result<(), Error>;
 }
 
 
@@ -114,7 +111,7 @@ impl PeerList {
 }
 
 
-pub struct GenericCloud<A, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: VirtualInterface> {
+pub struct GenericCloud<A, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterface> {
     peers: PeerList,
     reconnect_peers: Vec<SocketAddr>,
     table: T,
@@ -128,7 +125,7 @@ pub struct GenericCloud<A, T: Table<Address=A>, M: InterfaceMessage<Address=A>, 
     _dummy_m: PhantomData<M>,
 }
 
-impl<A: fmt::Debug, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: VirtualInterface> GenericCloud<A, T, M, I> {
+impl<A: fmt::Debug, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterface> GenericCloud<A, T, M, I> {
     pub fn new(device: I, listen: String, network_id: Option<NetworkId>, table: T, peer_timeout: Duration) -> Self {
         let socket = match UdpSocket::bind(&listen as &str) {
             Ok(socket) => socket,
@@ -149,7 +146,7 @@ impl<A: fmt::Debug, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: Virt
         }
     }
 
-    fn send_msg<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr, msg: &Message<M>) -> Result<(), Error> {
+    fn send_msg<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr, msg: &Message) -> Result<(), Error> {
         debug!("Sending {:?} to {}", msg, addr);
         let mut options = Options::default();
         options.network_id = self.network_id;
@@ -206,16 +203,17 @@ impl<A: fmt::Debug, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: Virt
         Ok(())
     }
 
-    fn handle_interface_data(&mut self, header: M, payload: &[u8]) -> Result<(), Error> {
-        debug!("Read data from interface {:?}, {} bytes", header, payload.len());
-        match self.table.lookup(header.dst()) {
+    fn handle_interface_data(&mut self, payload: &[u8]) -> Result<(), Error> {
+        let (src, dst) = try!(M::parse(payload));
+        debug!("Read data from interface: src: {:?}, dst: {:?}, {} bytes", src, dst, payload.len());
+        match self.table.lookup(&dst) {
             Some(addr) => {
-                debug!("Found destination for {:?} => {}", header.dst(), addr);
-                try!(self.send_msg(addr, &Message::Frame(header, payload)))
+                debug!("Found destination for {:?} => {}", dst, addr);
+                try!(self.send_msg(addr, &Message::Frame(payload)))
             },
             None => {
-                debug!("No destination for {:?} found, broadcasting", header.dst());
-                let msg = Message::Frame(header, payload);
+                debug!("No destination for {:?} found, broadcasting", dst);
+                let msg = Message::Frame(payload);
                 for addr in &self.peers.as_vec() {
                     try!(self.send_msg(addr, &msg));
                 }
@@ -224,7 +222,7 @@ impl<A: fmt::Debug, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: Virt
         Ok(())
     }
 
-    fn handle_net_message(&mut self, peer: SocketAddr, options: Options, msg: Message<M>) -> Result<(), Error> {
+    fn handle_net_message(&mut self, peer: SocketAddr, options: Options, msg: Message) -> Result<(), Error> {
         if let Some(id) = self.network_id {
             if options.network_id != Some(id) {
                 info!("Ignoring message from {} with wrong token {:?}", peer, options.network_id);
@@ -233,9 +231,10 @@ impl<A: fmt::Debug, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: Virt
         }
         debug!("Recieved {:?} from {}", msg, peer);
         match msg {
-            Message::Frame(header, payload) => {
-                debug!("Writing data to device: {:?}, {} bytes", header, payload.len());
-                match self.device.write(&header, &payload) {
+            Message::Frame(payload) => {
+                let (src, _dst) = try!(M::parse(payload));
+                debug!("Writing data to device: {} bytes", payload.len());
+                match self.device.write(&payload) {
                     Ok(()) => (),
                     Err(e) => {
                         error!("Failed to send via tap device {:?}", e);
@@ -243,7 +242,7 @@ impl<A: fmt::Debug, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: Virt
                     }
                 }
                 self.peers.add(&peer);
-                self.table.learn(header.src(), peer);
+                self.table.learn(src, peer);
             },
             Message::Peers(peers) => {
                 self.peers.add(&peer);
@@ -290,7 +289,7 @@ impl<A: fmt::Debug, T: Table<Address=A>, M: InterfaceMessage<Address=A>, I: Virt
                         Err(_error) => panic!("Failed to read from network socket")
                     },
                     &1 => match self.device.read(&mut buffer) {
-                        Ok((header, payload)) => match self.handle_interface_data(header, payload) {
+                        Ok(size) => match self.handle_interface_data(&buffer[..size]) {
                             Ok(_) => (),
                             Err(e) => error!("Error: {:?}", e)
                         },
