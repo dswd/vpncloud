@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::io::Write;
 
-use super::cloud::{Error, Table, Protocol};
+use super::cloud::{Error, Table, Protocol, Address};
 use super::util::as_obj;
 
 use time::{Duration, SteadyTime};
@@ -25,6 +25,16 @@ pub type VlanId = u16;
 pub struct EthAddr {
     pub mac: Mac,
     pub vlan: Option<VlanId>
+}
+
+impl Address for EthAddr {
+    fn from_bytes(_bytes: &[u8]) -> Result<Self, Error> {
+        unimplemented!()
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        unimplemented!()
+    }
 }
 
 
@@ -102,6 +112,10 @@ impl Table for MacTable {
            Some(value) => Some(value.address),
            None => None
        }
+    }
+
+    fn remove_all(&mut self, _addr: SocketAddr) {
+        unimplemented!()
     }
 }
 

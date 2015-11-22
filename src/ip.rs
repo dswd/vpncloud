@@ -1,25 +1,23 @@
-use std::net::{SocketAddr, Ipv4Addr, Ipv6Addr, AddrParseError, ToSocketAddrs};
+use std::net::{SocketAddr, Ipv4Addr, Ipv6Addr};
 use std::collections::{hash_map, HashMap};
 use std::ptr;
-use std::path::Path;
-use std::fs::File;
-use std::io::{Result as IoResult, Read, BufRead, BufReader};
+use std::io::Read;
 use std::str::FromStr;
 
-use regex::Regex;
-
-use super::cloud::{Protocol, Error, Table};
+use super::cloud::{Protocol, Error, Table, Address};
 use super::util::{as_obj, as_bytes};
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IpAddress {
     V4(Ipv4Addr),
-    V6(Ipv6Addr)
+    V6(Ipv6Addr),
+    V4Net(Ipv4Addr, u8),
+    V6Net(Ipv6Addr, u8),
 }
 
-impl IpAddress {
-    pub fn to_bytes(&self) -> Vec<u8> {
+impl Address for IpAddress {
+    fn to_bytes(&self) -> Vec<u8> {
         match self {
             &IpAddress::V4(addr) => {
                 let ip = addr.octets();
@@ -29,6 +27,11 @@ impl IpAddress {
                     ptr::copy_nonoverlapping(ip.as_ptr(), res.as_mut_ptr(), ip.len());
                 }
                 res
+            },
+            &IpAddress::V4Net(addr, prefix_len) => {
+                let mut bytes = IpAddress::V4(addr).to_bytes();
+                bytes.push(prefix_len);
+                bytes
             },
             &IpAddress::V6(addr) => {
                 let mut segments = addr.segments();
@@ -42,14 +45,56 @@ impl IpAddress {
                     ptr::copy_nonoverlapping(bytes.as_ptr(), res.as_mut_ptr(), bytes.len());
                 }
                 res
+            },
+            &IpAddress::V6Net(addr, prefix_len) => {
+                let mut bytes = IpAddress::V6(addr).to_bytes();
+                bytes.push(prefix_len);
+                bytes
             }
         }
     }
 
-    pub fn from_str(addr: &str) -> Result<Self, AddrParseError> {
-        let ipv4 = Ipv4Addr::from_str(addr).map(|addr| IpAddress::V4(addr));
-        let ipv6 = Ipv6Addr::from_str(addr).map(|addr| IpAddress::V6(addr));
-        ipv4.or(ipv6)
+    fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
+        match bytes.len() {
+            4 => Ok(IpAddress::V4(Ipv4Addr::new(bytes[0], bytes[1], bytes[2], bytes[3]))),
+            5 => Ok(IpAddress::V4Net(Ipv4Addr::new(bytes[0], bytes[1], bytes[2], bytes[3]), bytes[4])),
+            16 => {
+                let data = unsafe { as_obj::<[u16; 8]>(&bytes) };
+                Ok(IpAddress::V6(Ipv6Addr::new(
+                    u16::from_be(data[0]), u16::from_be(data[1]),
+                    u16::from_be(data[2]), u16::from_be(data[3]),
+                    u16::from_be(data[4]), u16::from_be(data[5]),
+                    u16::from_be(data[6]), u16::from_be(data[7]),
+                )))
+            },
+            17 => {
+                let data = unsafe { as_obj::<[u16; 8]>(&bytes) };
+                Ok(IpAddress::V6Net(Ipv6Addr::new(
+                    u16::from_be(data[0]), u16::from_be(data[1]),
+                    u16::from_be(data[2]), u16::from_be(data[3]),
+                    u16::from_be(data[4]), u16::from_be(data[5]),
+                    u16::from_be(data[6]), u16::from_be(data[7]),
+                ), bytes[16]))
+            }
+            _ => Err(Error::ParseError("Invalid address size"))
+        }
+    }
+}
+
+impl IpAddress {
+    pub fn from_str(addr: &str) -> Result<Self, Error> {
+        if let Some(pos) = addr.find("/") {
+            let prefix_len = try!(u8::from_str(&addr[pos+1..])
+                .map_err(|_| Error::ParseError("Failed to parse prefix length")));
+            let addr = &addr[..pos];
+            let ipv4 = Ipv4Addr::from_str(addr).map(|addr| IpAddress::V4Net(addr, prefix_len));
+            let ipv6 = Ipv6Addr::from_str(addr).map(|addr| IpAddress::V6Net(addr, prefix_len));
+            ipv4.or(ipv6).map_err(|_| Error::ParseError("Failed to parse address"))
+        } else {
+            let ipv4 = Ipv4Addr::from_str(addr).map(|addr| IpAddress::V4(addr));
+            let ipv6 = Ipv6Addr::from_str(addr).map(|addr| IpAddress::V6(addr));
+            ipv4.or(ipv6).map_err(|_| Error::ParseError("Failed to parse address"))
+        }
     }
 }
 
@@ -69,31 +114,13 @@ impl Protocol for InternetProtocol {
                 if data.len() < 20 {
                     return Err(Error::ParseError("Truncated header"));
                 }
-                let src_data = unsafe { as_obj::<[u8; 4]>(&data[12..]) };
-                let src = Ipv4Addr::new(src_data[0], src_data[1], src_data[2], src_data[3]);
-                let dst_data = unsafe { as_obj::<[u8; 4]>(&data[16..]) };
-                let dst = Ipv4Addr::new(dst_data[0], dst_data[1], dst_data[2], dst_data[3]);
-                Ok((IpAddress::V4(src), IpAddress::V4(dst)))
+                Ok((try!(IpAddress::from_bytes(&data[12..16])), try!(IpAddress::from_bytes(&data[16..20]))))
             },
             6 => {
                 if data.len() < 40 {
                     return Err(Error::ParseError("Truncated header"));
                 }
-                let src_data = unsafe { as_obj::<[u16; 8]>(&data[8..]) };
-                let src = Ipv6Addr::new(
-                    u16::from_be(src_data[0]), u16::from_be(src_data[1]),
-                    u16::from_be(src_data[2]), u16::from_be(src_data[3]),
-                    u16::from_be(src_data[4]), u16::from_be(src_data[5]),
-                    u16::from_be(src_data[6]), u16::from_be(src_data[7]),
-                );
-                let dst_data = unsafe { as_obj::<[u16; 8]>(&data[24..]) };
-                let dst = Ipv6Addr::new(
-                    u16::from_be(dst_data[0]), u16::from_be(dst_data[1]),
-                    u16::from_be(dst_data[2]), u16::from_be(dst_data[3]),
-                    u16::from_be(dst_data[4]), u16::from_be(dst_data[5]),
-                    u16::from_be(dst_data[6]), u16::from_be(dst_data[7]),
-                );
-                Ok((IpAddress::V6(src), IpAddress::V6(dst)))
+                Ok((try!(IpAddress::from_bytes(&data[8..24])), try!(IpAddress::from_bytes(&data[24..40]))))
             },
             _ => Err(Error::ParseError("Invalid version"))
         }
@@ -123,49 +150,6 @@ impl RoutingTable {
             hash_map::Entry::Occupied(mut entry) => entry.get_mut().push(routing_entry),
             hash_map::Entry::Vacant(entry) => { entry.insert(vec![routing_entry]); () }
         }
-    }
-
-    pub fn load_from(&mut self, path: &Path) -> IoResult<()> {
-        let pattern = Regex::new(r"(?P<base>[^/]+)/(?P<prefix>\d+)\s=>\s(?P<peer>.+)").unwrap();
-        let file = try!(File::open(path));
-        let mut reader = BufReader::new(file);
-        loop {
-            let mut s = String::new();
-            let res = try!(reader.read_line(&mut s));
-            if res == 0 {
-                break;
-            }
-            let captures = match pattern.captures(&s) {
-                Some(captures) => captures,
-                None => {
-                    error!("Failed to parse routing table entry: {}", s);
-                    continue
-                }
-            };
-            let base = match IpAddress::from_str(captures.name("base").unwrap()) {
-                Ok(addr) => addr.to_bytes(),
-                Err(e) => {
-                    error!("Failed to parse base address: {}", e);
-                    continue
-                }
-            };
-            let prefix_len = match u8::from_str(captures.name("prefix").unwrap()) {
-                Ok(num) => num,
-                Err(e) => {
-                    error!("Failed to parse prefix length: {}", e);
-                    continue
-                }
-            };
-            let peer = match captures.name("peer").unwrap().to_socket_addrs().map(|mut r| r.next()) {
-                Ok(Some(addr)) => addr,
-                _ => {
-                    error!("Failed to parse peer address");
-                    continue
-                }
-            };
-            self.add(base, prefix_len, peer);
-        }
-        Ok(())
     }
 
     pub fn lookup_bytes(&self, bytes: &[u8]) -> Option<SocketAddr> {
@@ -199,8 +183,13 @@ impl RoutingTable {
 impl Table for RoutingTable {
     type Address = IpAddress;
 
-    fn learn(&mut self, _src: Self::Address, _addr: SocketAddr) {
-        //nothing to do
+    fn learn(&mut self, src: Self::Address, addr: SocketAddr) {
+        match src {
+            IpAddress::V4(_) => (),
+            IpAddress::V4Net(base, prefix_len) => self.add(IpAddress::V4(base).to_bytes(), prefix_len, addr),
+            IpAddress::V6(_) => (),
+            IpAddress::V6Net(base, prefix_len) => self.add(IpAddress::V6(base).to_bytes(), prefix_len, addr)
+        }
     }
 
     fn lookup(&self, dst: &Self::Address) -> Option<SocketAddr> {
@@ -209,5 +198,9 @@ impl Table for RoutingTable {
 
     fn housekeep(&mut self) {
         //nothin to do
+    }
+
+    fn remove_all(&mut self, _addr: SocketAddr) {
+        unimplemented!()
     }
 }

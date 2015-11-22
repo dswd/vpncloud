@@ -3,7 +3,6 @@ extern crate time;
 extern crate docopt;
 extern crate rustc_serialize;
 extern crate epoll;
-extern crate regex;
 
 mod util;
 mod udpmessage;
@@ -16,9 +15,7 @@ use time::Duration;
 use docopt::Docopt;
 
 use std::hash::{Hash, SipHasher, Hasher};
-use std::path::PathBuf;
 
-use ip::RoutingTable;
 use cloud::{Error, TapCloud, TunCloud};
 
 
@@ -52,7 +49,7 @@ Options:
     -c <connect>, --connect <connect>      List of peers (addr:port) to connect to
     --network-id <network_id>              Optional token that identifies the network
     --peer-timeout <peer_timeout>          Peer timeout in seconds [default: 1800]
-    --table <file>                         The file containing the routing table (only for tun)
+    --subnet <subnet>                      The local subnet to use (only for tun)
     --mac-timeout <mac_timeout>            Mac table entry timeout in seconds (only for tap) [default: 300]
     -v, --verbose                          Log verbosely
     -q, --quiet                            Only print error messages
@@ -68,7 +65,7 @@ enum Type {
 #[derive(RustcDecodable, Debug)]
 struct Args {
     flag_type: Type,
-    flag_table: PathBuf,
+    flag_subnet: String,
     flag_device: String,
     flag_listen: String,
     flag_network_id: Option<String>,
@@ -98,8 +95,6 @@ fn tap_cloud(args: Args) {
 }
 
 fn tun_cloud(args: Args) {
-    let mut table = RoutingTable::new();
-    table.load_from(&args.flag_table).unwrap();
     let mut tuncloud = TunCloud::new_tun_cloud(
         &args.flag_device,
         args.flag_listen,
@@ -108,7 +103,7 @@ fn tun_cloud(args: Args) {
             name.hash(&mut s);
             s.finish()
         }),
-        table,
+        args.flag_subnet,
         Duration::seconds(args.flag_peer_timeout as i64)
     );
     for addr in args.flag_connect {
