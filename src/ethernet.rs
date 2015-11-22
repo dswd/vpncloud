@@ -28,7 +28,7 @@ pub type VlanId = u16;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EthAddr {
     pub mac: Mac,
-    pub vlan: VlanId
+    pub vlan: Option<VlanId>
 }
 
 #[derive(PartialEq)]
@@ -39,7 +39,7 @@ pub struct Frame {
 
 impl fmt::Debug for Frame {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(formatter, "src: {:?}, dst: {:?}, vlan: {}", self.src.mac, self.dst.mac, self.src.vlan)
+        write!(formatter, "src: {:?}, dst: {:?}, vlan: {:?}", self.src.mac, self.dst.mac, self.src.vlan)
     }
 }
 
@@ -64,10 +64,10 @@ impl InterfaceMessage for Frame {
             let src_dat = as_bytes::<Mac>(&self.src.mac);
             ptr::copy_nonoverlapping(src_dat.as_ptr(), data[pos..].as_mut_ptr(), src_dat.len());
             pos += src_dat.len();
-            if self.src.vlan != 0 {
+            if let Some(vlan) = self.src.vlan {
                 data[pos] = 0x81; data[pos+1] = 0x00;
                 pos += 2;
-                let vlan_dat = mem::transmute::<u16, [u8; 2]>(self.src.vlan.to_be());
+                let vlan_dat = mem::transmute::<u16, [u8; 2]>(vlan.to_be());
                 ptr::copy_nonoverlapping(vlan_dat.as_ptr(), data[pos..].as_mut_ptr(), vlan_dat.len());
                 pos += vlan_dat.len();
             }
@@ -86,14 +86,14 @@ impl InterfaceMessage for Frame {
         pos += mem::size_of::<Mac>();
         let src = *unsafe { as_obj::<Mac>(&data[pos..]) };
         pos += mem::size_of::<Mac>();
-        let mut vlan = 0;
+        let mut vlan = None;
         let mut payload = &data[pos..];
         if data[pos] == 0x81 && data[pos+1] == 0x00 {
             pos += 2;
             if data.len() < pos + 2 {
                 return Err(Error::ParseError("Vlan frame is too short"));
             }
-            vlan = u16::from_be(* unsafe { as_obj::<u16>(&data[pos..]) });
+            vlan = Some(u16::from_be(* unsafe { as_obj::<u16>(&data[pos..]) }));
             pos += 2;
             payload = &data[pos..];
         }
@@ -179,7 +179,7 @@ impl Table for MacTable {
             }
         }
         for key in del {
-            info!("Forgot mac: {:?} (vlan {})", key.mac, key.vlan);
+            info!("Forgot mac: {:?} (vlan {:?})", key.mac, key.vlan);
             self.table.remove(&key);
         }
     }
@@ -187,7 +187,7 @@ impl Table for MacTable {
     fn learn(&mut self, key: Self::Address, addr: SocketAddr) {
        let value = MacTableValue{address: addr, timeout: SteadyTime::now()+self.timeout};
        if self.table.insert(key, value).is_none() {
-           info!("Learned mac: {:?} (vlan {}) => {}", key.mac, key.vlan, addr);
+           info!("Learned mac: {:?} (vlan {:?}) => {}", key.mac, key.vlan, addr);
        }
     }
 
@@ -206,7 +206,7 @@ fn without_vlan() {
     let dst = Mac([6,5,4,3,2,1]);
     let payload = [1,2,3,4,5,6,7,8];
     let mut buf = [0u8; 1024];
-    let frame = Frame{src: EthAddr{mac: src, vlan: 0}, dst: EthAddr{mac: dst, vlan: 0}};
+    let frame = Frame{src: EthAddr{mac: src, vlan: None}, dst: EthAddr{mac: dst, vlan: None}};
     let size = frame.encode_to(&payload, &mut buf);
     assert_eq!(size, 20);
     assert_eq!(&buf[..size], &[6,5,4,3,2,1,1,2,3,4,5,6,1,2,3,4,5,6,7,8]);
@@ -221,7 +221,7 @@ fn with_vlan() {
     let dst = Mac([6,5,4,3,2,1]);
     let payload = [1,2,3,4,5,6,7,8];
     let mut buf = [0u8; 1024];
-    let frame = Frame{src: EthAddr{mac: src, vlan: 1234}, dst: EthAddr{mac: dst, vlan: 1234}};
+    let frame = Frame{src: EthAddr{mac: src, vlan: Some(1234)}, dst: EthAddr{mac: dst, vlan: Some(1234)}};
     let size = frame.encode_to(&payload, &mut buf);
     assert_eq!(size, 24);
     assert_eq!(&buf[..size], &[6,5,4,3,2,1,1,2,3,4,5,6,0x81,0,4,210,1,2,3,4,5,6,7,8]);

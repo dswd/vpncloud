@@ -189,7 +189,7 @@ fn encode_message_packet() {
     let src = Mac([1,2,3,4,5,6]);
     let dst = Mac([7,8,9,10,11,12]);
     let payload = [1,2,3,4,5];
-    let frame = ethernet::Frame{src: ethernet::EthAddr{mac: src, vlan: 0}, dst: ethernet::EthAddr{mac: dst, vlan: 0}};
+    let frame = ethernet::Frame{src: ethernet::EthAddr{mac: src, vlan: None}, dst: ethernet::EthAddr{mac: dst, vlan: None}};
     let msg = Message::Frame(frame, &payload);
     let mut buf = [0; 1024];
     let size = encode(&options, &msg, &mut buf[..]);
