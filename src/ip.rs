@@ -53,7 +53,7 @@ impl IpAddress {
     }
 }
 
-
+#[allow(dead_code)]
 pub struct InternetProtocol;
 
 impl Protocol for InternetProtocol {

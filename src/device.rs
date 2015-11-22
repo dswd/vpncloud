@@ -15,6 +15,7 @@ trait DeviceSetup {
     fn setup_device(RawFd, &str) -> IoResult<String>;
 }
 
+#[allow(dead_code)]
 struct TapSetup;
 
 impl DeviceSetup for TapSetup {
@@ -31,7 +32,7 @@ impl DeviceSetup for TapSetup {
     }
 }
 
-
+#[allow(dead_code)]
 struct TunSetup;
 
 impl DeviceSetup for TunSetup {

@@ -1,10 +1,9 @@
-use std::{mem, fmt, fs};
+use std::{mem, fmt};
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use std::os::unix::io::{AsRawFd, RawFd};
-use std::io::{Result as IoResult, Error as IoError, Read, Write};
+use std::io::Write;
 
-use super::cloud::{Error, Table, Protocol, VirtualInterface};
+use super::cloud::{Error, Table, Protocol};
 use super::util::as_obj;
 
 use time::{Duration, SteadyTime};

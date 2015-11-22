@@ -16,8 +16,10 @@ use time::Duration;
 use docopt::Docopt;
 
 use std::hash::{Hash, SipHasher, Hasher};
+use std::path::PathBuf;
 
-use cloud::{Error, TapCloud};
+use ip::RoutingTable;
+use cloud::{Error, TapCloud, TunCloud};
 
 
 //TODO: Implement IPv6
@@ -39,25 +41,34 @@ impl log::Log for SimpleLogger {
     }
 }
 
-
 static USAGE: &'static str = "
 Usage:
-    ethcloud [options] [-d <device>] [-l <listen>] [-c <connect>...]
+    ethcloud [options] [-t <type>] [-d <device>] [-l <listen>] [-c <connect>...]
 
 Options:
-    -d <device>, --device <device>         Name of the tap device [default: ethcloud%d]
+    -t <type>, --type <type>               Set the type of network [default: tap]
+    -d <device>, --device <device>         Name of the virtual device [default: cloud%d]
     -l <listen>, --listen <listen>         Address to listen on [default: 0.0.0.0:3210]
     -c <connect>, --connect <connect>      List of peers (addr:port) to connect to
     --network-id <network_id>              Optional token that identifies the network
     --peer-timeout <peer_timeout>          Peer timeout in seconds [default: 1800]
-    --mac-timeout <mac_timeout>            Mac table entry timeout in seconds [default: 300]
+    --table <file>                         The file containing the routing table (only for tun)
+    --mac-timeout <mac_timeout>            Mac table entry timeout in seconds (only for tap) [default: 300]
     -v, --verbose                          Log verbosely
     -q, --quiet                            Only print error messages
     -h, --help                             Display the help
 ";
 
+
+#[derive(RustcDecodable, Debug)]
+enum Type {
+    Tun, Tap
+}
+
 #[derive(RustcDecodable, Debug)]
 struct Args {
+    flag_type: Type,
+    flag_table: PathBuf,
     flag_device: String,
     flag_listen: String,
     flag_network_id: Option<String>,
@@ -66,6 +77,44 @@ struct Args {
     flag_mac_timeout: usize,
     flag_verbose: bool,
     flag_quiet: bool
+}
+
+fn tap_cloud(args: Args) {
+    let mut tapcloud = TapCloud::new_tap_cloud(
+        &args.flag_device,
+        args.flag_listen,
+        args.flag_network_id.map(|name| {
+            let mut s = SipHasher::new();
+            name.hash(&mut s);
+            s.finish()
+        }),
+        Duration::seconds(args.flag_mac_timeout as i64),
+        Duration::seconds(args.flag_peer_timeout as i64)
+    );
+    for addr in args.flag_connect {
+        tapcloud.connect(&addr as &str, true).expect("Failed to send");
+    }
+    tapcloud.run()
+}
+
+fn tun_cloud(args: Args) {
+    let mut table = RoutingTable::new();
+    table.load_from(&args.flag_table).unwrap();
+    let mut tuncloud = TunCloud::new_tun_cloud(
+        &args.flag_device,
+        args.flag_listen,
+        args.flag_network_id.map(|name| {
+            let mut s = SipHasher::new();
+            name.hash(&mut s);
+            s.finish()
+        }),
+        table,
+        Duration::seconds(args.flag_peer_timeout as i64)
+    );
+    for addr in args.flag_connect {
+        tuncloud.connect(&addr as &str, true).expect("Failed to send");
+    }
+    tuncloud.run()
 }
 
 fn main() {
@@ -82,19 +131,8 @@ fn main() {
         Box::new(SimpleLogger)
     }).unwrap();
     debug!("Args: {:?}", args);
-    let mut tapcloud = TapCloud::new_tap_cloud(
-        &args.flag_device,
-        args.flag_listen,
-        args.flag_network_id.map(|name| {
-            let mut s = SipHasher::new();
-            name.hash(&mut s);
-            s.finish()
-        }),
-        Duration::seconds(args.flag_mac_timeout as i64),
-        Duration::seconds(args.flag_peer_timeout as i64)
-    );
-    for addr in args.flag_connect {
-        tapcloud.connect(&addr as &str, true).expect("Failed to send");
+    match args.flag_type {
+        Type::Tap => tap_cloud(args),
+        Type::Tun => tun_cloud(args)
     }
-    tapcloud.run()
 }
