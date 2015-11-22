@@ -1,6 +1,12 @@
-use std::net::{SocketAddr, Ipv4Addr, Ipv6Addr};
+use std::net::{SocketAddr, Ipv4Addr, Ipv6Addr, AddrParseError, ToSocketAddrs};
 use std::collections::{hash_map, HashMap};
 use std::ptr;
+use std::path::Path;
+use std::fs::File;
+use std::io::{Result as IoResult, Read, BufRead, BufReader};
+use std::str::FromStr;
+
+use regex::Regex;
 
 use super::cloud::{Protocol, Error, Table};
 use super::util::{as_obj, as_bytes};
@@ -11,6 +17,42 @@ pub enum IpAddress {
     V4(Ipv4Addr),
     V6(Ipv6Addr)
 }
+
+impl IpAddress {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        match self {
+            &IpAddress::V4(addr) => {
+                let ip = addr.octets();
+                let mut res = Vec::with_capacity(4);
+                unsafe {
+                    res.set_len(4);
+                    ptr::copy_nonoverlapping(ip.as_ptr(), res.as_mut_ptr(), ip.len());
+                }
+                res
+            },
+            &IpAddress::V6(addr) => {
+                let mut segments = addr.segments();
+                for i in 0..8 {
+                    segments[i] = segments[i].to_be();
+                }
+                let bytes = unsafe { as_bytes(&segments) };
+                let mut res = Vec::with_capacity(16);
+                unsafe {
+                    res.set_len(16);
+                    ptr::copy_nonoverlapping(bytes.as_ptr(), res.as_mut_ptr(), bytes.len());
+                }
+                res
+            }
+        }
+    }
+
+    pub fn from_str(addr: &str) -> Result<Self, AddrParseError> {
+        let ipv4 = Ipv4Addr::from_str(addr).map(|addr| IpAddress::V4(addr));
+        let ipv6 = Ipv6Addr::from_str(addr).map(|addr| IpAddress::V6(addr));
+        ipv4.or(ipv6)
+    }
+}
+
 
 pub struct InternetProtocol;
 
@@ -83,8 +125,51 @@ impl RoutingTable {
         }
     }
 
+    pub fn load_from(&mut self, path: &Path) -> IoResult<()> {
+        let pattern = Regex::new(r"(?P<base>[^/]+)/(?P<prefix>\d+)\s=>\s(?P<peer>.+)").unwrap();
+        let file = try!(File::open(path));
+        let mut reader = BufReader::new(file);
+        loop {
+            let mut s = String::new();
+            let res = try!(reader.read_line(&mut s));
+            if res == 0 {
+                break;
+            }
+            let captures = match pattern.captures(&s) {
+                Some(captures) => captures,
+                None => {
+                    error!("Failed to parse routing table entry: {}", s);
+                    continue
+                }
+            };
+            let base = match IpAddress::from_str(captures.name("base").unwrap()) {
+                Ok(addr) => addr.to_bytes(),
+                Err(e) => {
+                    error!("Failed to parse base address: {}", e);
+                    continue
+                }
+            };
+            let prefix_len = match u8::from_str(captures.name("prefix").unwrap()) {
+                Ok(num) => num,
+                Err(e) => {
+                    error!("Failed to parse prefix length: {}", e);
+                    continue
+                }
+            };
+            let peer = match captures.name("peer").unwrap().to_socket_addrs().map(|mut r| r.next()) {
+                Ok(Some(addr)) => addr,
+                _ => {
+                    error!("Failed to parse peer address");
+                    continue
+                }
+            };
+            self.add(base, prefix_len, peer);
+        }
+        Ok(())
+    }
+
     pub fn lookup_bytes(&self, bytes: &[u8]) -> Option<SocketAddr> {
-        let mut len = bytes.len()/2 * 2;
+        let len = bytes.len()/2 * 2;
         for i in 0..len/2 {
             if let Some(group) = self.0.get(&bytes[0..len-2*i]) {
                 for entry in group {
@@ -119,22 +204,7 @@ impl Table for RoutingTable {
     }
 
     fn lookup(&self, dst: &Self::Address) -> Option<SocketAddr> {
-        match dst {
-            &IpAddress::V4(addr) => {
-                let mut bytes = [0u8; 4];
-                let ip = addr.octets();
-                unsafe { ptr::copy_nonoverlapping(ip.as_ptr(), bytes.as_mut_ptr(), ip.len()) };
-                self.lookup_bytes(&bytes[..])
-            },
-            &IpAddress::V6(addr) => {
-                let mut segments = addr.segments();
-                for i in 0..8 {
-                    segments[i] = segments[i].to_be();
-                }
-                let bytes = unsafe { as_bytes(&segments) };
-                self.lookup_bytes(bytes)
-            }
-        }
+        self.lookup_bytes(&dst.to_bytes())
     }
 
     fn housekeep(&mut self) {

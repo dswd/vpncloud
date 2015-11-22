@@ -3,6 +3,7 @@ extern crate time;
 extern crate docopt;
 extern crate rustc_serialize;
 extern crate epoll;
+extern crate regex;
 
 mod util;
 mod udpmessage;
