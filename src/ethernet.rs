@@ -1,13 +1,17 @@
-use std::{mem, ptr, fmt};
+use std::{mem, ptr, fmt, fs};
 use std::net::SocketAddr;
 use std::collections::HashMap;
-use std::marker::PhantomData;
+use std::os::unix::io::{AsRawFd, RawFd};
+use std::io::{Result as IoResult, Error as IoError, Read, Write};
 
 use super::ethcloud::{Error, Table, InterfaceMessage, VirtualInterface};
 use super::util::{as_bytes, as_obj};
 
 use time::{Duration, SteadyTime};
 
+extern {
+    fn setup_tap_device(fd: i32, ifname: *mut u8) -> i32;
+}
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Mac(pub [u8; 6]);
@@ -28,20 +32,18 @@ pub struct EthAddr {
 }
 
 #[derive(PartialEq)]
-pub struct Frame<'a> {
+pub struct Frame {
     pub src: EthAddr,
-    pub dst: EthAddr,
-    pub payload: &'a [u8]
+    pub dst: EthAddr
 }
 
-impl<'a> fmt::Debug for Frame<'a> {
+impl fmt::Debug for Frame {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(formatter, "src: {:?}, dst: {:?}, vlan: {}, payload: {} bytes",
-            self.src.mac, self.dst.mac, self.src.vlan, self.payload.len())
+        write!(formatter, "src: {:?}, dst: {:?}, vlan: {}", self.src.mac, self.dst.mac, self.src.vlan)
     }
 }
 
-impl<'a> InterfaceMessage for Frame<'a> {
+impl InterfaceMessage for Frame {
     type Address = EthAddr;
 
     fn src(&self) -> Self::Address {
@@ -51,68 +53,103 @@ impl<'a> InterfaceMessage for Frame<'a> {
     fn dst(&self) -> Self::Address {
         self.dst
     }
-}
 
-pub struct TapDevice<'a>(PhantomData<&'a ()>);
-
-impl<'a> VirtualInterface for TapDevice<'a> {
-    type Message = Frame<'a>;
-
-    fn read(&mut self) -> Result<Self::Message, Error> {
-        unimplemented!();
-    }
-
-    fn write(&mut self, msg: Self::Message) -> Result<(), Error> {
-        unimplemented!();
-    }
-}
-
-pub fn decode(data: &[u8]) -> Result<Frame, Error> {
-    if data.len() < 14 {
-        return Err(Error::ParseError("Frame is too short"));
-    }
-    let mut pos = 0;
-    let dst = *unsafe { as_obj::<Mac>(&data[pos..]) };
-    pos += mem::size_of::<Mac>();
-    let src = *unsafe { as_obj::<Mac>(&data[pos..]) };
-    pos += mem::size_of::<Mac>();
-    let mut vlan = 0;
-    let mut payload = &data[pos..];
-    if data[pos] == 0x81 && data[pos+1] == 0x00 {
-        pos += 2;
-        if data.len() < pos + 2 {
-            return Err(Error::ParseError("Vlan frame is too short"));
+    fn encode_to(&self, payload: &[u8], data: &mut [u8]) -> usize {
+        assert!(data.len() >= 16 + payload.len());
+        let mut pos = 0;
+        unsafe {
+            let dst_dat = as_bytes::<Mac>(&self.dst.mac);
+            ptr::copy_nonoverlapping(dst_dat.as_ptr(), data[pos..].as_mut_ptr(), dst_dat.len());
+            pos += dst_dat.len();
+            let src_dat = as_bytes::<Mac>(&self.src.mac);
+            ptr::copy_nonoverlapping(src_dat.as_ptr(), data[pos..].as_mut_ptr(), src_dat.len());
+            pos += src_dat.len();
+            if self.src.vlan != 0 {
+                data[pos] = 0x81; data[pos+1] = 0x00;
+                pos += 2;
+                let vlan_dat = mem::transmute::<u16, [u8; 2]>(self.src.vlan.to_be());
+                ptr::copy_nonoverlapping(vlan_dat.as_ptr(), data[pos..].as_mut_ptr(), vlan_dat.len());
+                pos += vlan_dat.len();
+            }
+            ptr::copy_nonoverlapping(payload.as_ptr(), data[pos..].as_mut_ptr(), payload.len());
         }
-        vlan = u16::from_be(* unsafe { as_obj::<u16>(&data[pos..]) });
-        pos += 2;
-        payload = &data[pos..];
+        pos += payload.len();
+        pos
     }
-    Ok(Frame{src: EthAddr{mac: src, vlan: vlan}, dst: EthAddr{mac: dst, vlan: vlan}, payload: payload})
-}
 
-pub fn encode(frame: &Frame, buf: &mut [u8]) -> usize {
-    assert!(buf.len() >= 16 + frame.payload.len());
-    let mut pos = 0;
-    unsafe {
-        let dst_dat = as_bytes::<Mac>(&frame.dst.mac);
-        ptr::copy_nonoverlapping(dst_dat.as_ptr(), buf[pos..].as_mut_ptr(), dst_dat.len());
-        pos += dst_dat.len();
-        let src_dat = as_bytes::<Mac>(&frame.src.mac);
-        ptr::copy_nonoverlapping(src_dat.as_ptr(), buf[pos..].as_mut_ptr(), src_dat.len());
-        pos += src_dat.len();
-        if frame.src.vlan != 0 {
-            buf[pos] = 0x81; buf[pos+1] = 0x00;
+    fn parse_from(data: &[u8]) -> Result<(Frame, &[u8]), Error> {
+        if data.len() < 14 {
+            return Err(Error::ParseError("Frame is too short"));
+        }
+        let mut pos = 0;
+        let dst = *unsafe { as_obj::<Mac>(&data[pos..]) };
+        pos += mem::size_of::<Mac>();
+        let src = *unsafe { as_obj::<Mac>(&data[pos..]) };
+        pos += mem::size_of::<Mac>();
+        let mut vlan = 0;
+        let mut payload = &data[pos..];
+        if data[pos] == 0x81 && data[pos+1] == 0x00 {
             pos += 2;
-            let vlan_dat = mem::transmute::<u16, [u8; 2]>(frame.src.vlan.to_be());
-            ptr::copy_nonoverlapping(vlan_dat.as_ptr(), buf[pos..].as_mut_ptr(), vlan_dat.len());
-            pos += vlan_dat.len();
+            if data.len() < pos + 2 {
+                return Err(Error::ParseError("Vlan frame is too short"));
+            }
+            vlan = u16::from_be(* unsafe { as_obj::<u16>(&data[pos..]) });
+            pos += 2;
+            payload = &data[pos..];
         }
-        ptr::copy_nonoverlapping(frame.payload.as_ptr(), buf[pos..].as_mut_ptr(), frame.payload.len());
+        Ok((Frame{src: EthAddr{mac: src, vlan: vlan}, dst: EthAddr{mac: dst, vlan: vlan}}, payload))
     }
-    pos += frame.payload.len();
-    pos
 }
 
+pub struct TapDevice {
+    fd: fs::File,
+    ifname: String
+}
+
+impl TapDevice {
+    pub fn new(ifname: &str) -> IoResult<Self> {
+        let fd = try!(fs::OpenOptions::new().read(true).write(true).open("/dev/net/tun"));
+        let mut ifname_string = String::with_capacity(32);
+        ifname_string.push_str(ifname);
+        ifname_string.push('\0');
+        let mut ifname_c = ifname_string.into_bytes();
+        let res = unsafe { setup_tap_device(fd.as_raw_fd(), ifname_c.as_mut_ptr()) };
+        match res {
+            0 => Ok(TapDevice{fd: fd, ifname: String::from_utf8(ifname_c).unwrap()}),
+            _ => Err(IoError::last_os_error())
+        }
+    }
+
+    #[inline(always)]
+    pub fn ifname(&self) -> &str {
+        &self.ifname
+    }
+}
+
+impl AsRawFd for TapDevice {
+    fn as_raw_fd(&self) -> RawFd {
+        self.fd.as_raw_fd()
+    }
+}
+
+impl VirtualInterface for TapDevice {
+    fn read<'a, T: InterfaceMessage>(&mut self, mut buffer: &'a mut [u8]) -> Result<(T, &'a[u8]), Error> {
+        let size = match self.fd.read(&mut buffer) {
+            Ok(size) => size,
+            Err(_) => return Err(Error::TunTapDevError("Read error"))
+        };
+        T::parse_from(&buffer[..size])
+    }
+
+    fn write<T: InterfaceMessage>(&mut self, msg: &T, payload: &[u8]) -> Result<(), Error> {
+        let mut buffer = [0u8; 64*1024];
+        let size = msg.encode_to(payload, &mut buffer);
+        match self.fd.write_all(&buffer[..size]) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(Error::TunTapDevError("Write error"))
+        }
+    }
+}
 
 struct MacTableValue {
     address: SocketAddr,
@@ -169,12 +206,13 @@ fn without_vlan() {
     let dst = Mac([6,5,4,3,2,1]);
     let payload = [1,2,3,4,5,6,7,8];
     let mut buf = [0u8; 1024];
-    let frame = Frame{src: EthAddr{mac: src, vlan: 0}, dst: EthAddr{mac: dst, vlan: 0}, payload: &payload};
-    let size = encode(&frame, &mut buf);
+    let frame = Frame{src: EthAddr{mac: src, vlan: 0}, dst: EthAddr{mac: dst, vlan: 0}};
+    let size = frame.encode_to(&payload, &mut buf);
     assert_eq!(size, 20);
     assert_eq!(&buf[..size], &[6,5,4,3,2,1,1,2,3,4,5,6,1,2,3,4,5,6,7,8]);
-    let frame2 = decode(&buf[..size]).unwrap();
+    let (frame2, payload2) = Frame::parse_from(&buf[..size]).unwrap();
     assert_eq!(frame, frame2);
+    assert_eq!(payload, payload2);
 }
 
 #[test]
@@ -183,10 +221,11 @@ fn with_vlan() {
     let dst = Mac([6,5,4,3,2,1]);
     let payload = [1,2,3,4,5,6,7,8];
     let mut buf = [0u8; 1024];
-    let frame = Frame{src: EthAddr{mac: src, vlan: 0}, dst: EthAddr{mac: dst, vlan: 0}, payload: &payload};
-    let size = encode(&frame, &mut buf);
+    let frame = Frame{src: EthAddr{mac: src, vlan: 1234}, dst: EthAddr{mac: dst, vlan: 1234}};
+    let size = frame.encode_to(&payload, &mut buf);
     assert_eq!(size, 24);
     assert_eq!(&buf[..size], &[6,5,4,3,2,1,1,2,3,4,5,6,0x81,0,4,210,1,2,3,4,5,6,7,8]);
-    let frame2 = decode(&buf[..size]).unwrap();
+    let (frame2, payload2) = Frame::parse_from(&buf[..size]).unwrap();
     assert_eq!(frame, frame2);
+    assert_eq!(payload, payload2);
 }

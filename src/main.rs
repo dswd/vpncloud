@@ -6,7 +6,6 @@ extern crate epoll;
 
 mod util;
 mod udpmessage;
-mod tuntap;
 mod ethernet;
 mod ip;
 mod ethcloud;
@@ -16,7 +15,7 @@ use docopt::Docopt;
 
 use std::hash::{Hash, SipHasher, Hasher};
 
-use ethcloud::{Error, EthCloud};
+use ethcloud::{Error, TapCloud};
 
 
 //TODO: Implement IPv6
@@ -81,7 +80,7 @@ fn main() {
         Box::new(SimpleLogger)
     }).unwrap();
     debug!("Args: {:?}", args);
-    let mut tapcloud = EthCloud::<ethernet::EthAddr, ethernet::MacTable, ethernet::Frame, ethernet::TapDevice>::new(
+    let mut tapcloud = TapCloud::new_tap_cloud(
         &args.flag_device,
         args.flag_listen,
         args.flag_network_id.map(|name| {

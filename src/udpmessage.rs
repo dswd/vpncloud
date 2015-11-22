@@ -2,7 +2,7 @@ use std::{mem, ptr, fmt};
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
 use std::u16;
 
-use super::ethcloud::{Error, NetworkId};
+use super::ethcloud::{Error, NetworkId, InterfaceMessage};
 use super::ethernet;
 use super::util::{as_obj, as_bytes};
 
@@ -31,17 +31,17 @@ pub struct Options {
 
 
 #[derive(PartialEq)]
-pub enum Message<'a> {
-    Frame(ethernet::Frame<'a>),
+pub enum Message<'a, M: InterfaceMessage> {
+    Frame(M, &'a[u8]),
     Peers(Vec<SocketAddr>),
     GetPeers,
     Close,
 }
 
-impl<'a> fmt::Debug for Message<'a> {
+impl<'a, M: InterfaceMessage> fmt::Debug for Message<'a, M> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            &Message::Frame(ref frame) => write!(formatter, "Frame({:?})", frame),
+            &Message::Frame(ref frame, ref payload) => write!(formatter, "Frame({:?}, payload: {})", frame, payload.len()),
             &Message::Peers(ref peers) => {
                 try!(write!(formatter, "Peers ["));
                 let mut first = true;
@@ -60,7 +60,7 @@ impl<'a> fmt::Debug for Message<'a> {
     }
 }
 
-pub fn decode(data: &[u8]) -> Result<(Options, Message), Error> {
+pub fn decode<M: InterfaceMessage>(data: &[u8]) -> Result<(Options, Message<M>), Error> {
     if data.len() < mem::size_of::<TopHeader>() {
         return Err(Error::ParseError("Empty message"));
     }
@@ -83,7 +83,10 @@ pub fn decode(data: &[u8]) -> Result<(Options, Message), Error> {
         pos += 8;
     }
     let msg = match header.msgtype {
-        0 => Message::Frame(try!(ethernet::decode(&data[pos..]))),
+        0 => {
+            let (header, payload) = try!(M::parse_from(&data[pos..]));
+            Message::Frame(header, payload)
+        },
         1 => {
             if data.len() < pos + 1 {
                 return Err(Error::ParseError("Empty peers"));
@@ -116,12 +119,12 @@ pub fn decode(data: &[u8]) -> Result<(Options, Message), Error> {
     Ok((options, msg))
 }
 
-pub fn encode(options: &Options, msg: &Message, buf: &mut [u8]) -> usize {
+pub fn encode<M: InterfaceMessage>(options: &Options, msg: &Message<M>, buf: &mut [u8]) -> usize {
     assert!(buf.len() >= mem::size_of::<TopHeader>());
     let mut pos = 0;
     let mut header = TopHeader::default();
     header.msgtype = match msg {
-        &Message::Frame(_) => 0,
+        &Message::Frame(_, _) => 0,
         &Message::Peers(_) => 1,
         &Message::GetPeers => 2,
         &Message::Close => 3
@@ -141,8 +144,8 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8]) -> usize {
         pos += 8;
     }
     match msg {
-        &Message::Frame(ref frame) => {
-            pos += ethernet::encode(&frame, &mut buf[pos..])
+        &Message::Frame(ref header, ref payload) => {
+            pos += header.encode_to(&payload, &mut buf[pos..])
         },
         &Message::Peers(ref peers) => {
             let count_pos = pos;
@@ -186,8 +189,8 @@ fn encode_message_packet() {
     let src = Mac([1,2,3,4,5,6]);
     let dst = Mac([7,8,9,10,11,12]);
     let payload = [1,2,3,4,5];
-    let frame = ethernet::Frame{src: ethernet::EthAddr{mac: src, vlan: 0}, dst: ethernet::EthAddr{mac: dst, vlan: 0}, payload: &payload};
-    let msg = Message::Frame(frame);
+    let frame = ethernet::Frame{src: ethernet::EthAddr{mac: src, vlan: 0}, dst: ethernet::EthAddr{mac: dst, vlan: 0}};
+    let msg = Message::Frame(frame, &payload);
     let mut buf = [0; 1024];
     let size = encode(&options, &msg, &mut buf[..]);
     assert_eq!(size, 25);
@@ -201,7 +204,7 @@ fn encode_message_packet() {
 fn encode_message_peers() {
     use std::str::FromStr;
     let options = Options::default();
-    let msg = Message::Peers(vec![SocketAddr::from_str("1.2.3.4:123").unwrap(), SocketAddr::from_str("5.6.7.8:12345").unwrap()]);
+    let msg: Message<ethernet::Frame> = Message::Peers(vec![SocketAddr::from_str("1.2.3.4:123").unwrap(), SocketAddr::from_str("5.6.7.8:12345").unwrap()]);
     let mut buf = [0; 1024];
     let size = encode(&options, &msg, &mut buf[..]);
     assert_eq!(size, 22);
@@ -215,7 +218,7 @@ fn encode_message_peers() {
 fn encode_option_network_id() {
     let mut options = Options::default();
     options.network_id = Some(134);
-    let msg = Message::GetPeers;
+    let msg: Message<ethernet::Frame> = Message::GetPeers;
     let mut buf = [0; 1024];
     let size = encode(&options, &msg, &mut buf[..]);
     assert_eq!(size, 16);
@@ -228,7 +231,7 @@ fn encode_option_network_id() {
 #[test]
 fn encode_message_getpeers() {
     let options = Options::default();
-    let msg = Message::GetPeers;
+    let msg: Message<ethernet::Frame> = Message::GetPeers;
     let mut buf = [0; 1024];
     let size = encode(&options, &msg, &mut buf[..]);
     assert_eq!(size, 8);
@@ -241,7 +244,7 @@ fn encode_message_getpeers() {
 #[test]
 fn encode_message_close() {
     let options = Options::default();
-    let msg = Message::Close;
+    let msg: Message<ethernet::Frame> = Message::Close;
     let mut buf = [0; 1024];
     let size = encode(&options, &msg, &mut buf[..]);
     assert_eq!(size, 8);
