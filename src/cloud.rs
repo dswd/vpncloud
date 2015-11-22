@@ -123,6 +123,7 @@ pub struct GenericCloud<A: Address, T: Table<Address=A>, M: Protocol<Address=A>,
     peers: PeerList,
     addresses: Vec<A>,
     learning: bool,
+    broadcast: bool,
     reconnect_peers: Vec<SocketAddr>,
     table: T,
     socket: UdpSocket,
@@ -137,7 +138,7 @@ pub struct GenericCloud<A: Address, T: Table<Address=A>, M: Protocol<Address=A>,
 
 impl<A: Address, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterface> GenericCloud<A, T, M, I> {
     pub fn new(device: I, listen: String, network_id: Option<NetworkId>, table: T,
-        peer_timeout: Duration, learning: bool, addresses: Vec<A>) -> Self {
+        peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<A>) -> Self {
         let socket = match UdpSocket::bind(&listen as &str) {
             Ok(socket) => socket,
             _ => panic!("Failed to open socket")
@@ -146,6 +147,7 @@ impl<A: Address, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterfac
             peers: PeerList::new(peer_timeout),
             addresses: addresses,
             learning: learning,
+            broadcast: broadcast,
             reconnect_peers: Vec::new(),
             table: table,
             socket: socket,
@@ -192,7 +194,6 @@ impl<A: Address, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterfac
     }
 
     fn housekeep(&mut self) -> Result<(), Error> {
-        debug!("Running housekeeping...");
         self.peers.timeout();
         self.table.housekeep();
         if self.next_peerlist <= SteadyTime::now() {
@@ -230,6 +231,10 @@ impl<A: Address, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterfac
                 }
             },
             None => {
+                if !self.broadcast {
+                    debug!("No destination for {:?} found, dropping", dst);
+                    return Ok(());
+                }
                 debug!("No destination for {:?} found, broadcasting", dst);
                 let msg = Message::Data(payload);
                 for addr in &self.peers.as_vec() {
@@ -273,8 +278,13 @@ impl<A: Address, T: Table<Address=A>, M: Protocol<Address=A>, I: VirtualInterfac
                 }
             },
             Message::Init(addrs) => {
+                if self.peers.contains(&peer) {
+                    return Ok(());
+                }
                 self.peers.add(&peer);
                 let peers = self.peers.as_vec();
+                let own_addrs = self.addresses.clone();
+                try!(self.send_msg(peer, &Message::Init(own_addrs)));
                 try!(self.send_msg(peer, &Message::Peers(peers)));
                 for addr in addrs {
                     self.table.learn(addr, peer.clone());
@@ -344,7 +354,7 @@ impl TapCloud {
         };
         info!("Opened tap device {}", device.ifname());
         let table = MacTable::new(mac_timeout);
-        Self::new(device, listen, network_id, table, peer_timeout, true, vec![])
+        Self::new(device, listen, network_id, table, peer_timeout, true, true, vec![])
     }
 }
 
@@ -360,6 +370,6 @@ impl TunCloud {
         info!("Opened tun device {}", device.ifname());
         let table = RoutingTable::new();
         let subnet = IpAddress::from_str(&subnet).expect("Invalid subnet");
-        Self::new(device, listen, network_id, table, peer_timeout, false, vec![subnet])
+        Self::new(device, listen, network_id, table, peer_timeout, false, false, vec![subnet])
     }
 }

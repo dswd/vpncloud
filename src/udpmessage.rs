@@ -4,7 +4,7 @@ use std::u16;
 
 use super::cloud::{Error, NetworkId, Address};
 use super::util::{as_obj, as_bytes};
-use super::ethernet;
+#[cfg(test)] use super::ethernet;
 
 const MAGIC: [u8; 3] = [0x76, 0x70, 0x6e];
 const VERSION: u8 = 0;

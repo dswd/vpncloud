@@ -186,9 +186,15 @@ impl Table for RoutingTable {
     fn learn(&mut self, src: Self::Address, addr: SocketAddr) {
         match src {
             IpAddress::V4(_) => (),
-            IpAddress::V4Net(base, prefix_len) => self.add(IpAddress::V4(base).to_bytes(), prefix_len, addr),
+            IpAddress::V4Net(base, prefix_len) => {
+                info!("Adding to routing table: {:?} => {}", src, addr);
+                self.add(IpAddress::V4(base).to_bytes(), prefix_len, addr);
+            },
             IpAddress::V6(_) => (),
-            IpAddress::V6Net(base, prefix_len) => self.add(IpAddress::V6(base).to_bytes(), prefix_len, addr)
+            IpAddress::V6Net(base, prefix_len) => {
+                info!("Adding to routing table: {:?} => {}", src, addr);
+                self.add(IpAddress::V6(base).to_bytes(), prefix_len, addr);
+            }
         }
     }
 
