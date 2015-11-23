@@ -146,7 +146,7 @@ vpncloud -c remote_node:3210
 Then, the interfaces have to configured and activated (the `X` in the address
 must be unique among all nodes, e.g. 0, 1, 2, ...):
 ```
-ifconfig vpncloud0 10.0.0.X/24 up
+ifconfig vpncloud0 10.0.0.X/24 mtu 1400 up
 ```
 
 Afterwards, the interface can be used to communicate.
