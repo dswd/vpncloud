@@ -9,9 +9,10 @@ matrix:
   - rust: nightly
 before_script:
 - ! 'pip install ''travis-cargo<0.2'' --user &&
-
-  export PATH=$HOME/.local/bin:$PATH
-
+  export PATH=$HOME/.local/bin:$PATH;
+  wget https://github.com/jedisct1/libsodium/releases/download/1.0.3/libsodium-1.0.3.tar.gz;
+  tar xvfz libsodium-1.0.3.tar.gz;
+  cd libsodium-1.0.3 && ./configure --prefix=/usr && make && sudo make install && cd ..
 '
 script:
 - ! 'travis-cargo build &&
@@ -26,8 +27,6 @@ addons:
     - libcurl4-openssl-dev
     - libelf-dev
     - libdw-dev
-    - libsodium13
-    - libsodium-dev
 after_success:
 - travis-cargo --only stable doc-upload
 - travis-cargo coveralls --no-sudo
