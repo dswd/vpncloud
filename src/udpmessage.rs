@@ -258,7 +258,7 @@ fn encode_option_network_id() {
     let mut buf = [0; 1024];
     let size = encode(&options, &msg, &mut buf[..]);
     assert_eq!(size, 16);
-    assert_eq!(&buf[..size], &[118,112,110,0,0,0,1,2,0,0,0,0,0,0,0,134]);
+    assert_eq!(&buf[..size], &[118,112,110,0,0,0,1,3,0,0,0,0,0,0,0,134]);
     let (options2, msg2) = decode(&buf[..size]).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
@@ -271,8 +271,8 @@ fn encode_message_init() {
     let msg = Message::Init(addrs);
     let mut buf = [0; 1024];
     let size = encode(&options, &msg, &mut buf[..]);
-    assert_eq!(size, 13);
-    assert_eq!(&buf[..size], &[118,112,110,0,0,0,0,2,1,2,3,4,5]);
+    assert_eq!(size, 9);
+    assert_eq!(&buf[..size], &[118,112,110,0,0,0,0,2,0]);
     let (options2, msg2) = decode(&buf[..size]).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);

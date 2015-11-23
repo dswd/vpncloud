@@ -28,12 +28,12 @@ impl Protocol for Frame {
             let mut src = Vec::with_capacity(8);
             let mut dst = Vec::with_capacity(8);
             unsafe {
-                ptr::copy_nonoverlapping(data.as_ptr(), src.as_mut_ptr(), 2);
-                ptr::copy_nonoverlapping(src_data.as_ptr(), src[2..].as_mut_ptr(), 6);
                 src.set_len(8);
-                ptr::copy_nonoverlapping(data.as_ptr(), dst.as_mut_ptr(), 2);
-                ptr::copy_nonoverlapping(dst_data.as_ptr(), dst[2..].as_mut_ptr(), 6);
+                ptr::copy_nonoverlapping(data[pos..].as_ptr(), src.as_mut_ptr(), 2);
+                ptr::copy_nonoverlapping(src_data.as_ptr(), src[2..].as_mut_ptr(), 6);
                 dst.set_len(8);
+                ptr::copy_nonoverlapping(data[pos..].as_ptr(), dst.as_mut_ptr(), 2);
+                ptr::copy_nonoverlapping(dst_data.as_ptr(), dst[2..].as_mut_ptr(), 6);
             }
             Ok((Address(src), Address(dst)))
         } else {
