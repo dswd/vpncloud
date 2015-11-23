@@ -17,4 +17,4 @@ gcc = "0.3"
 
 [features]
 default = []
-crypto = ["sodiumoxide"]
+crypto = ["sodiumoxide"] #not default as it requires external library
