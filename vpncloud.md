@@ -228,6 +228,7 @@ Every packet sent over UDP contains the following header (in order):
     order. Currently the following additional headers are supported:
 
     - Bit 1: Network ID
+    - Bit 2: Crypto information
 
   * 1 byte for the `message type`
 
@@ -246,6 +247,13 @@ field will follow in the order of their respective flag bits.
 
     The network id is encoded as 8 bytes.
 
+  * **Crypto information**:
+
+    If this header is present, the contents of the message are encrypted and
+    must have to decrypted before decoding.
+    This option contains 40 bytes. The first 8 bytes are the **nonce** for this
+    message and the later 32 bytes are the **authentication hash** of the
+    message.
 
 After the additional headers, message as specified in the `message type` field
 will follow:
