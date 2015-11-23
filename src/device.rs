@@ -3,7 +3,7 @@ use std::io::{Result as IoResult, Error as IoError, Read, Write};
 use std::marker::PhantomData;
 use std::fs;
 
-use super::cloud::{Error, VirtualInterface};
+use super::types::{Error, VirtualInterface};
 
 extern {
     fn setup_tap_device(fd: i32, ifname: *mut u8) -> i32;

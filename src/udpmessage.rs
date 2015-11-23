@@ -2,7 +2,7 @@ use std::{mem, ptr, fmt};
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
 use std::u16;
 
-use super::cloud::{Error, NetworkId, Range, Address};
+use super::types::{Error, NetworkId, Range, Address};
 use super::util::{as_obj, as_bytes, to_vec};
 
 const MAGIC: [u8; 3] = [0x76, 0x70, 0x6e];

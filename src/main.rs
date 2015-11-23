@@ -5,6 +5,7 @@ extern crate rustc_serialize;
 extern crate epoll;
 
 mod util;
+mod types;
 mod udpmessage;
 mod ethernet;
 mod ip;
@@ -16,7 +17,8 @@ use docopt::Docopt;
 
 use std::hash::{Hash, SipHasher, Hasher};
 
-use cloud::{Error, TapCloud, TunCloud, Behavior};
+use types::{Error, Behavior};
+use cloud::{TapCloud, TunCloud};
 
 
 //TODO: hub behavior

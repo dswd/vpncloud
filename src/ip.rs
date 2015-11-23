@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::collections::{hash_map, HashMap};
 use std::io::Read;
 
-use super::cloud::{Protocol, Error, Table, Address};
+use super::types::{Protocol, Error, Table, Address};
 use super::util::to_vec;
 
 #[allow(dead_code)]

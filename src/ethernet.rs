@@ -2,7 +2,7 @@ use std::ptr;
 use std::net::SocketAddr;
 use std::collections::HashMap;
 
-use super::cloud::{Error, Table, Protocol, Address};
+use super::types::{Error, Table, Protocol, Address};
 
 use time::{Duration, SteadyTime};
 
