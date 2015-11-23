@@ -2,4 +2,4 @@ target
 Cargo.lock
 vpncloud-*
 ._*
-vpncloud.1
+vpncloud.1*

@@ -14,8 +14,8 @@ Options:
     --subnet <subnet>               The local subnets to use.
     --network-id <id>               Optional token that identifies the network.
     --shared-key <key>              The shared key to encrypt all traffic.
-    --peer-timeout <timeout>        Peer timeout in seconds. [default: 1800]
-    --dst-timeout <timeout>         Switch table entry timeout in seconds.
+    --peer-timeout <secs>           Peer timeout in seconds. [default: 1800]
+    --dst-timeout <secs>            Switch table entry timeout in seconds.
                                     [default: 300]
     --ifup <command>                A command to setup the network interface.
     --ifdown <command>              A command to bring down the network

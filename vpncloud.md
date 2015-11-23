@@ -3,7 +3,7 @@ vpncloud(1) -- Peer-to-peer VPN
 
 ## SYNOPSIS
 
-`vpncloud [options] [-t <type>] [-d <device>] [-l <addr>] [-c <addr>...]`
+`vpncloud [options] [-t <type>] [-d <name>] [-l <addr>] [-c <addr>...]`
 
 
 ## OPTIONS
@@ -13,7 +13,7 @@ vpncloud(1) -- Peer-to-peer VPN
     Set the type of network. There are two options: **tap** devices process
     Ethernet frames **tun** devices process IP packets. [default: tap]
 
-  * `-d <device>`, `--device <device>`:
+  * `-d <name>`, `--device <name>`:
 
     Name of the virtual device. Any "%d" will be filled with a free number.
     [default: vpncloud%d]
@@ -44,22 +44,22 @@ vpncloud(1) -- Peer-to-peer VPN
     MAC address. The prefix length is the number of significant front bits that
     distinguish the subnet from other subnets. Example: `10.1.1.0/24`.
 
-  * `--shared-key <shared_key>`:
+  * `--shared-key <key>`:
 
     An optional shared key to encrypt the VPN data. If this option is not set,
     the traffic will be sent unencrypted.
 
-  * `--network-id <network_id>`:
+  * `--network-id <id>`:
 
     An optional token that identifies the network and helps to distinguish it
     from other networks.
 
-  * `--peer-timeout <peer_timeout>`:
+  * `--peer-timeout <secs>`:
 
     Peer timeout in seconds. The peers will exchange information periodically
     and drop peers that are silent for this period of time. [default: 1800]
 
-  * `--dst-timeout <dst_timeout>`:
+  * `--dst-timeout <secs>`:
 
     Switch table entry timeout in seconds. This parameter is only used in switch
     mode. Addresses that have not been seen for the given period of time  will
@@ -154,6 +154,7 @@ likely those commands need to be run as **root** using `sudo`.
 First, VpnCloud need to be started on both nodes (the address after `-c` is the
 address of the remote node and the the `X` in the interface address must be
 unique among all nodes, e.g. 0, 1, 2, ...):
+
 ```
 vpncloud -c remote_node:3210 --ifup 'ifconfig $IFNAME 10.0.0.X/24 mtu 1400 up'
 ```
@@ -165,6 +166,7 @@ Afterwards, the interface can be used to communicate.
 
 In this example, 4 nodes should communicate using IP. First, VpnCloud need to
 be started on both nodes:
+
 ```
 vpncloud -t tun -c remote_node:3210 --subnet 10.0.0.X/32 --ifup 'ifconfig $IFNAME 10.0.0.0/24 mtu 1400 up'
 ```
