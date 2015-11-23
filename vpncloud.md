@@ -127,6 +127,61 @@ based on separate MAC tables. Any nested tags (Q-in-Q) will be ignored.
 
 ## EXAMPLES
 
+### Switched TAP scenario
+
+In the example scenario, a simple layer 2 network tunnel is established. Most
+likely those commands need to be run as **root** using `sudo`.
+
+First, VpnCloud need to be started on both nodes (the address after `-c` is the
+address of the remote node):
+```
+vpncloud -c remote_node:3210
+```
+
+Then, the interfaces have to configured and activated (the `X` in the address
+must be unique among all nodes, e.g. 0, 1, 2, ...):
+```
+ifconfig vpncloud0 10.0.0.X/24 up
+```
+
+Afterwards, the interface can be used to communicate.
+
+
+### Routed TUN example
+
+In this example, 4 nodes should communicate using IP. First, VpnCloud need to
+be started on both nodes:
+```
+vpncloud -t tun -c remote_node:3210 --subnet 10.0.0.1/32
+```
+
+Then, the interfaces can be configured and activated like in the previous
+example.
+
+
+### Important notes
+
+- It is important to configure the interface in a way that all addresses on the
+  VPN can be reached directly. E.g. if addresses 10.0.0.1 and 10.0.0.2 are used,
+  the interface needs to be configured as /24.
+  For TUN devices, this means that the prefix length of the subnets must be
+  different than the prefix length that the interface is configured with.
+
+- VpnCloud can be used to connect two separate networks. TAP networks can be
+  bridged using `brctl` and TUN networks must be routed. It is very important
+  to be careful when setting up such a scenario in order to avoid network loops,
+  security issues, DHCP issues and many more problems.
+
+- TAP devices will forward DHCP data. If done intentionally, this can be used
+  to assign unique addresses to all participants. If this happens accidentally,
+  it can conflict with DHCP servers of the local network and can have severe
+  side effects.
+
+- VpnCloud is not designed to be secure. It encapsulates the network data but
+  it (currently) does not encrypt and authenticate it. Attackers with read
+  access to the UDP stream can read the whole traffic including any unencrypted
+  passwords in the payload. Attackers with write access to the UDP stream can
+  manipulate or suppress the whole traffic and even send data on their own.
 
 
 ## NETWORK PROTOCOL
