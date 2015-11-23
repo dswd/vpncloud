@@ -51,24 +51,23 @@ impl Protocol for Frame {
 }
 
 
-struct MacTableValue {
+struct SwitchTableValue {
     address: SocketAddr,
     timeout: SteadyTime
 }
 
-
-pub struct MacTable {
-    table: HashMap<Address, MacTableValue>,
+pub struct SwitchTable {
+    table: HashMap<Address, SwitchTableValue>,
     timeout: Duration
 }
 
-impl MacTable {
-    pub fn new(timeout: Duration) -> MacTable {
-        MacTable{table: HashMap::new(), timeout: timeout}
+impl SwitchTable {
+    pub fn new(timeout: Duration) -> Self {
+        SwitchTable{table: HashMap::new(), timeout: timeout}
     }
 }
 
-impl Table for MacTable {
+impl Table for SwitchTable {
     fn housekeep(&mut self) {
         let now = SteadyTime::now();
         let mut del: Vec<Address> = Vec::new();
@@ -84,7 +83,7 @@ impl Table for MacTable {
     }
 
     fn learn(&mut self, key: Address, _prefix_len: Option<u8>, addr: SocketAddr) {
-       let value = MacTableValue{address: addr, timeout: SteadyTime::now()+self.timeout};
+       let value = SwitchTableValue{address: addr, timeout: SteadyTime::now()+self.timeout};
        if self.table.insert(key.clone(), value).is_none() {
            info!("Learned address {:?} => {}", key, addr);
        }

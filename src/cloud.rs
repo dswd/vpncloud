@@ -6,16 +6,14 @@ use std::io::Read;
 use std::fmt;
 use std::os::unix::io::AsRawFd;
 use std::marker::PhantomData;
-use std::str::FromStr;
 
 use time::{Duration, SteadyTime, precise_time_ns};
 use epoll;
 
-use super::types::{Table, Protocol, VirtualInterface, Range, Error, NetworkId, Behavior};
-use super::device::{TunDevice, TapDevice};
+use super::types::{Table, Protocol, VirtualInterface, Range, Error, NetworkId};
+use super::device::Device;
 use super::udpmessage::{encode, decode, Options, Message};
-use super::ethernet::{Frame, MacTable};
-use super::ip::{InternetProtocol, RoutingTable};
+use super::{ethernet, ip};
 
 struct PeerList {
     timeout: Duration,
@@ -85,25 +83,25 @@ impl PeerList {
 }
 
 
-pub struct GenericCloud<T: Table, P: Protocol, I: VirtualInterface> {
+pub struct GenericCloud<P: Protocol> {
     peers: PeerList,
     addresses: Vec<Range>,
     learning: bool,
     broadcast: bool,
     reconnect_peers: Vec<SocketAddr>,
-    table: T,
+    table: Box<Table>,
     socket: UdpSocket,
-    device: I,
+    device: Device,
     network_id: Option<NetworkId>,
     next_peerlist: SteadyTime,
     update_freq: Duration,
     buffer_out: [u8; 64*1024],
     next_housekeep: SteadyTime,
-    _dummy_m: PhantomData<P>,
+    _dummy_p: PhantomData<P>,
 }
 
-impl<T: Table, P: Protocol, I: VirtualInterface> GenericCloud<T, P, I> {
-    pub fn new(device: I, listen: String, network_id: Option<NetworkId>, table: T,
+impl<P: Protocol> GenericCloud<P> {
+    pub fn new(device: Device, listen: String, network_id: Option<NetworkId>, table: Box<Table>,
         peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>) -> Self {
         let socket = match UdpSocket::bind(&listen as &str) {
             Ok(socket) => socket,
@@ -123,7 +121,7 @@ impl<T: Table, P: Protocol, I: VirtualInterface> GenericCloud<T, P, I> {
             update_freq: peer_timeout/2,
             buffer_out: [0; 64*1024],
             next_housekeep: SteadyTime::now(),
-            _dummy_m: PhantomData,
+            _dummy_p: PhantomData,
         }
     }
 
@@ -311,47 +309,5 @@ impl<T: Table, P: Protocol, I: VirtualInterface> GenericCloud<T, P, I> {
 }
 
 
-pub type TapCloud = GenericCloud<MacTable, Frame, TapDevice>;
-
-impl TapCloud {
-    pub fn new_tap_cloud(device: &str, listen: String, behavior: Behavior, network_id: Option<NetworkId>, mac_timeout: Duration, peer_timeout: Duration) -> Self {
-        let device = match TapDevice::new(device) {
-            Ok(device) => device,
-            _ => panic!("Failed to open tap device")
-        };
-        info!("Opened tap device {}", device.ifname());
-        let table = MacTable::new(mac_timeout);
-        let (learning, broadcasting) = match behavior {
-            Behavior::Normal => (true, true),
-            Behavior::Switch => (true, true),
-            Behavior::Hub => (false, true),
-            Behavior::Router => (false, false)
-        };
-        Self::new(device, listen, network_id, table, peer_timeout, learning, broadcasting, vec![])
-    }
-}
-
-
-pub type TunCloud = GenericCloud<RoutingTable, InternetProtocol, TunDevice>;
-
-impl TunCloud {
-    pub fn new_tun_cloud(device: &str, listen: String, behavior: Behavior, network_id: Option<NetworkId>, range_strs: Vec<String>, peer_timeout: Duration) -> Self {
-        let device = match TunDevice::new(device) {
-            Ok(device) => device,
-            _ => panic!("Failed to open tun device")
-        };
-        info!("Opened tun device {}", device.ifname());
-        let table = RoutingTable::new();
-        let mut ranges = Vec::with_capacity(range_strs.len());
-        for s in range_strs {
-            ranges.push(Range::from_str(&s).expect("Invalid subnet"));
-        }
-        let (learning, broadcasting) = match behavior {
-            Behavior::Normal => (false, false),
-            Behavior::Switch => (true, true),
-            Behavior::Hub => (false, true),
-            Behavior::Router => (false, false)
-        };
-        Self::new(device, listen, network_id, table, peer_timeout, learning, broadcasting, ranges)
-    }
-}
+pub type TapCloud = GenericCloud<ethernet::Frame>;
+pub type TunCloud = GenericCloud<ip::Packet>;

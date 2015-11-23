@@ -6,9 +6,9 @@ use super::types::{Protocol, Error, Table, Address};
 use super::util::to_vec;
 
 #[allow(dead_code)]
-pub struct InternetProtocol;
+pub struct Packet;
 
-impl Protocol for InternetProtocol {
+impl Protocol for Packet {
     fn parse(data: &[u8]) -> Result<(Address, Address), Error> {
         if data.len() < 1 {
             return Err(Error::ParseError("Empty header"));

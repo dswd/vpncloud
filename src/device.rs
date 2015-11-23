@@ -1,9 +1,8 @@
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::io::{Result as IoResult, Error as IoError, Read, Write};
-use std::marker::PhantomData;
 use std::fs;
 
-use super::types::{Error, VirtualInterface};
+use super::types::{Error, VirtualInterface, Type};
 
 extern {
     fn setup_tap_device(fd: i32, ifname: *mut u8) -> i32;
@@ -11,56 +10,26 @@ extern {
 }
 
 
-trait DeviceSetup {
-    fn setup_device(RawFd, &str) -> IoResult<String>;
-}
-
-#[allow(dead_code)]
-struct TapSetup;
-
-impl DeviceSetup for TapSetup {
-    fn setup_device(fd: RawFd, ifname: &str) -> IoResult<String> {
-        let mut ifname_string = String::with_capacity(32);
-        ifname_string.push_str(ifname);
-        ifname_string.push('\0');
-        let mut ifname_c = ifname_string.into_bytes();
-        let res = unsafe { setup_tap_device(fd, ifname_c.as_mut_ptr()) };
-        match res {
-            0 => Ok(String::from_utf8(ifname_c).unwrap()),
-            _ => Err(IoError::last_os_error())
-        }
-    }
-}
-
-#[allow(dead_code)]
-struct TunSetup;
-
-impl DeviceSetup for TunSetup {
-    fn setup_device(fd: RawFd, ifname: &str) -> IoResult<String> {
-        let mut ifname_string = String::with_capacity(32);
-        ifname_string.push_str(ifname);
-        ifname_string.push('\0');
-        let mut ifname_c = ifname_string.into_bytes();
-        let res = unsafe { setup_tun_device(fd, ifname_c.as_mut_ptr()) };
-        match res {
-            0 => Ok(String::from_utf8(ifname_c).unwrap()),
-            _ => Err(IoError::last_os_error())
-        }
-    }
-}
-
-
-pub struct Device<T> {
+pub struct Device {
     fd: fs::File,
-    ifname: String,
-    _dummy_t: PhantomData<T>
+    ifname: String
 }
 
-impl<T: DeviceSetup> Device<T> {
-    pub fn new(ifname: &str) -> IoResult<Self> {
+impl Device {
+    pub fn new(ifname: &str, type_: Type) -> IoResult<Self> {
         let fd = try!(fs::OpenOptions::new().read(true).write(true).open("/dev/net/tun"));
-        let ifname = try!(T::setup_device(fd.as_raw_fd(), ifname));
-        Ok(Device{fd: fd, ifname: ifname, _dummy_t: PhantomData})
+        let mut ifname_string = String::with_capacity(32);
+        ifname_string.push_str(ifname);
+        ifname_string.push('\0');
+        let mut ifname_c = ifname_string.into_bytes();
+        let res = match type_ {
+            Type::Tun => unsafe { setup_tun_device(fd.as_raw_fd(), ifname_c.as_mut_ptr()) },
+            Type::Tap => unsafe { setup_tap_device(fd.as_raw_fd(), ifname_c.as_mut_ptr()) }
+        };
+        match res {
+            0 => Ok(Device{fd: fd, ifname: String::from_utf8(ifname_c).unwrap()}),
+            _ => Err(IoError::last_os_error())
+        }
     }
 
     #[inline(always)]
@@ -69,13 +38,13 @@ impl<T: DeviceSetup> Device<T> {
     }
 }
 
-impl<T> AsRawFd for Device<T> {
+impl AsRawFd for Device {
     fn as_raw_fd(&self) -> RawFd {
         self.fd.as_raw_fd()
     }
 }
 
-impl<T> VirtualInterface for Device<T> {
+impl VirtualInterface for Device {
     fn read(&mut self, mut buffer: &mut [u8]) -> Result<usize, Error> {
         self.fd.read(&mut buffer).map_err(|_| Error::TunTapDevError("Read error"))
     }
@@ -87,6 +56,3 @@ impl<T> VirtualInterface for Device<T> {
         }
     }
 }
-
-pub type TapDevice = Device<TapSetup>;
-pub type TunDevice = Device<TunSetup>;

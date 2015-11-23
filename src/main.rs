@@ -16,13 +16,16 @@ use time::Duration;
 use docopt::Docopt;
 
 use std::hash::{Hash, SipHasher, Hasher};
+use std::str::FromStr;
 
-use types::{Error, Behavior};
+use device::Device;
+use ethernet::SwitchTable;
+use ip::RoutingTable;
+use types::{Error, Behavior, Type, Range, Table};
 use cloud::{TapCloud, TunCloud};
 
 
-//TODO: hub behavior
-//TODO: L2 routing/L3 switching
+//TODO: L2 routing
 //TODO: Implement IPv6
 //TODO: Encryption
 //TODO: Call close
@@ -54,17 +57,12 @@ Options:
     -c <connect>, --connect <connect>      List of peers (addr:port) to connect to
     --network-id <network_id>              Optional token that identifies the network
     --peer-timeout <peer_timeout>          Peer timeout in seconds [default: 1800]
-    --subnet <subnet>...                   The local subnets to use (only for tun)
-    --mac-timeout <mac_timeout>            Mac table entry timeout in seconds (only for tap) [default: 300]
+    --subnet <subnet>...                   The local subnets to use
+    --dst-timeout <dst_timeout>            Switch table entry timeout in seconds [default: 300]
     -v, --verbose                          Log verbosely
     -q, --quiet                            Only print error messages
     -h, --help                             Display the help
 ";
-
-#[derive(RustcDecodable, Debug)]
-enum Type {
-    Tun, Tap
-}
 
 #[derive(RustcDecodable, Debug)]
 struct Args {
@@ -76,47 +74,9 @@ struct Args {
     flag_network_id: Option<String>,
     flag_connect: Vec<String>,
     flag_peer_timeout: usize,
-    flag_mac_timeout: usize,
+    flag_dst_timeout: usize,
     flag_verbose: bool,
     flag_quiet: bool
-}
-
-fn tap_cloud(args: Args) {
-    let mut tapcloud = TapCloud::new_tap_cloud(
-        &args.flag_device,
-        args.flag_listen,
-        args.flag_behavior,
-        args.flag_network_id.map(|name| {
-            let mut s = SipHasher::new();
-            name.hash(&mut s);
-            s.finish()
-        }),
-        Duration::seconds(args.flag_mac_timeout as i64),
-        Duration::seconds(args.flag_peer_timeout as i64)
-    );
-    for addr in args.flag_connect {
-        tapcloud.connect(&addr as &str, true).expect("Failed to send");
-    }
-    tapcloud.run()
-}
-
-fn tun_cloud(args: Args) {
-    let mut tuncloud = TunCloud::new_tun_cloud(
-        &args.flag_device,
-        args.flag_listen,
-        args.flag_behavior,
-        args.flag_network_id.map(|name| {
-            let mut s = SipHasher::new();
-            name.hash(&mut s);
-            s.finish()
-        }),
-        args.flag_subnet,
-        Duration::seconds(args.flag_peer_timeout as i64)
-    );
-    for addr in args.flag_connect {
-        tuncloud.connect(&addr as &str, true).expect("Failed to send");
-    }
-    tuncloud.run()
 }
 
 fn main() {
@@ -133,8 +93,42 @@ fn main() {
         Box::new(SimpleLogger)
     }).unwrap();
     debug!("Args: {:?}", args);
-    match args.flag_type {
-        Type::Tap => tap_cloud(args),
-        Type::Tun => tun_cloud(args)
+    let device = Device::new(&args.flag_device, args.flag_type).expect("Failed to open virtual interface");
+    info!("Opened device {}", device.ifname());
+    let mut ranges = Vec::with_capacity(args.flag_subnet.len());
+    for s in args.flag_subnet {
+        ranges.push(Range::from_str(&s).expect("Invalid subnet"));
     }
+    let dst_timeout = Duration::seconds(args.flag_dst_timeout as i64);
+    let peer_timeout = Duration::seconds(args.flag_peer_timeout as i64);
+    let (learning, broadcasting, table): (bool, bool, Box<Table>) = match args.flag_behavior {
+        Behavior::Normal => match args.flag_type {
+            Type::Tap => (true, true, Box::new(SwitchTable::new(dst_timeout))),
+            Type::Tun => (false, false, Box::new(RoutingTable::new()))
+        },
+        Behavior::Router => (false, false, Box::new(RoutingTable::new())),
+        Behavior::Switch => (true, true, Box::new(SwitchTable::new(dst_timeout))),
+        Behavior::Hub => (false, true, Box::new(SwitchTable::new(dst_timeout)))
+    };
+    let network_id = args.flag_network_id.map(|name| {
+        let mut s = SipHasher::new();
+        name.hash(&mut s);
+        s.finish()
+    });
+    match args.flag_type {
+        Type::Tap => {
+            let mut cloud = TapCloud::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges);
+            for addr in args.flag_connect {
+                cloud.connect(&addr as &str, true).expect("Failed to send");
+            }
+            cloud.run()
+        },
+        Type::Tun => {
+            let mut cloud = TunCloud::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges);
+            for addr in args.flag_connect {
+                cloud.connect(&addr as &str, true).expect("Failed to send");
+            }
+            cloud.run()
+        }
+    };
 }

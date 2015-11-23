@@ -80,6 +80,11 @@ impl FromStr for Range {
 }
 
 
+#[derive(RustcDecodable, Debug, Clone, Copy)]
+pub enum Type {
+    Tun, Tap
+}
+
 #[derive(RustcDecodable, Debug)]
 pub enum Behavior {
     Normal, Hub, Switch, Router
