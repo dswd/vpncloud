@@ -1,5 +1,5 @@
 [package]
-name = "ethcloud"
+name = "vpncloud"
 version = "0.1.0"
 authors = ["Dennis Schwerdel <schwerdel@informatik.uni-kl.de>"]
 build = "build.rs"

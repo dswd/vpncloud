@@ -148,7 +148,7 @@ impl<P: Protocol> GenericCloud<P> {
                 }
             }
         }
-        info!("Connecting to {}", addr);
+        debug!("Connecting to {}", addr);
         if reconnect {
             let addr = addr.to_socket_addrs().unwrap().next().unwrap();
             self.reconnect_peers.push(addr);

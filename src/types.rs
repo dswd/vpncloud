@@ -4,7 +4,7 @@ use std::{fmt, ptr};
 use std::os::unix::io::AsRawFd;
 use std::str::FromStr;
 
-use super::util::as_bytes;
+use super::util::{as_bytes, as_obj};
 
 pub type NetworkId = u64;
 
@@ -17,6 +17,11 @@ impl fmt::Debug for Address {
             4 => write!(formatter, "{}.{}.{}.{}", self.0[0], self.0[1], self.0[2], self.0[3]),
             6 => write!(formatter, "{:x}:{:x}:{:x}:{:x}:{:x}:{:x}",
                 self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]),
+            8 => {
+                let vlan = u16::from_be( *unsafe { as_obj(&self.0[0..1]) });
+                write!(formatter, "vlan{}/{:x}:{:x}:{:x}:{:x}:{:x}:{:x}",
+                    vlan, self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5])
+            },
             16 => write!(formatter, "{:x}{:x}:{:x}{:x}:{:x}{:x}:{:x}{:x}:{:x}{:x}:{:x}{:x}:{:x}{:x}:{:x}{:x}",
                 self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], self.0[6], self.0[7],
                 self.0[8], self.0[9], self.0[10], self.0[11], self.0[12], self.0[13], self.0[14], self.0[15]
@@ -93,7 +98,7 @@ pub enum Type {
 }
 
 #[derive(RustcDecodable, Debug)]
-pub enum Behavior {
+pub enum Mode {
     Normal, Hub, Switch, Router
 }
 

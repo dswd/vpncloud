@@ -53,6 +53,7 @@ impl Table for RoutingTable {
             Some(val) => val,
             None => addr.0.len() as u8 * 8
         };
+        info!("New routing entry: {:?}/{} => {}", addr, prefix_len, address);
         let group_len = (prefix_len as usize / 16) * 2;
         let group_bytes: Vec<u8> = addr.0[..group_len].iter().map(|b| *b).collect();
         let routing_entry = RoutingEntry{address: address, bytes: addr.0, prefix_len: prefix_len};
@@ -64,7 +65,7 @@ impl Table for RoutingTable {
 
     fn lookup(&self, addr: &Address) -> Option<SocketAddr> {
         let len = addr.0.len()/2 * 2;
-        for i in 0..len/2 {
+        for i in 0..(len/2)+1 {
             if let Some(group) = self.0.get(&addr.0[0..len-2*i]) {
                 for entry in group {
                     if entry.bytes.len() != addr.0.len() {

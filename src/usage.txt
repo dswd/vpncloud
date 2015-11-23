@@ -1,0 +1,21 @@
+Usage:
+    vpncloud [options] [-t <type>] [-d <device>] [-l <listen>] [-c <connect>...]
+
+Options:
+    -t <type>, --type <type>        Set the type of network ("tap" or "tun").
+                                    [default: tap]
+    -d <device>, --device <device>  Name of the virtual device.
+                                    [default: vpncloud%d]
+    -m <mode>, --mode <mode>        The mode of the VPN ("hub", "switch",
+                                    "router", or "normal"). [default: normal]
+    -l <listen>, --listen <listen>  The address to listen for data.
+                                    [default: 0.0.0.0:3210]
+    -c <addr>, --connect <addr>     Address of a peer to connect to.
+    --subnet <subnet>               The local subnets to use.
+    --network-id <network_id>       Optional token that identifies the network.
+    --peer-timeout <peer_timeout>   Peer timeout in seconds. [default: 1800]
+    --dst-timeout <dst_timeout>     Switch table entry timeout in seconds.
+                                    [default: 300]
+    -v, --verbose                   Print debug information.
+    -q, --quiet                     Only print errors and warnings.
+    -h, --help                      Display the help.

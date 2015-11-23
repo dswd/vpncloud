@@ -53,7 +53,7 @@ impl<'a> fmt::Debug for Message<'a> {
                 }
                 write!(formatter, "]")
             },
-            &Message::Init(ref data) => write!(formatter, "Init(data: {} bytes)", data.len()),
+            &Message::Init(ref data) => write!(formatter, "Init{:?}", data),
             &Message::Close => write!(formatter, "Close"),
         }
     }
@@ -209,8 +209,8 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8]) -> usize {
                 assert!(buf.len() >= pos + 1 + len + 1);
                 buf[pos] = len as u8;
                 pos += 1;
-                unsafe { ptr::copy_nonoverlapping(base.0.as_ptr(), buf[pos..].as_mut_ptr(), base.0.len()) };
-                pos += base.0.len();
+                unsafe { ptr::copy_nonoverlapping(base.0.as_ptr(), buf[pos..].as_mut_ptr(), len) };
+                pos += len;
                 buf[pos] = range.prefix_len;
                 pos += 1;
             }

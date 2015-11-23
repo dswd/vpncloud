@@ -21,7 +21,7 @@ use std::str::FromStr;
 use device::Device;
 use ethernet::SwitchTable;
 use ip::RoutingTable;
-use types::{Error, Behavior, Type, Range, Table};
+use types::{Error, Mode, Type, Range, Table};
 use cloud::{TapCloud, TunCloud};
 
 
@@ -44,34 +44,17 @@ impl log::Log for SimpleLogger {
     }
 }
 
-static USAGE: &'static str = "
-Usage:
-    ethcloud [options] [-t <type>] [-d <device>] [-l <listen>] [-c <connect>...]
-
-Options:
-    -t <type>, --type <type>               Set the type of network [default: tap]
-    --behavior <behavior>                  The behavior of the vpn [default: normal]
-    -d <device>, --device <device>         Name of the virtual device [default: cloud%d]
-    -l <listen>, --listen <listen>         Address to listen on [default: 0.0.0.0:3210]
-    -c <connect>, --connect <connect>      List of peers (addr:port) to connect to
-    --network-id <network_id>              Optional token that identifies the network
-    --peer-timeout <peer_timeout>          Peer timeout in seconds [default: 1800]
-    --subnet <subnet>...                   The local subnets to use
-    --dst-timeout <dst_timeout>            Switch table entry timeout in seconds [default: 300]
-    -v, --verbose                          Log verbosely
-    -q, --quiet                            Only print error messages
-    -h, --help                             Display the help
-";
+static USAGE: &'static str = include_str!("usage.txt");
 
 #[derive(RustcDecodable, Debug)]
 struct Args {
     flag_type: Type,
-    flag_behavior: Behavior,
+    flag_mode: Mode,
     flag_subnet: Vec<String>,
     flag_device: String,
     flag_listen: String,
     flag_network_id: Option<String>,
-    flag_connect: Vec<String>,
+    flag_addr: Vec<String>,
     flag_peer_timeout: usize,
     flag_dst_timeout: usize,
     flag_verbose: bool,
@@ -100,14 +83,14 @@ fn main() {
     }
     let dst_timeout = Duration::seconds(args.flag_dst_timeout as i64);
     let peer_timeout = Duration::seconds(args.flag_peer_timeout as i64);
-    let (learning, broadcasting, table): (bool, bool, Box<Table>) = match args.flag_behavior {
-        Behavior::Normal => match args.flag_type {
+    let (learning, broadcasting, table): (bool, bool, Box<Table>) = match args.flag_mode {
+        Mode::Normal => match args.flag_type {
             Type::Tap => (true, true, Box::new(SwitchTable::new(dst_timeout))),
             Type::Tun => (false, false, Box::new(RoutingTable::new()))
         },
-        Behavior::Router => (false, false, Box::new(RoutingTable::new())),
-        Behavior::Switch => (true, true, Box::new(SwitchTable::new(dst_timeout))),
-        Behavior::Hub => (false, true, Box::new(SwitchTable::new(dst_timeout)))
+        Mode::Router => (false, false, Box::new(RoutingTable::new())),
+        Mode::Switch => (true, true, Box::new(SwitchTable::new(dst_timeout))),
+        Mode::Hub => (false, true, Box::new(SwitchTable::new(dst_timeout)))
     };
     let network_id = args.flag_network_id.map(|name| {
         let mut s = SipHasher::new();
@@ -117,14 +100,14 @@ fn main() {
     match args.flag_type {
         Type::Tap => {
             let mut cloud = TapCloud::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges);
-            for addr in args.flag_connect {
+            for addr in args.flag_addr {
                 cloud.connect(&addr as &str, true).expect("Failed to send");
             }
             cloud.run()
         },
         Type::Tun => {
             let mut cloud = TunCloud::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges);
-            for addr in args.flag_connect {
+            for addr in args.flag_addr {
                 cloud.connect(&addr as &str, true).expect("Failed to send");
             }
             cloud.run()

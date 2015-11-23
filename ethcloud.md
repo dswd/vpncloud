@@ -1,72 +1,193 @@
-ethcloud(1) -- Layer 2 VPN over UDP
-===================================
+vpncloud(1) -- Peer-to-peer VPN
+===============================
 
 ## SYNOPSIS
 
-```
-Usage:
-    ethcloud [options]
+`vpncloud [options] [-t <type>] [-d <device>] [-l <listen>] [-c <connect>...]`
 
-Options:
-    -d <device>, --device <device>         Name of the tap device [default: ethcloud%d]
-    -l <listen>, --listen <listen>         Address to listen on [default: 0.0.0.0:3210]
-    -t <token>, --token <token>            Token that identifies the network [default: 0]
-    -c <connect>, --connect <connect>      List of peers (addr:port) to connect to
-    --peer-timeout <peer_timeout>          Peer timeout in seconds [default: 1800]
-    --mac-timeout <mac_timeout>            Mac table entry timeout in seconds [default: 300]
-    -v, --verbose                          Log verbosely
-    -q, --quiet                            Only print error messages
-```
+
+## OPTIONS
+
+  * `-t <type>`, `--type <type>`:
+
+    Set the type of network. There are two options: **tap** devices process
+    Ethernet frames **tun** devices process IP packets. [default: tap]
+
+  * `-d <device>`, `--device <device>`:
+
+    Name of the virtual device. Any "%d" will be filled with a free number.
+    [default: vpncloud%d]
+
+  * `-m <mode>`, `--mode <mode>`:
+
+    The mode of the VPN. The VPN can like a router, a switch or a hub. A **hub**
+    will send all data always to all peers. A **switch** will learn addresses
+    from incoming data and only send data to all peers when the address is
+    unknown. A **router** will send data according to known subnets of the
+    peers and ignore them otherwise. The **normal** mode is switch for tap
+    devices and router for tun devices. [default: normal]
+
+  * `-l <listen>`, `--listen <listen>`:
+
+    The address to listen for data. [default: 0.0.0.0:3210]
+
+  * `-c <addr>`, `--connect <addr>`:
+
+    Address of a peer to connect to. The address should be in the form
+    `addr:port`. If the node is not started, the connection will be retried
+    periodically. This parameter can be repeated to connect to multiple peers.
+
+  * `--subnet <subnet>`:
+
+    The local subnets to use. This parameter should be in the form
+    `address/prefixlen` where address is an IPv4 address, an IPv6 address, or a
+    MAC address. The prefix length is the number of significant front bits that
+    distinguish the subnet from other subnets. Example: `10.1.1.0/24`.
+
+  * `--network-id <network_id>`:
+
+    An optional token that identifies the network and helps to distinguish it
+    from other networks.
+
+  * `--peer-timeout <peer_timeout>`:
+
+    Peer timeout in seconds. The peers will exchange information periodically
+    and drop peers that are silent for this period of time. [default: 1800]
+
+  * `--dst-timeout <dst_timeout>`:
+
+    Switch table entry timeout in seconds. This parameter is only used in switch
+    mode. Addresses that have not been seen for the given period of time  will
+    be forgot. [default: 300]
+
+  * `-v`, `--verbose`:
+
+    Print debug information, including information for data being received and
+    sent.
+
+  * `-q`, `--quiet`:
+
+    Only print errors and warnings.
+
+  * `-h`, `--help`:
+
+    Display the help.
+
 
 ## DESCRIPTION
 
-**Ethcloud** is a simple layer 2 VPN over UDP. It creates an ethernet based
-network interface on the host and forwards all received frames via UDP to the
-destination.
-The forwarding is based on traditional switch behavior with MAC address
-learning. Whenever a frame is received, the sender UDP address and MAC address
-are associated and used for replies. Frames for unknown addresses will be
-broadcast to all peers.
-All connected ethcloud programs will form a peer-to-peer network and
-cross-connect automatically until the network is fully connected.
+**VpnCloud** is a simple VPN over UDP. It creates a virtual network interface on
+the host and forwards all received data via UDP to the destination. It can work
+in 3 different modes:
 
-The token is used to distinguish different networks and discard foreign packets.
-It should be unique.
+  * **Switch mode**: In this mode, the VPN will dynamically learn addresses
+    as they are used as source addresses and use them to forward data to its
+    destination. Addresses that have not been seen for some time
+    (option `dst_timeout`) will be forgot. Data for unknown addresses will be
+    broadcast to all peers. This mode is the default mode for TAP devices that
+    process Ethernet frames but it can also be used with TUN devices and IP
+    packets.
 
-Ethcloud does not implement any loop-avoidance. Since data received on the UDP
-socket will only be sent to the local network interface and vice versa, ethcloud
-cannot produce loops on its own.
+  * **Hub mode**: In this mode, all data will always be broadcast to all peers.
+    This mode uses lots of bandwidth and should only be used in special cases.
 
-IEEE 802.1q frames (VLAN tagged) are detected and forwarded based on separate
-MAC tables. All frames without a tag will be treated as having tag `0`.
+  * **Router mode**: In this mode, data will be forwarded based on preconfigured
+    address ranges ("subnets"). Data for unknown nodes will be silently ignored.
+    This mode is the default mode for TUN devices that work with IP packets but
+    it can also be used with TAP devices and Ethernet frames.
 
-The peer-to-peer protocol will cause nodes to exchange information about their
-peers. For nodes behind a firewall or a NAT, this can function as hole-punching.
+All connected vpncloud nodes will form a peer-to-peer network and cross-connect
+automatically until the network is fully connected. The nodes will periodically
+exchange information with the other nodes to signal that they are still active
+and to allow the automatic cross-connect behavior. There are some important
+things to note:
 
-Ethcloud should be able to scale to a few thousand nodes with reasonable
-management traffic (below 10 KiB/s for 10.000 nodes). However, such huge
-networks will cause a lot of traffic due to broadcasts. At this point, a routed
-approach should be preferred.
+  - To avoid that different networks that reuse each others addresses merge due
+    to the cross-connect behavior, the `network_id` option can be used and set
+    to any unique string to identify the network. The `network_id` must be the
+    same on all nodes of the same VPN network.
+
+  - The cross-connect behavior can be able to connect nodes that are behind
+    firewalls or NATs as it can function as hole-punching.
+
+  - The management traffic will increase with the peer number quadratically.
+    It should still be reasonably small for high node numbers (below 10 KiB/s
+    for 10.000 nodes). A longer `peer_timeout` can be used to reduce the traffic
+    further. For high node numbers, router mode should be used as it never
+    broadcasts data.
+
+VpnCloud does not implement any loop-avoidance. Since data received on the UDP
+socket will only be sent to the local network interface and vice versa, VpnCloud
+cannot produce loops on its own. On the TAP device, however STP data can be
+transported to avoid loops caused by other network components.
+
+For TAP devices, IEEE 802.1q frames (VLAN tagged) are detected and forwarded
+based on separate MAC tables. Any nested tags (Q-in-Q) will be ignored.
+
+
+## EXAMPLES
+
 
 
 ## NETWORK PROTOCOL
 
-The protocol of `ethcloud` is kept as simple as possible to allow other
+The protocol of VpnCloud is kept as simple as possible to allow other
 implementations and to maximize the performance.
 
-The first 7 bytes of each packet are the token that is used to distinguish
-different networks and sort out stray packets that do not belong.
+Every packet sent over UDP contains the following header (in order):
 
-After that, the 8th byte is a switch that determines the structure of the rest
-of the packet:
+  * 3 bytes `magic constant` = [0x76, 0x70, 0x6e] ("vpn")
 
-  * **Frame packet** (value `0`):
-    This packet contains an actual ethernet frame which starts right after the
-    switch byte and ends at the end of the packet. It contains the main
-    ethernet frame data starting with the destination MAC and ending with the
-    payload. It does not contain the preamble, SFD, padding, and CRC fields.
+    This field is used to identify the packet and to sort out packets that do
+    not belong.
 
-  * **Peer list** (value `1`):
+  * 1 byte `version number` = 1 (currently)
+
+    This field specifies the version and helps nodes to parse the rest of the
+    header and the packet.
+
+  * 2 `reserved bytes` that are currently unused
+
+  * 1 byte for `flags`
+
+    This byte contains flags that specify the presence of additional headers.
+    The flags are enumerated from bit 1 (least significant bit) to bit 8
+    (most significant bit). The additional headers must be present in this same
+    order. Currently the following additional headers are supported:
+
+    - Bit 1: Network ID
+
+  * 1 byte for the `message type`
+
+    This byte specifies the type of message that follows after all additional
+    headers. Currently the following message types are supported:
+
+    - Type 0: Data packet
+    - Type 1: Peer list
+    - Type 2: Initial message
+    - Type 3: Closing message
+
+After this 8 byte header, the additional headers as specified in the `flags`
+field will follow in the order of their respective flag bits.
+
+  * **Network ID**:
+
+    The network id is encoded as 8 bytes.
+
+
+After the additional headers, message as specified in the `message type` field
+will follow:
+
+  * **Data packet** (message type 0):
+    This packet contains payload. The format of the data depends on the device
+    type. For TUN devices, this data contains an IP packet. For TAP devices it
+    contains an Ethernet frame. The data starts right after all additional
+    headers and ends at the end of the packet.
+    If it is an Ethernet frame, it will start with the destination MAC and end
+    with the payload. It does not contain the preamble, SFD, padding, and CRC
+    fields.
+
+  * **Peer list** (message type 1):
     This packet contains the peer list of the sender. The first byte after the
     switch byte contains the number of IPv4 addresses that follow.
     After that, the specified number of addresses follow, where each address
@@ -77,16 +198,29 @@ of the packet:
     each address is encoded in 18 bytes. The first 16 bytes are the IPv6 address
     and the later 2 bytes are port number (both in network byte order).
 
-  * **Get peer list** (value `2`):
-    This packet requests that the receiver sends its peer list to the sender.
-    It does not contain any further data.
+  * **Initial message** (message type 2):
+    This packet contains all the local subnets claimed by the nodes.
+    The subnet list is encoded in the following way: The first byte of data
+    contains the number of encoded subnets that follow. After that, the given
+    number of encoded subnets follow.
+    For each subnet, the first byte is the length of bytes in the base address
+    and is followed by the given number of base address bytes and one additional
+    byte that is the prefix length of the subnet.
+    The addresses for the subnet will be encoded like they are encoded in their
+    native protocol (4 bytes for IPv4, 16 bytes for IPv6, and 6 bytes for a MAC
+    address) with the exception of MAC addresses in a VLan which will be encoded
+    in 8 bytes where the first 2 bytes are the VLan number in network byte order
+    and the later 6 bytes are the MAC address.
 
-  * **Close** (value `3`):
-    This packet requests that the receiver removes the sender from its peer list
-    and stops sending data to it. It does not contain any further data.
+  * **Closing message** (message type 3):
+    This packet does not contain any further data.
 
-Nodes are expected to request the peer list from the initial nodes they are
-connecting to. After that, they should periodically send their peer list to all
+Nodes are expected to send an **initial message** whenever they connect to a
+node they were not connected to before. As a reply to this message, another
+initial should be sent if the node was not known before. Also a **peer list**
+message should be sent as a reply.
+
+When connected, nodes should periodically send their **peer list** to all
 of their peers to spread this information and to avoid peer timeouts.
 To avoid the cubic growth of management traffic, nodes should at a certain
 network size start sending partial peer lists instead of the full list.
@@ -95,13 +229,14 @@ The subsets can be selected using round robin (making sure all peers eventually
 receive all information) or randomly.
 
 Nodes should remove peers from their peer list after a certain period of
-inactivity or when receiving a `Close` message. Before shutting down, nodes
-should send the `Close` message to all of their peers in order to avoid
+inactivity or when receiving a **closing message**. Before shutting down, nodes
+should send the closing message to all of their peers in order to avoid
 receiving further data until the timeout is reached.
 
-Nodes should only add nodes to their peer list after receiving a message from
-them instead of adding them right from the peer list of another peer. This
-is necessary to avoid the case of a large network keeping dead nodes alive
+Nodes should only add nodes to their peer list after receiving an initial
+message from them instead of adding them right from the peer list of another
+peer. This is necessary to avoid the case of a large network keeping dead nodes
+alive.
 
 
 ## COPYRIGHT
