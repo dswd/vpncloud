@@ -93,6 +93,8 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
         pos += 8;
         let hash = &data[pos..pos+32];
         pos += 32;
+        debug!("{:?}", nonce);
+        debug!("{:?}", hash);
         // Cheat data mutable to make the borrow checker happy
         let data = unsafe { slice::from_raw_parts_mut(mem::transmute(data[pos..].as_ptr()), data.len()-pos) };
         try!(crypto.decrypt(data, nonce, hash));
@@ -171,7 +173,7 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
         header.flags |= 0x01;
     }
     if crypto.is_secure() {
-        header.flags |= 0x02
+        header.flags |= 0x02;
     }
     let header_dat = unsafe { as_bytes(&header) };
     unsafe { ptr::copy_nonoverlapping(header_dat.as_ptr(), buf[pos..].as_mut_ptr(), header_dat.len()) };
@@ -269,7 +271,7 @@ fn encode_message_packet() {
     let mut buf = [0; 1024];
     let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
     assert_eq!(size, 13);
-    assert_eq!(&buf[..8], &[118,112,110,0,0,0,0,0]);
+    assert_eq!(&buf[..8], &[118,112,110,1,0,0,0,0]);
     let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
@@ -284,7 +286,7 @@ fn encode_message_peers() {
     let mut buf = [0; 1024];
     let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
     assert_eq!(size, 22);
-    assert_eq!(&buf[..size], &[118,112,110,0,0,0,0,1,2,1,2,3,4,0,123,5,6,7,8,48,57,0]);
+    assert_eq!(&buf[..size], &[118,112,110,1,0,0,0,1,2,1,2,3,4,0,123,5,6,7,8,48,57,0]);
     let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
@@ -299,7 +301,7 @@ fn encode_option_network_id() {
     let mut buf = [0; 1024];
     let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
     assert_eq!(size, 16);
-    assert_eq!(&buf[..size], &[118,112,110,0,0,0,1,3,0,0,0,0,0,0,0,134]);
+    assert_eq!(&buf[..size], &[118,112,110,1,0,0,1,3,0,0,0,0,0,0,0,134]);
     let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
@@ -314,7 +316,7 @@ fn encode_message_init() {
     let mut buf = [0; 1024];
     let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
     assert_eq!(size, 9);
-    assert_eq!(&buf[..size], &[118,112,110,0,0,0,0,2,0]);
+    assert_eq!(&buf[..size], &[118,112,110,1,0,0,0,2,0]);
     let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
@@ -328,7 +330,7 @@ fn encode_message_close() {
     let mut buf = [0; 1024];
     let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
     assert_eq!(size, 8);
-    assert_eq!(&buf[..size], &[118,112,110,0,0,0,0,3]);
+    assert_eq!(&buf[..size], &[118,112,110,1,0,0,0,3]);
     let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);

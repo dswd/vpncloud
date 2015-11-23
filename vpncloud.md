@@ -3,7 +3,7 @@ vpncloud(1) -- Peer-to-peer VPN
 
 ## SYNOPSIS
 
-`vpncloud [options] [-t <type>] [-d <device>] [-l <listen>] [-c <connect>...]`
+`vpncloud [options] [-t <type>] [-d <device>] [-l <addr>] [-c <addr>...]`
 
 
 ## OPTIONS
@@ -27,7 +27,7 @@ vpncloud(1) -- Peer-to-peer VPN
     peers and ignore them otherwise. The **normal** mode is switch for tap
     devices and router for tun devices. [default: normal]
 
-  * `-l <listen>`, `--listen <listen>`:
+  * `-l <addr>`, `--listen <addr>`:
 
     The address to listen for data. [default: 0.0.0.0:3210]
 

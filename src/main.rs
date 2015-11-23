@@ -58,7 +58,7 @@ struct Args {
     flag_device: String,
     flag_listen: String,
     flag_network_id: Option<String>,
-    flag_addr: Vec<String>,
+    flag_connect: Vec<String>,
     flag_peer_timeout: usize,
     flag_dst_timeout: usize,
     flag_verbose: bool,
@@ -108,14 +108,14 @@ fn main() {
     match args.flag_type {
         Type::Tap => {
             let mut cloud = TapCloud::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges, crypto);
-            for addr in args.flag_addr {
+            for addr in &args.flag_connect {
                 cloud.connect(&addr as &str, true).expect("Failed to send");
             }
             cloud.run()
         },
         Type::Tun => {
             let mut cloud = TunCloud::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges, crypto);
-            for addr in args.flag_addr {
+            for addr in &args.flag_connect {
                 cloud.connect(&addr as &str, true).expect("Failed to send");
             }
             cloud.run()
