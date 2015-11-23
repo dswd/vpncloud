@@ -15,14 +15,14 @@ impl fmt::Debug for Address {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self.0.len() {
             4 => write!(formatter, "{}.{}.{}.{}", self.0[0], self.0[1], self.0[2], self.0[3]),
-            6 => write!(formatter, "{:x}:{:x}:{:x}:{:x}:{:x}:{:x}",
+            6 => write!(formatter, "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
                 self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]),
             8 => {
-                let vlan = u16::from_be( *unsafe { as_obj(&self.0[0..1]) });
-                write!(formatter, "vlan{}/{:x}:{:x}:{:x}:{:x}:{:x}:{:x}",
-                    vlan, self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5])
+                let vlan = u16::from_be( *unsafe { as_obj(&self.0[0..2]) });
+                write!(formatter, "vlan{}/{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                    vlan, self.0[2], self.0[3], self.0[4], self.0[5], self.0[6], self.0[7])
             },
-            16 => write!(formatter, "{:x}{:x}:{:x}{:x}:{:x}{:x}:{:x}{:x}:{:x}{:x}:{:x}{:x}:{:x}{:x}:{:x}{:x}",
+            16 => write!(formatter, "{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}",
                 self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], self.0[6], self.0[7],
                 self.0[8], self.0[9], self.0[10], self.0[11], self.0[12], self.0[13], self.0[14], self.0[15]
             ),
@@ -126,4 +126,13 @@ pub enum Error {
     SocketError(&'static str),
     TunTapDevError(&'static str),
     CryptoError(&'static str)
+}
+
+
+#[test]
+fn address_fmt() {
+    assert_eq!(format!("{:?}", Address(vec![120,45,22,5])), "120.45.22.5");
+    assert_eq!(format!("{:?}", Address(vec![120,45,22,5,1,2])), "78:2d:16:05:01:02");
+    assert_eq!(format!("{:?}", Address(vec![3,56,120,45,22,5,1,2])), "vlan824/78:2d:16:05:01:02");
+    assert_eq!(format!("{:?}", Address(vec![0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15])), "0001:0203:0405:0607:0809:0a0b:0c0d:0e0f");
 }

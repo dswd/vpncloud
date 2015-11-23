@@ -277,6 +277,22 @@ fn encode_message_packet() {
     assert_eq!(msg, msg2);
 }
 
+#[cfg(feature = "crypto")]
+#[test]
+fn encode_message_encrypted() {
+    let mut options = Options::default();
+    let mut crypto = Crypto::from_shared_key("test");
+    let payload = [1,2,3,4,5];
+    let msg = Message::Data(&payload);
+    let mut buf = [0; 1024];
+    let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
+    assert_eq!(size, 53);
+    assert_eq!(&buf[..8], &[118,112,110,1,0,0,2,0]);
+    let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
+    assert_eq!(options, options2);
+    assert_eq!(msg, msg2);
+}
+
 #[test]
 fn encode_message_peers() {
     use std::str::FromStr;
@@ -311,12 +327,13 @@ fn encode_option_network_id() {
 fn encode_message_init() {
     let mut options = Options::default();
     let mut crypto = Crypto::None;
-    let addrs = vec![];
+    let addrs = vec![Range{base: Address(vec![0,1,2,3]), prefix_len: 24},
+        Range{base: Address(vec![0,1,2,3,4,5]), prefix_len: 16}];
     let msg = Message::Init(addrs);
     let mut buf = [0; 1024];
     let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
-    assert_eq!(size, 9);
-    assert_eq!(&buf[..size], &[118,112,110,1,0,0,0,2,0]);
+    assert_eq!(size, 23);
+    assert_eq!(&buf[..size], &[118,112,110,1,0,0,0,2,2,4,0,1,2,3,24,6,0,1,2,3,4,5,16]);
     let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
