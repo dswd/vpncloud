@@ -115,7 +115,7 @@ in 3 different modes:
     This mode is the default mode for TUN devices that work with IP packets but
     it can also be used with TAP devices and Ethernet frames.
 
-All connected vpncloud nodes will form a peer-to-peer network and cross-connect
+All connected VpnCloud nodes will form a peer-to-peer network and cross-connect
 automatically until the network is fully connected. The nodes will periodically
 exchange information with the other nodes to signal that they are still active
 and to allow the automatic cross-connect behavior. There are some important
@@ -156,7 +156,7 @@ address of the remote node and the the `X` in the interface address must be
 unique among all nodes, e.g. 0, 1, 2, ...):
 
 ```
-vpncloud -c remote_node:3210 --ifup 'ifconfig $IFNAME 10.0.0.X/24 mtu 1400 up'
+vpncloud -c REMOTE_HOST:PORT --ifup 'ifconfig $IFNAME 10.0.0.X/24 mtu 1400 up'
 ```
 
 Afterwards, the interface can be used to communicate.
@@ -168,7 +168,7 @@ In this example, 4 nodes should communicate using IP. First, VpnCloud need to
 be started on both nodes:
 
 ```
-vpncloud -t tun -c remote_node:3210 --subnet 10.0.0.X/32 --ifup 'ifconfig $IFNAME 10.0.0.0/24 mtu 1400 up'
+vpncloud -t tun -c REMOTE_HOST:PORT --subnet 10.0.0.X/32 --ifup 'ifconfig $IFNAME 10.0.0.0/24 mtu 1400 up'
 ```
 
 
