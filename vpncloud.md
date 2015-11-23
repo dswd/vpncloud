@@ -11,12 +11,12 @@ vpncloud(1) -- Peer-to-peer VPN
   * `-t <type>`, `--type <type>`:
 
     Set the type of network. There are two options: **tap** devices process
-    Ethernet frames **tun** devices process IP packets. [default: tap]
+    Ethernet frames **tun** devices process IP packets. [default: `tap`]
 
   * `-d <name>`, `--device <name>`:
 
-    Name of the virtual device. Any "%d" will be filled with a free number.
-    [default: vpncloud%d]
+    Name of the virtual device. Any `%d` will be filled with a free number.
+    [default: `vpncloud%d`]
 
   * `-m <mode>`, `--mode <mode>`:
 
@@ -25,11 +25,11 @@ vpncloud(1) -- Peer-to-peer VPN
     from incoming data and only send data to all peers when the address is
     unknown. A **router** will send data according to known subnets of the
     peers and ignore them otherwise. The **normal** mode is switch for tap
-    devices and router for tun devices. [default: normal]
+    devices and router for tun devices. [default: `normal`]
 
   * `-l <addr>`, `--listen <addr>`:
 
-    The address to listen for data. [default: 0.0.0.0:3210]
+    The address to listen for data. [default: `0.0.0.0:3210`]
 
   * `-c <addr>`, `--connect <addr>`:
 
@@ -57,13 +57,13 @@ vpncloud(1) -- Peer-to-peer VPN
   * `--peer-timeout <secs>`:
 
     Peer timeout in seconds. The peers will exchange information periodically
-    and drop peers that are silent for this period of time. [default: 1800]
+    and drop peers that are silent for this period of time. [default: `1800`]
 
   * `--dst-timeout <secs>`:
 
     Switch table entry timeout in seconds. This parameter is only used in switch
     mode. Addresses that have not been seen for the given period of time  will
-    be forgot. [default: 300]
+    be forgot. [default: `300`]
 
   * `--ifup <command>`:
 
@@ -210,7 +210,7 @@ implementations and to maximize the performance.
 
 Every packet sent over UDP contains the following header (in order):
 
-  * 3 bytes `magic constant` = [0x76, 0x70, 0x6e] ("vpn")
+  * 3 bytes `magic constant` = `[0x76, 0x70, 0x6e]` ("vpn")
 
     This field is used to identify the packet and to sort out packets that do
     not belong.
