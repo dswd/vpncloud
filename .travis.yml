@@ -15,10 +15,10 @@ before_script:
 '
 script:
 - ! 'travis-cargo build &&
-  travis-cargo build --features "crypto" &&
-  travis-cargo test --features "crypto" &&
-  travis-cargo bench --features "crypto" &&
-  travis-cargo --only stable doc --features "crypto"
+  travis-cargo build -- --features "crypto" &&
+  travis-cargo test -- --features "crypto" &&
+  travis-cargo bench -- --features "crypto" &&
+  travis-cargo --only stable doc -- --features "crypto"
 '
 addons:
   apt:
