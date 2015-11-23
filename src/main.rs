@@ -20,6 +20,7 @@ use docopt::Docopt;
 
 use std::hash::{Hash, SipHasher, Hasher};
 use std::str::FromStr;
+use std::process::Command;
 
 use device::Device;
 use ethernet::SwitchTable;
@@ -62,7 +63,22 @@ struct Args {
     flag_peer_timeout: usize,
     flag_dst_timeout: usize,
     flag_verbose: bool,
-    flag_quiet: bool
+    flag_quiet: bool,
+    flag_ifup: Option<String>,
+    flag_ifdown: Option<String>
+}
+
+fn run_script(script: String, ifname: &str) {
+    let mut cmd = Command::new("sh");
+    cmd.arg("-c").arg(&script).env("IFNAME", ifname);
+    debug!("Running script: {:?}", cmd);
+    match cmd.status() {
+        Ok(status) => match status.success() {
+            true => (),
+            false => error!("Script returned with error: {:?}", status.code())
+        },
+        Err(e) => error!("Failed to execute script {:?}: {}", script, e)
+    }
 }
 
 fn main() {
@@ -108,15 +124,27 @@ fn main() {
     match args.flag_type {
         Type::Tap => {
             let mut cloud = TapCloud::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges, crypto);
+            if let Some(script) = args.flag_ifup {
+                run_script(script, cloud.ifname());
+            }
             for addr in &args.flag_connect {
                 cloud.connect(&addr as &str, true).expect("Failed to send");
             }
-            cloud.run()
+            cloud.run();
+            if let Some(script) = args.flag_ifdown {
+                run_script(script, cloud.ifname());
+            }
         },
         Type::Tun => {
             let mut cloud = TunCloud::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges, crypto);
+            if let Some(script) = args.flag_ifup {
+                run_script(script, cloud.ifname());
+            }
             for addr in &args.flag_connect {
                 cloud.connect(&addr as &str, true).expect("Failed to send");
+            }
+            if let Some(script) = args.flag_ifdown {
+                run_script(script, cloud.ifname());
             }
             cloud.run()
         }

@@ -65,6 +65,20 @@ vpncloud(1) -- Peer-to-peer VPN
     mode. Addresses that have not been seen for the given period of time  will
     be forgot. [default: 300]
 
+  * `--ifup <command>`:
+
+    A command to setup the network interface. The command will be run (as
+    parameter to `sh -c`) when the device has been created to configure it.
+    The name of the allocated device will be available via the environment
+    variable `IFNAME`.
+
+  * `--ifdown <command>`:
+
+    A command to bring down the network interface. The command will be run (as
+    parameter to `sh -c`) to remove any configuration from the device.
+    The name of the allocated device will be available via the environment
+    variable `IFNAME`.
+
   * `-v`, `--verbose`:
 
     Print debug information, including information for data being received and
@@ -138,15 +152,10 @@ In the example scenario, a simple layer 2 network tunnel is established. Most
 likely those commands need to be run as **root** using `sudo`.
 
 First, VpnCloud need to be started on both nodes (the address after `-c` is the
-address of the remote node):
+address of the remote node and the the `X` in the interface address must be
+unique among all nodes, e.g. 0, 1, 2, ...):
 ```
-vpncloud -c remote_node:3210
-```
-
-Then, the interfaces have to configured and activated (the `X` in the address
-must be unique among all nodes, e.g. 0, 1, 2, ...):
-```
-ifconfig vpncloud0 10.0.0.X/24 mtu 1400 up
+vpncloud -c remote_node:3210 --ifup 'ifconfig $IFNAME 10.0.0.X/24 mtu 1400 up'
 ```
 
 Afterwards, the interface can be used to communicate.
@@ -157,11 +166,8 @@ Afterwards, the interface can be used to communicate.
 In this example, 4 nodes should communicate using IP. First, VpnCloud need to
 be started on both nodes:
 ```
-vpncloud -t tun -c remote_node:3210 --subnet 10.0.0.1/32
+vpncloud -t tun -c remote_node:3210 --subnet 10.0.0.X/32 --ifup 'ifconfig $IFNAME 10.0.0.0/24 mtu 1400 up'
 ```
-
-Then, the interfaces can be configured and activated like in the previous
-example.
 
 
 ### Important notes

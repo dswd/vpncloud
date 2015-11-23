@@ -131,6 +131,10 @@ impl<P: Protocol> GenericCloud<P> {
         }
     }
 
+    pub fn ifname(&self) -> &str {
+        self.device.ifname()
+    }
+
     fn send_msg<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr, msg: &Message) -> Result<(), Error> {
         debug!("Sending {:?} to {}", msg, addr);
         let size = encode(&mut self.options, msg, &mut self.buffer_out, &mut self.crypto);
