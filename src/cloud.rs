@@ -14,6 +14,7 @@ use super::types::{Table, Protocol, VirtualInterface, Range, Error, NetworkId};
 use super::device::Device;
 use super::udpmessage::{encode, decode, Options, Message};
 use super::{ethernet, ip};
+use super::Crypto;
 
 struct PeerList {
     timeout: Duration,
@@ -92,7 +93,8 @@ pub struct GenericCloud<P: Protocol> {
     table: Box<Table>,
     socket: UdpSocket,
     device: Device,
-    network_id: Option<NetworkId>,
+    options: Options,
+    crypto: Crypto,
     next_peerlist: SteadyTime,
     update_freq: Duration,
     buffer_out: [u8; 64*1024],
@@ -102,11 +104,14 @@ pub struct GenericCloud<P: Protocol> {
 
 impl<P: Protocol> GenericCloud<P> {
     pub fn new(device: Device, listen: String, network_id: Option<NetworkId>, table: Box<Table>,
-        peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>) -> Self {
+        peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>,
+        crypto: Crypto) -> Self {
         let socket = match UdpSocket::bind(&listen as &str) {
             Ok(socket) => socket,
             _ => panic!("Failed to open socket")
         };
+        let mut options = Options::default();
+        options.network_id = network_id;
         GenericCloud{
             peers: PeerList::new(peer_timeout),
             addresses: addresses,
@@ -116,7 +121,8 @@ impl<P: Protocol> GenericCloud<P> {
             table: table,
             socket: socket,
             device: device,
-            network_id: network_id,
+            options: options,
+            crypto: crypto,
             next_peerlist: SteadyTime::now(),
             update_freq: peer_timeout/2,
             buffer_out: [0; 64*1024],
@@ -127,9 +133,7 @@ impl<P: Protocol> GenericCloud<P> {
 
     fn send_msg<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr, msg: &Message) -> Result<(), Error> {
         debug!("Sending {:?} to {}", msg, addr);
-        let mut options = Options::default();
-        options.network_id = self.network_id;
-        let size = encode(&options, msg, &mut self.buffer_out);
+        let size = encode(&mut self.options, msg, &mut self.buffer_out, &mut self.crypto);
         match self.socket.send_to(&self.buffer_out[..size], addr) {
             Ok(written) if written == size => Ok(()),
             Ok(_) => Err(Error::SocketError("Sent out truncated packet")),
@@ -210,7 +214,7 @@ impl<P: Protocol> GenericCloud<P> {
     }
 
     fn handle_net_message(&mut self, peer: SocketAddr, options: Options, msg: Message) -> Result<(), Error> {
-        if let Some(id) = self.network_id {
+        if let Some(id) = self.options.network_id {
             if options.network_id != Some(id) {
                 info!("Ignoring message from {} with wrong token {:?}", peer, options.network_id);
                 return Err(Error::WrongNetwork(options.network_id));
@@ -279,7 +283,7 @@ impl<P: Protocol> GenericCloud<P> {
                 match &events[i as usize].data {
                     &0 => match self.socket.recv_from(&mut buffer) {
                         Ok((size, src)) => {
-                            match decode(&buffer[..size]).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
+                            match decode(&mut buffer[..size], &mut self.crypto).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
                                 Ok(_) => (),
                                 Err(e) => error!("Error: {:?}", e)
                             }

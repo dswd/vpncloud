@@ -44,6 +44,11 @@ vpncloud(1) -- Peer-to-peer VPN
     MAC address. The prefix length is the number of significant front bits that
     distinguish the subnet from other subnets. Example: `10.1.1.0/24`.
 
+  * `--shared-key <shared_key>`:
+
+    An optional shared key to encrypt the VPN data. If this option is not set,
+    the traffic will be sent unencrypted.
+
   * `--network-id <network_id>`:
 
     An optional token that identifies the network and helps to distinguish it
@@ -177,11 +182,17 @@ example.
   it can conflict with DHCP servers of the local network and can have severe
   side effects.
 
-- VpnCloud is not designed to be secure. It encapsulates the network data but
-  it (currently) does not encrypt and authenticate it. Attackers with read
-  access to the UDP stream can read the whole traffic including any unencrypted
-  passwords in the payload. Attackers with write access to the UDP stream can
-  manipulate or suppress the whole traffic and even send data on their own.
+- VpnCloud is not designed for high security use cases. Although the used crypto
+  primitives are expected to be very secure, their application has not been
+  reviewed.
+  The shared key is hashed using *ScryptSalsa208Sha256* to derive a key,
+  which is used to encrypt the payload of messages using *ChaCha20*. The
+  authenticity of messages is verified using *HmacSha512256* hashes.
+  This method only protects the contents of the message (payload, peer list,
+  etc.) but not the header of each message.
+  Also, this method does only protect against attacks on single messages but not
+  on attacks that manipulate the message series itself (i.e. suppress messages,
+  reorder them, and duplicate them).
 
 
 ## NETWORK PROTOCOL

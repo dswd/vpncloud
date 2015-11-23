@@ -125,4 +125,5 @@ pub enum Error {
     WrongNetwork(Option<NetworkId>),
     SocketError(&'static str),
     TunTapDevError(&'static str),
+    CryptoError(&'static str)
 }

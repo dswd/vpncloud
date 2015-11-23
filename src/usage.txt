@@ -13,6 +13,7 @@ Options:
     -c <addr>, --connect <addr>     Address of a peer to connect to.
     --subnet <subnet>               The local subnets to use.
     --network-id <network_id>       Optional token that identifies the network.
+    --shared-key <shared_key>       The shared key to encrypt all traffic.
     --peer-timeout <peer_timeout>   Peer timeout in seconds. [default: 1800]
     --dst-timeout <dst_timeout>     Switch table entry timeout in seconds.
                                     [default: 300]

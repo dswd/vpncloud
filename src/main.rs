@@ -3,9 +3,12 @@ extern crate time;
 extern crate docopt;
 extern crate rustc_serialize;
 extern crate epoll;
+#[cfg(feature = "crypto")] extern crate sodiumoxide;
 
 mod util;
 mod types;
+#[cfg(feature = "crypto")] mod crypto;
+#[cfg(not(feature = "crypto"))] mod no_crypto;
 mod udpmessage;
 mod ethernet;
 mod ip;
@@ -23,10 +26,10 @@ use ethernet::SwitchTable;
 use ip::RoutingTable;
 use types::{Error, Mode, Type, Range, Table};
 use cloud::{TapCloud, TunCloud};
-
+#[cfg(feature = "crypto")] pub use crypto::Crypto;
+#[cfg(not(feature = "crypto"))] pub use no_crypto::Crypto;
 
 //TODO: Implement IPv6
-//TODO: Encryption
 //TODO: Call close
 
 
@@ -50,6 +53,7 @@ static USAGE: &'static str = include_str!("usage.txt");
 struct Args {
     flag_type: Type,
     flag_mode: Mode,
+    flag_shared_key: Option<String>,
     flag_subnet: Vec<String>,
     flag_device: String,
     flag_listen: String,
@@ -97,16 +101,20 @@ fn main() {
         name.hash(&mut s);
         s.finish()
     });
+    let crypto = match args.flag_shared_key {
+        Some(key) => Crypto::from_shared_key(&key),
+        None => Crypto::None
+    };
     match args.flag_type {
         Type::Tap => {
-            let mut cloud = TapCloud::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges);
+            let mut cloud = TapCloud::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges, crypto);
             for addr in args.flag_addr {
                 cloud.connect(&addr as &str, true).expect("Failed to send");
             }
             cloud.run()
         },
         Type::Tun => {
-            let mut cloud = TunCloud::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges);
+            let mut cloud = TunCloud::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges, crypto);
             for addr in args.flag_addr {
                 cloud.connect(&addr as &str, true).expect("Failed to send");
             }

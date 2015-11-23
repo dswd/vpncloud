@@ -1,12 +1,13 @@
-use std::{mem, ptr, fmt};
+use std::{mem, ptr, fmt, slice};
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
 use std::u16;
 
 use super::types::{Error, NetworkId, Range, Address};
 use super::util::{as_obj, as_bytes, to_vec};
+use super::Crypto;
 
 const MAGIC: [u8; 3] = [0x76, 0x70, 0x6e];
-const VERSION: u8 = 0;
+const VERSION: u8 = 1;
 
 #[repr(packed)]
 struct TopHeader {
@@ -25,7 +26,7 @@ impl Default for TopHeader {
 
 #[derive(Default, Debug, PartialEq, Eq)]
 pub struct Options {
-    pub network_id: Option<NetworkId>
+    pub network_id: Option<NetworkId>,
 }
 
 
@@ -59,7 +60,7 @@ impl<'a> fmt::Debug for Message<'a> {
     }
 }
 
-pub fn decode(data: &[u8]) -> Result<(Options, Message), Error> {
+pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, Message<'a>), Error> {
     if data.len() < mem::size_of::<TopHeader>() {
         return Err(Error::ParseError("Empty message"));
     }
@@ -80,6 +81,21 @@ pub fn decode(data: &[u8]) -> Result<(Options, Message), Error> {
         let id = u64::from_be(*unsafe { as_obj::<u64>(&data[pos..]) });
         options.network_id = Some(id);
         pos += 8;
+    }
+    if header.flags & 0x02 > 0 {
+        if data.len() < pos + 40 {
+            return Err(Error::ParseError("Truncated options"));
+        }
+        if !crypto.is_secure() {
+            return Err(Error::CryptoError("Unexpected encrypted data"));
+        }
+        let nonce = &data[pos..pos+8];
+        pos += 8;
+        let hash = &data[pos..pos+32];
+        pos += 32;
+        // Cheat data mutable to make the borrow checker happy
+        let data = unsafe { slice::from_raw_parts_mut(mem::transmute(data[pos..].as_ptr()), data.len()-pos) };
+        try!(crypto.decrypt(data, nonce, hash));
     }
     let msg = match header.msgtype {
         0 => Message::Data(&data[pos..]),
@@ -141,7 +157,7 @@ pub fn decode(data: &[u8]) -> Result<(Options, Message), Error> {
     Ok((options, msg))
 }
 
-pub fn encode(options: &Options, msg: &Message, buf: &mut [u8]) -> usize {
+pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Crypto) -> usize {
     assert!(buf.len() >= mem::size_of::<TopHeader>());
     let mut pos = 0;
     let mut header = TopHeader::default();
@@ -154,6 +170,9 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8]) -> usize {
     if options.network_id.is_some() {
         header.flags |= 0x01;
     }
+    if crypto.is_secure() {
+        header.flags |= 0x02
+    }
     let header_dat = unsafe { as_bytes(&header) };
     unsafe { ptr::copy_nonoverlapping(header_dat.as_ptr(), buf[pos..].as_mut_ptr(), header_dat.len()) };
     pos += header_dat.len();
@@ -165,6 +184,16 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8]) -> usize {
         }
         pos += 8;
     }
+    let (nonce_pos, hash_pos) = if crypto.is_secure() {
+        let nonce_pos = pos;
+        pos += 8;
+        let hash_pos = pos;
+        pos += 32;
+        (nonce_pos, hash_pos)
+    } else {
+        (0, 0)
+    };
+    let crypto_pos = pos;
     match msg {
         &Message::Data(ref data) => {
             assert!(buf.len() >= pos + data.len());
@@ -218,20 +247,30 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8]) -> usize {
         &Message::Close => {
         }
     }
+    if crypto.is_secure() {
+        let (nonce, hash) = crypto.encrypt(&mut buf[crypto_pos..pos]);
+        assert_eq!(nonce.len(), 8);
+        assert_eq!(hash.len(), 32);
+        unsafe {
+            ptr::copy_nonoverlapping(nonce.as_ptr(), buf[nonce_pos..].as_mut_ptr(), 8);
+            ptr::copy_nonoverlapping(hash.as_ptr(), buf[hash_pos..].as_mut_ptr(), 32);
+        }
+    }
     pos
 }
 
 
 #[test]
 fn encode_message_packet() {
-    let options = Options::default();
+    let mut options = Options::default();
+    let mut crypto = Crypto::None;
     let payload = [1,2,3,4,5];
     let msg = Message::Data(&payload);
     let mut buf = [0; 1024];
-    let size = encode(&options, &msg, &mut buf[..]);
+    let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
     assert_eq!(size, 13);
     assert_eq!(&buf[..8], &[118,112,110,0,0,0,0,0]);
-    let (options2, msg2) = decode(&buf[..size]).unwrap();
+    let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
 }
@@ -239,13 +278,14 @@ fn encode_message_packet() {
 #[test]
 fn encode_message_peers() {
     use std::str::FromStr;
-    let options = Options::default();
+    let mut options = Options::default();
+    let mut crypto = Crypto::None;
     let msg = Message::Peers(vec![SocketAddr::from_str("1.2.3.4:123").unwrap(), SocketAddr::from_str("5.6.7.8:12345").unwrap()]);
     let mut buf = [0; 1024];
-    let size = encode(&options, &msg, &mut buf[..]);
+    let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
     assert_eq!(size, 22);
     assert_eq!(&buf[..size], &[118,112,110,0,0,0,0,1,2,1,2,3,4,0,123,5,6,7,8,48,57,0]);
-    let (options2, msg2) = decode(&buf[..size]).unwrap();
+    let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
 }
@@ -254,39 +294,42 @@ fn encode_message_peers() {
 fn encode_option_network_id() {
     let mut options = Options::default();
     options.network_id = Some(134);
+    let mut crypto = Crypto::None;
     let msg = Message::Close;
     let mut buf = [0; 1024];
-    let size = encode(&options, &msg, &mut buf[..]);
+    let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
     assert_eq!(size, 16);
     assert_eq!(&buf[..size], &[118,112,110,0,0,0,1,3,0,0,0,0,0,0,0,134]);
-    let (options2, msg2) = decode(&buf[..size]).unwrap();
+    let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
 }
 
 #[test]
 fn encode_message_init() {
-    let options = Options::default();
+    let mut options = Options::default();
+    let mut crypto = Crypto::None;
     let addrs = vec![];
     let msg = Message::Init(addrs);
     let mut buf = [0; 1024];
-    let size = encode(&options, &msg, &mut buf[..]);
+    let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
     assert_eq!(size, 9);
     assert_eq!(&buf[..size], &[118,112,110,0,0,0,0,2,0]);
-    let (options2, msg2) = decode(&buf[..size]).unwrap();
+    let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
 }
 
 #[test]
 fn encode_message_close() {
-    let options = Options::default();
+    let mut options = Options::default();
+    let mut crypto = Crypto::None;
     let msg = Message::Close;
     let mut buf = [0; 1024];
-    let size = encode(&options, &msg, &mut buf[..]);
+    let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
     assert_eq!(size, 8);
     assert_eq!(&buf[..size], &[118,112,110,0,0,0,0,3]);
-    let (options2, msg2) = decode(&buf[..size]).unwrap();
+    let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
 }
