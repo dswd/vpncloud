@@ -25,7 +25,6 @@ use types::{Error, Behavior, Type, Range, Table};
 use cloud::{TapCloud, TunCloud};
 
 
-//TODO: L2 routing
 //TODO: Implement IPv6
 //TODO: Encryption
 //TODO: Call close

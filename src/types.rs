@@ -52,7 +52,14 @@ impl FromStr for Address {
             }
             return Ok(Address(res));
         }
-        //FIXME: implement for mac addresses
+        let parts: Vec<&str> = text.split(':').collect();
+        if parts.len() == 6 {
+            let mut bytes = Vec::with_capacity(6);
+            for i in 0..6 {
+                bytes.push(try!(u8::from_str_radix(&parts[i], 16).map_err(|_| Error::ParseError("Failed to parse mac"))));
+            }
+            return Ok(Address(bytes));
+        }
         return Err(Error::ParseError("Failed to parse address"))
     }
 }
