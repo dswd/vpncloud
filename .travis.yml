@@ -8,19 +8,14 @@ matrix:
   allow_failures:
   - rust: nightly
 before_script:
-- ! 'pip install ''travis-cargo<0.2'' --user &&
-  export PATH=$HOME/.local/bin:$PATH;
+- ! 'pip install ''travis-cargo<0.2'' --user && export PATH=$HOME/.local/bin:$PATH;
   wget https://github.com/jedisct1/libsodium/releases/download/1.0.3/libsodium-1.0.3.tar.gz;
-  tar xvfz libsodium-1.0.3.tar.gz;
-  cd libsodium-1.0.3 && ./configure --prefix=/usr && make && sudo make install && cd ..
-'
+  tar xvfz libsodium-1.0.3.tar.gz; cd libsodium-1.0.3 && ./configure --prefix=/usr
+  && make && sudo make install && cd .. '
 script:
-- ! 'travis-cargo build &&
-  travis-cargo build -- --features "crypto" &&
-  travis-cargo test -- --features "crypto" &&
-  travis-cargo bench -- --features "crypto" &&
-  travis-cargo --only stable doc -- --features "crypto"
-'
+- ! 'travis-cargo build && travis-cargo build -- --features "crypto" && travis-cargo
+  test -- --features "crypto" && travis-cargo bench -- --features "crypto" && travis-cargo
+  --only stable doc -- --features "crypto" '
 addons:
   apt:
     packages:
@@ -36,3 +31,4 @@ notifications:
 env:
   global:
   - TRAVIS_CARGO_NIGHTLY_FEATURE=""
+  - secure: fzCMraJjZ4Ok+T6PzL8BMtg6NFBDdpZ98YraxYSJU57sJ//4LtJ49dlGNZTrMTz4BehO5PIJ8oXWLPRVV4fqQoppWehOskx/WVoLFhv/3PFy+/FYmPJvqqV9eOYHlE8+hmMI06Kk1gqLpw8egTjs4f4Mx7rd3kpCSJahm9SZO2Qc933vq4NppuXcmfARbQ33Xyhmbs4OGPRTbj5LrUogonzDzpQkeXMa+ZZqr6eaaT9fCnVAB03aPhzJ3H00nzeQSEoU4sL2p6NvDZwsheZ/HxYwDwxzgu70JAtIe4lMRaK+XmhhXFes0SR70Cncpeedee1FOvzcHZYLVlA+mml92rmIYSlsRMDv4++KS03+Jug11niWkKh/AWAlpHPSu2UmiENavpolFMzVpSu46zkpfJa2vPNqKTj2qpoixNaauNYWJJvI1mYLMMIfNv64HuLsGdGk0gR3KHG3paGPm1Xxnf4tBf+g53lBWxlxSieXzxaTZDAE+AIsQPI4snL6hoH4FqGcqmoRjOG71FrijlEqkmZYouMQt+EVQYJMcprEUVjvYkKXHypMW0DgFSace/9rOxu5YWezMBUsSJoBsMGsS28X/ZpJ1Aj3EKFZtG+OSu2MuxLUsvT1czmG9Q0tKDSIvjllaDLHl3CqpeFpVlKKwnAlpo+fjZxxdfYctfrF+ds=
