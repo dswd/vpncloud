@@ -21,6 +21,7 @@ impl Device {
         let mut ifname_string = String::with_capacity(32);
         ifname_string.push_str(ifname);
         ifname_string.push('\0');
+        assert!(ifname_string.len() <= 32);
         let mut ifname_c = ifname_string.into_bytes();
         let res = match type_ {
             Type::Tun => unsafe { setup_tun_device(fd.as_raw_fd(), ifname_c.as_mut_ptr()) },
