@@ -7,8 +7,7 @@ extern crate epoll;
 
 mod util;
 mod types;
-#[cfg(feature = "crypto")] mod crypto;
-#[cfg(not(feature = "crypto"))] mod no_crypto;
+mod crypto;
 mod udpmessage;
 mod ethernet;
 mod ip;
@@ -28,12 +27,13 @@ use ip::RoutingTable;
 use types::{Error, Mode, Type, Range, Table};
 use cloud::{TapCloud, TunCloud};
 use udpmessage::VERSION;
-#[cfg(feature = "crypto")] pub use crypto::Crypto;
-#[cfg(not(feature = "crypto"))] pub use no_crypto::Crypto;
+use crypto::Crypto;
 
 //TODO: Implement IPv6
 //TODO: Call close
-
+//FIXME: The crypto method should be signaled as part of the protocol
+//FIXME: The HMAC should also include the header
+//FIXME: Encryption should also include all following additional headers
 
 struct SimpleLogger;
 

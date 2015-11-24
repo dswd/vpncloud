@@ -4,7 +4,7 @@ use std::u16;
 
 use super::types::{Error, NetworkId, Range, Address};
 use super::util::{as_obj, as_bytes, to_vec};
-use super::Crypto;
+use super::crypto::Crypto;
 
 const MAGIC: [u8; 3] = [0x76, 0x70, 0x6e];
 pub const VERSION: u8 = 1;
@@ -13,14 +13,15 @@ pub const VERSION: u8 = 1;
 struct TopHeader {
     magic: [u8; 3],
     version: u8,
-    _reserved: [u8; 2],
+    crypto_method : u8,
+    _reserved: u8,
     flags: u8,
     msgtype: u8
 }
 
 impl Default for TopHeader {
     fn default() -> Self {
-        TopHeader{magic: MAGIC, version: VERSION, _reserved: [0; 2], flags: 0, msgtype: 0}
+        TopHeader{magic: MAGIC, version: VERSION, crypto_method: 0, _reserved: 0, flags: 0, msgtype: 0}
     }
 }
 
@@ -73,6 +74,21 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
     if header.version != VERSION {
         return Err(Error::ParseError("Wrong version"));
     }
+    if header.crypto_method != crypto.method() {
+        return Err(Error::CryptoError("Wrong crypto method"));
+    }
+    if crypto.method() > 0 {
+        if data.len() < pos + crypto.nonce_bytes() + crypto.auth_bytes() {
+            return Err(Error::ParseError("Truncated crypto header"));
+        }
+        let nonce = &data[pos..pos+crypto.nonce_bytes()];
+        pos += crypto.nonce_bytes();
+        let hash = &data[pos..pos+crypto.auth_bytes()];
+        pos += crypto.auth_bytes();
+        // Cheat data mutable to make the borrow checker happy
+        let data = unsafe { slice::from_raw_parts_mut(mem::transmute(data[pos..].as_ptr()), data.len()-pos) };
+        try!(crypto.decrypt(data, nonce, hash));
+    }
     let mut options = Options::default();
     if header.flags & 0x01 > 0 {
         if data.len() < pos + 8 {
@@ -81,23 +97,6 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
         let id = u64::from_be(*unsafe { as_obj::<u64>(&data[pos..]) });
         options.network_id = Some(id);
         pos += 8;
-    }
-    if header.flags & 0x02 > 0 {
-        if data.len() < pos + 40 {
-            return Err(Error::ParseError("Truncated options"));
-        }
-        if !crypto.is_secure() {
-            return Err(Error::CryptoError("Unexpected encrypted data"));
-        }
-        let nonce = &data[pos..pos+8];
-        pos += 8;
-        let hash = &data[pos..pos+32];
-        pos += 32;
-        debug!("{:?}", nonce);
-        debug!("{:?}", hash);
-        // Cheat data mutable to make the borrow checker happy
-        let data = unsafe { slice::from_raw_parts_mut(mem::transmute(data[pos..].as_ptr()), data.len()-pos) };
-        try!(crypto.decrypt(data, nonce, hash));
     }
     let msg = match header.msgtype {
         0 => Message::Data(&data[pos..]),
@@ -169,15 +168,18 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
         &Message::Init(_) => 2,
         &Message::Close => 3
     };
+    header.crypto_method = crypto.method();
     if options.network_id.is_some() {
         header.flags |= 0x01;
-    }
-    if crypto.is_secure() {
-        header.flags |= 0x02;
     }
     let header_dat = unsafe { as_bytes(&header) };
     unsafe { ptr::copy_nonoverlapping(header_dat.as_ptr(), buf[pos..].as_mut_ptr(), header_dat.len()) };
     pos += header_dat.len();
+    let nonce_pos = pos;
+    pos += crypto.nonce_bytes();
+    let hash_pos = pos;
+    pos += crypto.auth_bytes();
+    let crypto_pos = pos;
     if let Some(id) = options.network_id {
         assert!(buf.len() >= pos + 8);
         unsafe {
@@ -186,16 +188,6 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
         }
         pos += 8;
     }
-    let (nonce_pos, hash_pos) = if crypto.is_secure() {
-        let nonce_pos = pos;
-        pos += 8;
-        let hash_pos = pos;
-        pos += 32;
-        (nonce_pos, hash_pos)
-    } else {
-        (0, 0)
-    };
-    let crypto_pos = pos;
     match msg {
         &Message::Data(ref data) => {
             assert!(buf.len() >= pos + data.len());
@@ -249,13 +241,13 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
         &Message::Close => {
         }
     }
-    if crypto.is_secure() {
+    if crypto.method() > 0 {
         let (nonce, hash) = crypto.encrypt(&mut buf[crypto_pos..pos]);
-        assert_eq!(nonce.len(), 8);
-        assert_eq!(hash.len(), 32);
+        assert_eq!(nonce.len(), crypto.nonce_bytes());
+        assert_eq!(hash.len(), crypto.auth_bytes());
         unsafe {
-            ptr::copy_nonoverlapping(nonce.as_ptr(), buf[nonce_pos..].as_mut_ptr(), 8);
-            ptr::copy_nonoverlapping(hash.as_ptr(), buf[hash_pos..].as_mut_ptr(), 32);
+            ptr::copy_nonoverlapping(nonce.as_ptr(), buf[nonce_pos..].as_mut_ptr(), crypto.nonce_bytes());
+            ptr::copy_nonoverlapping(hash.as_ptr(), buf[hash_pos..].as_mut_ptr(), crypto.auth_bytes());
         }
     }
     pos
@@ -287,7 +279,7 @@ fn encode_message_encrypted() {
     let mut buf = [0; 1024];
     let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
     assert_eq!(size, 53);
-    assert_eq!(&buf[..8], &[118,112,110,1,0,0,2,0]);
+    assert_eq!(&buf[..8], &[118,112,110,1,1,0,0,0]);
     let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
