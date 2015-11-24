@@ -7,7 +7,7 @@ use super::util::{as_obj, as_bytes, to_vec};
 use super::Crypto;
 
 const MAGIC: [u8; 3] = [0x76, 0x70, 0x6e];
-const VERSION: u8 = 1;
+pub const VERSION: u8 = 1;
 
 #[repr(packed)]
 struct TopHeader {

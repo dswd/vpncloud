@@ -27,6 +27,7 @@ use ethernet::SwitchTable;
 use ip::RoutingTable;
 use types::{Error, Mode, Type, Range, Table};
 use cloud::{TapCloud, TunCloud};
+use udpmessage::VERSION;
 #[cfg(feature = "crypto")] pub use crypto::Crypto;
 #[cfg(not(feature = "crypto"))] pub use no_crypto::Crypto;
 
@@ -65,7 +66,8 @@ struct Args {
     flag_verbose: bool,
     flag_quiet: bool,
     flag_ifup: Option<String>,
-    flag_ifdown: Option<String>
+    flag_ifdown: Option<String>,
+    flag_version: bool
 }
 
 fn run_script(script: String, ifname: &str) {
@@ -83,6 +85,13 @@ fn run_script(script: String, ifname: &str) {
 
 fn main() {
     let args: Args = Docopt::new(USAGE).and_then(|d| d.decode()).unwrap_or_else(|e| e.exit());
+    if args.flag_version {
+        println!("VpnCloud v{} ({}, protocol version {})", env!("CARGO_PKG_VERSION"),
+            if cfg!(feature = "crypto") { "with crypto support" } else { "without crypto support" },
+            VERSION
+        );
+        return;
+    }
     log::set_logger(|max_log_level| {
         assert!(!args.flag_verbose || !args.flag_quiet);
         if args.flag_verbose {

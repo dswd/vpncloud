@@ -92,6 +92,10 @@ vpncloud(1) -- Peer-to-peer VPN
 
     Display the help.
 
+  * `-V`, `--version`:
+
+    Print the version and exit.
+
 
 ## DESCRIPTION
 
