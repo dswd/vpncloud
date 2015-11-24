@@ -15,3 +15,29 @@ vpncloud -c REMOTE_HOST:PORT --ifup 'ifconfig $IFNAME 10.0.0.1/24 mtu 1400 up'
 ```
 
 More details can be found in [the manpage](vpncloud.md).
+
+
+### Current Status
+
+This project is under heavy development and has not reached a stable state yet.
+This is what currently works:
+
+* Normal operation using TUN/TAP interfaces and different forwarding modes (Hub, Switch, Router)
+* Encryption using *libsodium*
+
+However there are some open issues:
+
+* Encryption is not very mature. Do not use it for any relevant data.
+* The protocol, especially the encryption part, can change.
+* Running on IPv6 is not supported.
+* The software is not very well tested.
+* The closing message is not sent to peers.
+* Usage of rust panics instead of pretty error messages.
+* The coverage score includes all unused methods from *libsodium*
+
+Please feel free to help and contribute code.
+
+
+### Semantic Versioning
+
+This project uses [semantic versioning](http://semver.org). Currently that means that everything can change between versions before 1.0 is finally released. This is especially true for the network protocol and even more for the crypto part of it. Expect them to change before 1.0.
