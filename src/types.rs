@@ -1,7 +1,6 @@
 use std::net::{SocketAddr, Ipv4Addr, Ipv6Addr};
 use std::hash::Hasher;
 use std::{fmt, ptr};
-use std::os::unix::io::AsRawFd;
 use std::str::FromStr;
 
 use super::util::{as_bytes, as_obj};
@@ -112,12 +111,6 @@ pub trait Table {
 pub trait Protocol: Sized {
     fn parse(&[u8]) -> Result<(Address, Address), Error>;
 }
-
-pub trait VirtualInterface: AsRawFd {
-    fn read(&mut self, &mut [u8]) -> Result<usize, Error>;
-    fn write(&mut self, &[u8]) -> Result<(), Error>;
-}
-
 
 #[derive(Debug)]
 pub enum Error {

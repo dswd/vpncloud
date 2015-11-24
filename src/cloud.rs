@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 use time::{Duration, SteadyTime, precise_time_ns};
 use epoll;
 
-use super::types::{Table, Protocol, VirtualInterface, Range, Error, NetworkId};
+use super::types::{Table, Protocol, Range, Error, NetworkId};
 use super::device::Device;
 use super::udpmessage::{encode, decode, Options, Message};
 use super::{ethernet, ip};
