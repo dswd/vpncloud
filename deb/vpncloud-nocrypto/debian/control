@@ -1,0 +1,12 @@
+Source: vpncloud-nocrypto
+Section: misc
+Priority: extra
+Maintainer: Dennis Schwerdel <schwerdel@informatik.uni-kl.de>
+Build-Depends: debhelper (>= 7), ruby-ronn, rust-stable
+Standards-Version: 3.8.3
+
+Package: vpncloud-nocrypto
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Conflicts: vpncloud
+Description: Peer-to-peer VPN (built without crypto support)

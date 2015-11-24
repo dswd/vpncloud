@@ -1,0 +1,9 @@
+vpncloud/debian/vpncloud*
+vpncloud/debian/files
+vpncloud/vpncloud
+vpncloud-nocrypto/debian/vpncloud*
+vpncloud-nocrypto/debian/files
+vpncloud-nocrypto/vpncloud
+*.deb
+*.build
+*.changes
