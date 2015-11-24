@@ -92,10 +92,6 @@ vpncloud(1) -- Peer-to-peer VPN
 
     Display the help.
 
-  * `-V`, `--version`:
-
-    Print the version and exit.
-
 
 ## DESCRIPTION
 
@@ -198,11 +194,10 @@ vpncloud -t tun -c REMOTE_HOST:PORT --subnet 10.0.0.X/32 --ifup 'ifconfig $IFNAM
   primitives are expected to be very secure, their application has not been
   reviewed.
   The shared key is hashed using *ScryptSalsa208Sha256* to derive a key,
-  which is used to encrypt the payload of messages using *ChaCha20*. The
-  authenticity of messages is verified using *HmacSha512256* hashes.
-  This method only protects the contents of the message (payload, peer list,
-  etc.) but not the header of each message.
-  Also, this method does only protect against attacks on single messages but not
+  which is used to encrypt the payload of messages using *ChaCha20Poly1305*.
+  The encryption includes an authentication that also protects the header and
+  all additional headers.
+  This method does only protect against attacks on single messages but not
   on attacks that manipulate the message series itself (i.e. suppress messages,
   reorder them, and duplicate them).
 
@@ -224,7 +219,21 @@ Every packet sent over UDP contains the following header (in order):
     This field specifies the version and helps nodes to parse the rest of the
     header and the packet.
 
-  * 2 `reserved bytes` that are currently unused
+  * 1 byte `crypto method`
+
+    This field specifies the method that must be used to decrypt the rest of the
+    data (additional headers and message contents). The currently supported
+    methods are:
+
+    - Method `0`, **No encryption**: Rest of the data can be read without
+      decrypting it.
+
+    - Method `1`, **ChaCha20Poly1305**: The header is followed by a 8 byte
+      *nonce*. The rest of the data is encrypted with the
+      `libsodium::crypto_aead_chacha20poly1305` method, using the 8 byte header
+      as additional data.
+
+  * 1 `reserved byte` that is currently unused
 
   * 1 byte for `flags`
 
@@ -234,7 +243,6 @@ Every packet sent over UDP contains the following header (in order):
     order. Currently the following additional headers are supported:
 
     - Bit 1: Network ID
-    - Bit 2: Crypto information
 
   * 1 byte for the `message type`
 
@@ -246,23 +254,18 @@ Every packet sent over UDP contains the following header (in order):
     - Type 2: Initial message
     - Type 3: Closing message
 
-After this 8 byte header, the additional headers as specified in the `flags`
-field will follow in the order of their respective flag bits.
+After this 8 byte header, the rest of the message follows. It is encrypted using
+the method specified in the header.
+
+In the decrypted data, the additional headers as specified in the `flags` field
+will follow in the order of their respective flag bits.
 
   * **Network ID**:
 
     The network id is encoded as 8 bytes.
 
-  * **Crypto information**:
-
-    If this header is present, the contents of the message are encrypted and
-    must have to decrypted before decoding.
-    This option contains 40 bytes. The first 8 bytes are the **nonce** for this
-    message and the later 32 bytes are the **authentication hash** of the
-    message.
-
-After the additional headers, message as specified in the `message type` field
-will follow:
+After the additional headers, the message as specified in the `message type`
+field will follow:
 
   * **Data packet** (message type 0):
     This packet contains payload. The format of the data depends on the device

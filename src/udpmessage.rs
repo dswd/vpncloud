@@ -65,7 +65,8 @@ impl<'a> fmt::Debug for Message<'a> {
 }
 
 pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, Message<'a>), Error> {
-    if data.len() < mem::size_of::<TopHeader>() {
+    let mut end = data.len();
+    if end < mem::size_of::<TopHeader>() {
         return Err(Error::ParseError("Empty message"));
     }
     let mut pos = 0;
@@ -81,18 +82,21 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
         return Err(Error::CryptoError("Wrong crypto method"));
     }
     if crypto.method() > 0 {
-        let len = crypto.nonce_bytes() + crypto.auth_bytes();
-        if data.len() < pos + len {
+        let len = crypto.nonce_bytes();
+        if end < pos + len {
             return Err(Error::ParseError("Truncated crypto header"));
         }
-        let (crypto_header, crypto_data) = data[pos..].split_at_mut(len);
-        pos += len;
-        let (nonce, hash) = crypto_header.split_at(crypto.nonce_bytes());
-        try!(crypto.decrypt(crypto_data, nonce, hash));
+        {
+            let (before, after) = data.split_at_mut(pos);
+            let (nonce, crypto_data) = after.split_at_mut(len);
+            pos += len;
+            end = try!(crypto.decrypt(crypto_data, nonce, &before[..mem::size_of::<TopHeader>()])) + pos;
+        }
+        assert_eq!(end, data.len()-crypto.additional_bytes());
     }
     let mut options = Options::default();
     if header.flags & 0x01 > 0 {
-        if data.len() < pos + NETWORK_ID_BYTES {
+        if end < pos + NETWORK_ID_BYTES {
             return Err(Error::ParseError("Truncated options"));
         }
         let id = u64::from_be(*unsafe { as_obj::<u64>(&data[pos..pos+NETWORK_ID_BYTES]) });
@@ -100,15 +104,15 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
         pos += NETWORK_ID_BYTES;
     }
     let msg = match header.msgtype {
-        0 => Message::Data(&data[pos..]),
+        0 => Message::Data(&data[pos..end]),
         1 => {
-            if data.len() < pos + 1 {
+            if end < pos + 1 {
                 return Err(Error::ParseError("Empty peers"));
             }
             let count = data[pos];
             pos += 1;
             let len = count as usize * 6;
-            if data.len() < pos + len {
+            if end < pos + len {
                 return Err(Error::ParseError("Peer data too short"));
             }
             let mut peers = Vec::with_capacity(count as usize);
@@ -127,28 +131,24 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
             Message::Peers(peers)
         },
         2 => {
-            if data.len() < pos + 1 {
+            if end < pos + 1 {
                 return Err(Error::ParseError("Init data too short"));
             }
             let count = data[pos] as usize;
             pos += 1;
             let mut addrs = Vec::with_capacity(count);
             for _ in 0..count {
-                if data.len() < pos + 1 {
+                if end < pos + 1 {
                     return Err(Error::ParseError("Init data too short"));
                 }
                 let len = data[pos] as usize;
                 pos += 1;
-                if data.len() < pos + len {
+                if end < pos + len + 1 {
                     return Err(Error::ParseError("Init data too short"));
                 }
                 let base = Address(to_vec(&data[pos..pos+len]));
-                pos += len;
-                if data.len() < pos + 1 {
-                    return Err(Error::ParseError("Init data too short"));
-                }
-                let prefix_len = data[pos];
-                pos += 1;
+                let prefix_len = data[pos+len];
+                pos += len + 1;
                 addrs.push(Range{base: base, prefix_len: prefix_len});
             }
             Message::Init(addrs)
@@ -176,11 +176,7 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
     let header_dat = unsafe { as_bytes(&header) };
     unsafe { ptr::copy_nonoverlapping(header_dat.as_ptr(), buf[pos..].as_mut_ptr(), header_dat.len()) };
     pos += header_dat.len();
-    let nonce_pos = pos;
     pos += crypto.nonce_bytes();
-    let hash_pos = pos;
-    pos += crypto.auth_bytes();
-    let crypto_pos = pos;
     if let Some(id) = options.network_id {
         assert!(buf.len() >= pos + NETWORK_ID_BYTES);
         unsafe {
@@ -243,13 +239,11 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
         }
     }
     if crypto.method() > 0 {
-        let (nonce, hash) = crypto.encrypt(&mut buf[crypto_pos..pos]);
-        assert_eq!(nonce.len(), crypto.nonce_bytes());
-        assert_eq!(hash.len(), crypto.auth_bytes());
-        unsafe {
-            ptr::copy_nonoverlapping(nonce.as_ptr(), buf[nonce_pos..].as_mut_ptr(), crypto.nonce_bytes());
-            ptr::copy_nonoverlapping(hash.as_ptr(), buf[hash_pos..].as_mut_ptr(), crypto.auth_bytes());
-        }
+        let (header, rest) = buf.split_at_mut(mem::size_of::<TopHeader>());
+        let (nonce, rest) = rest.split_at_mut(crypto.nonce_bytes());
+        let crypto_start = header.len() + nonce.len();
+        assert!(rest.len() >= pos - crypto_start + crypto.additional_bytes());
+        pos = crypto.encrypt(rest, pos-crypto_start, nonce, header) + crypto_start;
     }
     pos
 }
@@ -279,7 +273,7 @@ fn encode_message_encrypted() {
     let msg = Message::Data(&payload);
     let mut buf = [0; 1024];
     let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
-    assert_eq!(size, 53);
+    assert_eq!(size, 37);
     assert_eq!(&buf[..8], &[118,112,110,1,1,0,0,0]);
     let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);

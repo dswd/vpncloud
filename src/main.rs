@@ -3,7 +3,7 @@ extern crate time;
 extern crate docopt;
 extern crate rustc_serialize;
 extern crate epoll;
-#[cfg(feature = "crypto")] extern crate sodiumoxide;
+#[cfg(feature = "crypto")] extern crate libsodium_sys;
 
 mod util;
 mod types;
@@ -31,9 +31,6 @@ use crypto::Crypto;
 
 //TODO: Implement IPv6
 //TODO: Call close
-//FIXME: The crypto method should be signaled as part of the protocol
-//FIXME: The HMAC should also include the header
-//FIXME: Encryption should also include all following additional headers
 
 struct SimpleLogger;
 

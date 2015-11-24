@@ -13,7 +13,7 @@ impl Crypto {
         0
     }
 
-    pub fn auth_bytes(&self) -> usize {
+    pub fn additional_bytes(&self) -> usize {
         0
     }
 
@@ -21,11 +21,11 @@ impl Crypto {
         panic!("This binary has no crypto support");
     }
 
-    pub fn decrypt(&self, mut _buf: &mut [u8], _nonce: &[u8], _hash: &[u8]) -> Result<(), Error> {
+    pub fn decrypt(&self, mut _buf: &mut [u8], _nonce: &[u8], _hash: &[u8]) -> Result<usize, Error> {
         unreachable!("This should never be called")
     }
 
-    pub fn encrypt(&mut self, mut _buf: &mut [u8]) -> (Vec<u8>, Vec<u8>) {
+    pub fn encrypt(&mut self, mut _buf: &mut [u8], _mlen: usize, _nonce_bytes: &mut [u8], _header: &[u8]) -> usize {
         unreachable!("This should never be called")
     }
 }
