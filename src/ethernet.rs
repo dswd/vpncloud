@@ -3,9 +3,7 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 
 use super::types::{Error, Table, Protocol, Address};
-
-use time::{Duration, SteadyTime};
-
+use super::util::{now, Time, Duration};
 
 #[derive(PartialEq)]
 pub struct Frame;
@@ -49,7 +47,7 @@ impl Protocol for Frame {
 
 struct SwitchTableValue {
     address: SocketAddr,
-    timeout: SteadyTime
+    timeout: Time
 }
 
 pub struct SwitchTable {
@@ -66,7 +64,7 @@ impl SwitchTable {
 
 impl Table for SwitchTable {
     fn housekeep(&mut self) {
-        let now = SteadyTime::now();
+        let now = now();
         let mut del: Vec<Address> = Vec::new();
         for (key, val) in &self.table {
             if val.timeout < now {
@@ -82,7 +80,7 @@ impl Table for SwitchTable {
 
     #[inline]
     fn learn(&mut self, key: Address, _prefix_len: Option<u8>, addr: SocketAddr) {
-        let value = SwitchTableValue{address: addr, timeout: SteadyTime::now()+self.timeout};
+        let value = SwitchTableValue{address: addr, timeout: now()+self.timeout as Time};
         if self.table.insert(key.clone(), value).is_none() {
             info!("Learned address {:?} => {}", key, addr);
         }

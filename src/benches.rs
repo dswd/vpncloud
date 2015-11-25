@@ -1,6 +1,6 @@
 use test::Bencher;
 
-use time::{SteadyTime, Duration};
+use time::Duration;
 
 use std::str::FromStr;
 use std::net::ToSocketAddrs;
@@ -61,7 +61,8 @@ fn switch_lookup(b: &mut Bencher) {
 
 #[bench]
 fn ethernet_parse(b: &mut Bencher) {
-    let data = [0; 1500];
+    let mut data = [0; 1500];
+    data[5] = 45;
     b.iter(|| {
         Frame::parse(&data).unwrap()
     })

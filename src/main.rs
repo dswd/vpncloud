@@ -6,6 +6,7 @@ extern crate rustc_serialize;
 extern crate epoll;
 extern crate signal;
 extern crate nix;
+extern crate libc;
 #[cfg(feature = "crypto")] extern crate libsodium_sys;
 #[cfg(feature = "bench")] extern crate test;
 
@@ -19,7 +20,6 @@ mod cloud;
 mod device;
 #[cfg(feature = "bench")] mod benches;
 
-use time::Duration;
 use docopt::Docopt;
 
 use std::hash::{Hash, SipHasher, Hasher};
@@ -33,6 +33,7 @@ use types::{Error, Mode, Type, Range, Table, Protocol};
 use cloud::GenericCloud;
 use udpmessage::VERSION;
 use crypto::Crypto;
+use util::Duration;
 
 
 struct SimpleLogger;
@@ -63,8 +64,8 @@ struct Args {
     flag_listen: String,
     flag_network_id: Option<String>,
     flag_connect: Vec<String>,
-    flag_peer_timeout: usize,
-    flag_dst_timeout: usize,
+    flag_peer_timeout: Duration,
+    flag_dst_timeout: Duration,
     flag_verbose: bool,
     flag_quiet: bool,
     flag_ifup: Option<String>,
@@ -93,8 +94,8 @@ fn run<T: Protocol> (args: Args) {
     for s in args.flag_subnet {
         ranges.push(try_fail!(Range::from_str(&s), "Invalid subnet format: {} ({})", s));
     }
-    let dst_timeout = Duration::seconds(args.flag_dst_timeout as i64);
-    let peer_timeout = Duration::seconds(args.flag_peer_timeout as i64);
+    let dst_timeout = args.flag_dst_timeout;
+    let peer_timeout = args.flag_peer_timeout;
     let (learning, broadcasting, table): (bool, bool, Box<Table>) = match args.flag_mode {
         Mode::Normal => match args.flag_type {
             Type::Tap => (true, true, Box::new(SwitchTable::new(dst_timeout))),

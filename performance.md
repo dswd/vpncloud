@@ -41,10 +41,10 @@ $> iperf -c 10.2.1.2 -t 60
 
 **Results:**
   * Throughput without VpnCloud: 938 Mbits/sec
-  * Throughput via VpnCloud (MTU=1400): 363 Mbits/sec
+  * Throughput via VpnCloud (MTU=1400): 461 Mbits/sec
   * CPU usage for VpnCloud (MTU=1400): maxed out at ~105% of one core
-  * Throughput via VpnCloud (MTU=16384): 946 Mbits/sec (no idea why this is higher)
-  * CPU usage for VpnCloud (MTU=16384): ~73% of one core
+  * Throughput via VpnCloud (MTU=16384): 949 Mbits/sec (no idea why this is higher)
+  * CPU usage for VpnCloud (MTU=16384): ~68% of one core
 
 
 ### Test 2: Unencrypted ping
@@ -86,6 +86,6 @@ SIZE: 1400 bytes
 
 ### Conclusion
 
-* VpnCloud achieves about 360 MBit/s with default MTU settings.
+* VpnCloud achieves about 460 MBit/s with default MTU settings.
 * At increased MTU, VpnCloud is able to saturate a Gigabit link.
 * VpnCloud adds about 120µs to the round trip times, i.e. 60µs latency increase.

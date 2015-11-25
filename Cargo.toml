@@ -12,6 +12,7 @@ log = "0.3"
 epoll = "0.2"
 signal = "0.1"
 nix = "*"
+libc = "*"
 libsodium-sys = {version = "0.0.9", optional = true}
 
 [build-dependencies]

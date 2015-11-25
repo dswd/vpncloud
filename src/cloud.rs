@@ -7,19 +7,20 @@ use std::fmt;
 use std::os::unix::io::AsRawFd;
 use std::marker::PhantomData;
 
-use time::{Duration, SteadyTime, precise_time_ns};
 use epoll;
 use nix::sys::signal::{SIGTERM, SIGQUIT, SIGINT};
 use signal::trap::Trap;
+use time::SteadyTime;
 
 use super::types::{Table, Protocol, Range, Error, NetworkId};
 use super::device::Device;
 use super::udpmessage::{encode, decode, Options, Message};
 use super::crypto::Crypto;
+use super::util::{now, Time, Duration, time_rand};
 
 struct PeerList {
     timeout: Duration,
-    peers: HashMap<SocketAddr, SteadyTime>
+    peers: HashMap<SocketAddr, Time>
 }
 
 impl PeerList {
@@ -28,7 +29,7 @@ impl PeerList {
     }
 
     fn timeout(&mut self) -> Vec<SocketAddr> {
-        let now = SteadyTime::now();
+        let now = now();
         let mut del: Vec<SocketAddr> = Vec::new();
         for (&addr, &timeout) in &self.peers {
             if timeout < now {
@@ -49,7 +50,7 @@ impl PeerList {
 
     #[inline]
     fn add(&mut self, addr: &SocketAddr) {
-        if self.peers.insert(*addr, SteadyTime::now()+self.timeout).is_none() {
+        if self.peers.insert(*addr, now()+self.timeout as Time).is_none() {
             info!("New peer: {:?}", addr);
         }
     }
@@ -96,10 +97,10 @@ pub struct GenericCloud<P: Protocol> {
     device: Device,
     options: Options,
     crypto: Crypto,
-    next_peerlist: SteadyTime,
+    next_peerlist: Time,
     update_freq: Duration,
     buffer_out: [u8; 64*1024],
-    next_housekeep: SteadyTime,
+    next_housekeep: Time,
     _dummy_p: PhantomData<P>,
 }
 
@@ -124,10 +125,10 @@ impl<P: Protocol> GenericCloud<P> {
             device: device,
             options: options,
             crypto: crypto,
-            next_peerlist: SteadyTime::now(),
+            next_peerlist: now(),
             update_freq: peer_timeout/2,
             buffer_out: [0; 64*1024],
-            next_housekeep: SteadyTime::now(),
+            next_housekeep: now(),
             _dummy_p: PhantomData,
         }
     }
@@ -169,7 +170,7 @@ impl<P: Protocol> GenericCloud<P> {
     fn housekeep(&mut self) -> Result<(), Error> {
         self.peers.timeout();
         self.table.housekeep();
-        if self.next_peerlist <= SteadyTime::now() {
+        if self.next_peerlist <= now() {
             debug!("Send peer list to all peers");
             let mut peer_num = self.peers.len();
             if peer_num > 10 {
@@ -178,12 +179,12 @@ impl<P: Protocol> GenericCloud<P> {
                     peer_num = 10;
                 }
             }
-            let peers = self.peers.subset(peer_num, precise_time_ns() as u32);
+            let peers = self.peers.subset(peer_num, time_rand() as u32);
             let msg = Message::Peers(peers);
             for addr in &self.peers.as_vec() {
                 try!(self.send_msg(addr, &msg));
             }
-            self.next_peerlist = SteadyTime::now() + self.update_freq;
+            self.next_peerlist = now() + self.update_freq as Time;
         }
         for addr in self.reconnect_peers.clone() {
             try!(self.connect(addr, false));
@@ -272,6 +273,7 @@ impl<P: Protocol> GenericCloud<P> {
     }
 
     pub fn run(&mut self) {
+        let dummy_time = SteadyTime::now();
         let trap = Trap::trap(&[SIGINT, SIGTERM, SIGQUIT]);
         let epoll_handle = try_fail!(epoll::create1(0), "Failed to create epoll handle: {}");
         let socket_fd = self.socket.as_raw_fd();
@@ -284,10 +286,6 @@ impl<P: Protocol> GenericCloud<P> {
         let mut buffer = [0; 64*1024];
         loop {
             let count = try_fail!(epoll::wait(epoll_handle, &mut events, 1000), "Epoll wait failed: {}");
-            // Check for signals
-            if trap.wait(SteadyTime::now()).is_some() {
-                break;
-            }
             // Process events
             for i in 0..count {
                 match &events[i as usize].data {
@@ -308,13 +306,17 @@ impl<P: Protocol> GenericCloud<P> {
                     _ => unreachable!()
                 }
             }
-            // Do the housekeeping
-            if self.next_housekeep < SteadyTime::now() {
+            if self.next_housekeep < now() {
+                // Check for signals
+                if trap.wait(dummy_time).is_some() {
+                    break;
+                }
+                // Do the housekeeping
                 match self.housekeep() {
                     Ok(_) => (),
                     Err(e) => error!("Error: {:?}", e)
                 }
-                self.next_housekeep = SteadyTime::now() + Duration::seconds(1)
+                self.next_housekeep = now() + 1
             }
         }
         info!("Shutting down...");
