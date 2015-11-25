@@ -78,8 +78,8 @@ $> ping 10.2.1.2 -c 10000 -i 0.001 -s SIZE -U -q
 
 For all the test, the best result out of 5 is selected.
 
-SIZE: 50 bytes
-  * Without VpnCloud: Ø= 164 µs
+SIZE: 100 bytes
+  * Without VpnCloud: Ø= 317 µs
   * With VpnCloud: Ø= 433 µs
 
 SIZE: 500 bytes
@@ -151,9 +151,9 @@ $> ping 10.2.1.2 -c 10000 -i 0.001 -s SIZE -U -q
 
 For all the test, the best result out of 5 is selected.
 
-SIZE: 50 bytes
-  * Without VpnCloud: Ø= 164 µs
-  * With VpnCloud: Ø= 456 µs
+SIZE: 100 bytes
+  * Without VpnCloud: Ø= 317 µs
+  * With VpnCloud: Ø= 454 µs
 
 SIZE: 500 bytes
   * Without VpnCloud: Ø= 330 µs
