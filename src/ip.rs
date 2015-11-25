@@ -63,7 +63,7 @@ impl Table for RoutingTable {
         }
     }
 
-    fn lookup(&self, addr: &Address) -> Option<SocketAddr> {
+    fn lookup(&mut self, addr: &Address) -> Option<SocketAddr> {
         let len = addr.0.len()/2 * 2;
         for i in 0..(len/2)+1 {
             if let Some(group) = self.0.get(&addr.0[0..len-2*i]) {

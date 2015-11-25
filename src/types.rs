@@ -122,7 +122,7 @@ impl fmt::Display for Mode {
 
 pub trait Table {
     fn learn(&mut self, Address, Option<u8>, SocketAddr);
-    fn lookup(&self, &Address) -> Option<SocketAddr>;
+    fn lookup(&mut self, &Address) -> Option<SocketAddr>;
     fn housekeep(&mut self);
     fn remove_all(&mut self, SocketAddr);
 }

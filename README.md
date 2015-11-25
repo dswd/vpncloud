@@ -15,6 +15,7 @@ vpncloud -c REMOTE_HOST:PORT --ifup 'ifconfig $IFNAME 10.0.0.1/24 mtu 1400 up'
 ```
 
 More details can be found in [the manpage](vpncloud.md).
+Some performance measurements can be found [here](performance.md).
 
 
 ### Current Status
@@ -31,6 +32,7 @@ However there are some open issues:
 * The protocol can still change.
 * The software is not very well tested.
 * The coverage score includes all unused methods from *libsodium*
+* The software has not been optimized for speed.
 
 Please feel free to help and contribute code.
 

@@ -58,12 +58,13 @@ struct SwitchTableValue {
 
 pub struct SwitchTable {
     table: HashMap<Address, SwitchTableValue>,
+    cache: Option<(Address, SocketAddr)>,
     timeout: Duration
 }
 
 impl SwitchTable {
     pub fn new(timeout: Duration) -> Self {
-        SwitchTable{table: HashMap::new(), timeout: timeout}
+        SwitchTable{table: HashMap::new(), cache: None, timeout: timeout}
     }
 }
 
@@ -80,20 +81,21 @@ impl Table for SwitchTable {
             info!("Forgot address {:?}", key);
             self.table.remove(&key);
         }
+        self.cache = None;
     }
 
     fn learn(&mut self, key: Address, _prefix_len: Option<u8>, addr: SocketAddr) {
-       let value = SwitchTableValue{address: addr, timeout: SteadyTime::now()+self.timeout};
-       if self.table.insert(key.clone(), value).is_none() {
-           info!("Learned address {:?} => {}", key, addr);
-       }
+        let value = SwitchTableValue{address: addr, timeout: SteadyTime::now()+self.timeout};
+        if self.table.insert(key.clone(), value).is_none() {
+            info!("Learned address {:?} => {}", key, addr);
+        }
     }
 
-    fn lookup(&self, key: &Address) -> Option<SocketAddr> {
-       match self.table.get(key) {
-           Some(value) => Some(value.address),
-           None => None
-       }
+    fn lookup(&mut self, key: &Address) -> Option<SocketAddr> {
+        match self.table.get(key) {
+            Some(value) => Some(value.address),
+            None => None
+        }
     }
 
     fn remove_all(&mut self, _addr: SocketAddr) {
