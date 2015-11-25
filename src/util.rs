@@ -19,3 +19,31 @@ pub fn to_vec(data: &[u8]) -> Vec<u8> {
     }
     v
 }
+
+macro_rules! fail {
+    ($format:expr) => ( {
+        use std::process;
+        error!($format);
+        process::exit(-1);
+    } );
+    ($format:expr, $( $arg:expr ),+) => ( {
+        use std::process;
+        error!($format, $( $arg ),+ );
+        process::exit(-1);
+    } );
+}
+
+macro_rules! try_fail {
+    ($val:expr, $format:expr) => ( {
+        match $val {
+            Ok(val) => val,
+            Err(err) => fail!($format, err)
+        }
+    } );
+    ($val:expr, $format:expr, $( $arg:expr ),+) => ( {
+        match $val {
+            Ok(val) => val,
+            Err(err) => fail!($format, $( $arg ),+, err)
+        }
+    } );
+}

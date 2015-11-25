@@ -13,7 +13,6 @@ use epoll;
 use super::types::{Table, Protocol, Range, Error, NetworkId};
 use super::device::Device;
 use super::udpmessage::{encode, decode, Options, Message};
-use super::{ethernet, ip};
 use super::crypto::Crypto;
 
 struct PeerList {
@@ -108,7 +107,7 @@ impl<P: Protocol> GenericCloud<P> {
         crypto: Crypto) -> Self {
         let socket = match UdpSocket::bind(&listen as &str) {
             Ok(socket) => socket,
-            _ => panic!("Failed to open socket")
+            _ => fail!("Failed to open socket {}", listen)
         };
         let mut options = Options::default();
         options.network_id = network_id;
@@ -271,35 +270,33 @@ impl<P: Protocol> GenericCloud<P> {
     }
 
     pub fn run(&mut self) {
-        let epoll_handle = epoll::create1(0).expect("Failed to create epoll handle");
+        let epoll_handle = try_fail!(epoll::create1(0), "Failed to create epoll handle: {}");
         let socket_fd = self.socket.as_raw_fd();
         let device_fd = self.device.as_raw_fd();
         let mut socket_event = epoll::EpollEvent{events: epoll::util::event_type::EPOLLIN, data: 0};
         let mut device_event = epoll::EpollEvent{events: epoll::util::event_type::EPOLLIN, data: 1};
-        epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, socket_fd, &mut socket_event).expect("Failed to add socket to epoll handle");
-        epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, device_fd, &mut device_event).expect("Failed to add device to epoll handle");
+        try_fail!(epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, socket_fd, &mut socket_event), "Failed to add socket to epoll handle: {}");
+        try_fail!(epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, device_fd, &mut device_event), "Failed to add device to epoll handle: {}");
         let mut events = [epoll::EpollEvent{events: 0, data: 0}; 2];
         let mut buffer = [0; 64*1024];
         loop {
-            let count = epoll::wait(epoll_handle, &mut events, 1000).expect("Epoll wait failed");
+            let count = try_fail!(epoll::wait(epoll_handle, &mut events, 1000), "Epoll wait failed: {}");
             // Process events
             for i in 0..count {
                 match &events[i as usize].data {
-                    &0 => match self.socket.recv_from(&mut buffer) {
-                        Ok((size, src)) => {
-                            match decode(&mut buffer[..size], &mut self.crypto).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
-                                Ok(_) => (),
-                                Err(e) => error!("Error: {:?}", e)
-                            }
-                        },
-                        Err(_error) => panic!("Failed to read from network socket")
-                    },
-                    &1 => match self.device.read(&mut buffer) {
-                        Ok(size) => match self.handle_interface_data(&buffer[..size]) {
+                    &0 => {
+                        let (size, src) = try_fail!(self.socket.recv_from(&mut buffer), "Failed to read from network socket: {}");
+                        match decode(&mut buffer[..size], &mut self.crypto).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
                             Ok(_) => (),
                             Err(e) => error!("Error: {:?}", e)
-                        },
-                        Err(_error) => panic!("Failed to read from tap device")
+                        }
+                    },
+                    &1 => {
+                        let size = try_fail!(self.device.read(&mut buffer), "Failed to read from tap device: {}");
+                        match self.handle_interface_data(&buffer[..size]) {
+                            Ok(_) => (),
+                            Err(e) => error!("Error: {:?}", e)
+                        }
                     },
                     _ => unreachable!()
                 }
@@ -315,7 +312,3 @@ impl<P: Protocol> GenericCloud<P> {
         }
     }
 }
-
-
-pub type TapCloud = GenericCloud<ethernet::Frame>;
-pub type TunCloud = GenericCloud<ip::Packet>;

@@ -27,12 +27,11 @@ This is what currently works:
 
 However there are some open issues:
 
-* Encryption is not very mature. Do not use it for any relevant data.
-* The protocol, especially the encryption part, can change.
+* Encryption has not been thoroughly reviewed, use with care.
+* The protocol can still change.
 * Running on IPv6 is not supported.
 * The software is not very well tested.
 * The closing message is not sent to peers.
-* Usage of rust panics instead of pretty error messages.
 * The coverage score includes all unused methods from *libsodium*
 
 Please feel free to help and contribute code.

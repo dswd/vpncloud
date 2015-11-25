@@ -91,7 +91,7 @@ impl Table for RoutingTable {
     }
 
     fn housekeep(&mut self) {
-        //nothin to do
+        //nothing to do
     }
 
     fn remove_all(&mut self, _addr: SocketAddr) {

@@ -95,10 +95,29 @@ impl FromStr for Range {
 pub enum Type {
     Tun, Tap
 }
+impl fmt::Display for Type {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            &Type::Tun => write!(formatter, "tun"),
+            &Type::Tap => write!(formatter, "tap"),
+        }
+    }
+}
+
 
 #[derive(RustcDecodable, Debug)]
 pub enum Mode {
     Normal, Hub, Switch, Router
+}
+impl fmt::Display for Mode {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            &Mode::Normal => write!(formatter, "normal"),
+            &Mode::Hub => write!(formatter, "hub"),
+            &Mode::Switch => write!(formatter, "switch"),
+            &Mode::Router => write!(formatter, "router"),
+        }
+    }
 }
 
 pub trait Table {
@@ -120,7 +139,18 @@ pub enum Error {
     TunTapDevError(&'static str),
     CryptoError(&'static str)
 }
-
+impl fmt::Display for Error {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            &Error::ParseError(ref msg) => write!(formatter, "{}", msg),
+            &Error::SocketError(ref msg) => write!(formatter, "{}", msg),
+            &Error::TunTapDevError(ref msg) => write!(formatter, "{}", msg),
+            &Error::CryptoError(ref msg) => write!(formatter, "{}", msg),
+            &Error::WrongNetwork(Some(net)) => write!(formatter, "wrong network id: {}", net),
+            &Error::WrongNetwork(None) => write!(formatter, "wrong network id: none"),
+        }
+    }
+}
 
 #[test]
 fn address_fmt() {

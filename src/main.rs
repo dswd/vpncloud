@@ -5,7 +5,7 @@ extern crate rustc_serialize;
 extern crate epoll;
 #[cfg(feature = "crypto")] extern crate libsodium_sys;
 
-mod util;
+#[macro_use] mod util;
 mod types;
 mod crypto;
 mod udpmessage;
@@ -24,8 +24,8 @@ use std::process::Command;
 use device::Device;
 use ethernet::SwitchTable;
 use ip::RoutingTable;
-use types::{Error, Mode, Type, Range, Table};
-use cloud::{TapCloud, TunCloud};
+use types::{Error, Mode, Type, Range, Table, Protocol};
+use cloud::GenericCloud;
 use udpmessage::VERSION;
 use crypto::Crypto;
 
@@ -80,32 +80,13 @@ fn run_script(script: String, ifname: &str) {
     }
 }
 
-fn main() {
-    let args: Args = Docopt::new(USAGE).and_then(|d| d.decode()).unwrap_or_else(|e| e.exit());
-    if args.flag_version {
-        println!("VpnCloud v{} ({}, protocol version {})", env!("CARGO_PKG_VERSION"),
-            if cfg!(feature = "crypto") { "with crypto support" } else { "without crypto support" },
-            VERSION
-        );
-        return;
-    }
-    log::set_logger(|max_log_level| {
-        assert!(!args.flag_verbose || !args.flag_quiet);
-        if args.flag_verbose {
-            max_log_level.set(log::LogLevelFilter::Debug);
-        } else if args.flag_quiet {
-            max_log_level.set(log::LogLevelFilter::Error);
-        } else {
-            max_log_level.set(log::LogLevelFilter::Info);
-        }
-        Box::new(SimpleLogger)
-    }).unwrap();
-    debug!("Args: {:?}", args);
-    let device = Device::new(&args.flag_device, args.flag_type).expect("Failed to open virtual interface");
+fn run<T: Protocol> (args: Args) {
+    let device = try_fail!(Device::new(&args.flag_device, args.flag_type),
+        "Failed to open virtual {} interface {}: {}", args.flag_type, &args.flag_device);
     info!("Opened device {}", device.ifname());
     let mut ranges = Vec::with_capacity(args.flag_subnet.len());
     for s in args.flag_subnet {
-        ranges.push(Range::from_str(&s).expect("Invalid subnet"));
+        ranges.push(try_fail!(Range::from_str(&s), "Invalid subnet format: {} ({})", s));
     }
     let dst_timeout = Duration::seconds(args.flag_dst_timeout as i64);
     let peer_timeout = Duration::seconds(args.flag_peer_timeout as i64);
@@ -127,32 +108,42 @@ fn main() {
         Some(key) => Crypto::from_shared_key(&key),
         None => Crypto::None
     };
-    match args.flag_type {
-        Type::Tap => {
-            let mut cloud = TapCloud::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges, crypto);
-            if let Some(script) = args.flag_ifup {
-                run_script(script, cloud.ifname());
-            }
-            for addr in &args.flag_connect {
-                cloud.connect(&addr as &str, true).expect("Failed to send");
-            }
-            cloud.run();
-            if let Some(script) = args.flag_ifdown {
-                run_script(script, cloud.ifname());
-            }
-        },
-        Type::Tun => {
-            let mut cloud = TunCloud::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges, crypto);
-            if let Some(script) = args.flag_ifup {
-                run_script(script, cloud.ifname());
-            }
-            for addr in &args.flag_connect {
-                cloud.connect(&addr as &str, true).expect("Failed to send");
-            }
-            if let Some(script) = args.flag_ifdown {
-                run_script(script, cloud.ifname());
-            }
-            cloud.run()
+    let mut cloud = GenericCloud::<T>::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges, crypto);
+    if let Some(script) = args.flag_ifup {
+        run_script(script, cloud.ifname());
+    }
+    for addr in &args.flag_connect {
+        try_fail!(cloud.connect(&addr as &str, true), "Failed to send message to {}: {}", &addr);
+    }
+    cloud.run();
+    if let Some(script) = args.flag_ifdown {
+        run_script(script, cloud.ifname());
+    }
+}
+
+fn main() {
+    let args: Args = Docopt::new(USAGE).and_then(|d| d.decode()).unwrap_or_else(|e| e.exit());
+    if args.flag_version {
+        println!("VpnCloud v{} ({}, protocol version {})", env!("CARGO_PKG_VERSION"),
+            if cfg!(feature = "crypto") { "with crypto support" } else { "without crypto support" },
+            VERSION
+        );
+        return;
+    }
+    log::set_logger(|max_log_level| {
+        assert!(!args.flag_verbose || !args.flag_quiet);
+        if args.flag_verbose {
+            max_log_level.set(log::LogLevelFilter::Debug);
+        } else if args.flag_quiet {
+            max_log_level.set(log::LogLevelFilter::Error);
+        } else {
+            max_log_level.set(log::LogLevelFilter::Info);
         }
-    };
+        Box::new(SimpleLogger)
+    }).unwrap();
+    debug!("Args: {:?}", args);
+    match args.flag_type {
+        Type::Tap => run::<ethernet::Frame>(args),
+        Type::Tun => run::<ip::Packet>(args),
+    }
 }
