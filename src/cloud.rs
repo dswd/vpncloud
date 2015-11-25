@@ -9,6 +9,8 @@ use std::marker::PhantomData;
 
 use time::{Duration, SteadyTime, precise_time_ns};
 use epoll;
+use nix::sys::signal::{SIGTERM, SIGQUIT, SIGINT};
+use signal::trap::Trap;
 
 use super::types::{Table, Protocol, Range, Error, NetworkId};
 use super::device::Device;
@@ -270,6 +272,7 @@ impl<P: Protocol> GenericCloud<P> {
     }
 
     pub fn run(&mut self) {
+        let trap = Trap::trap(&[SIGINT, SIGTERM, SIGQUIT]);
         let epoll_handle = try_fail!(epoll::create1(0), "Failed to create epoll handle: {}");
         let socket_fd = self.socket.as_raw_fd();
         let device_fd = self.device.as_raw_fd();
@@ -281,6 +284,10 @@ impl<P: Protocol> GenericCloud<P> {
         let mut buffer = [0; 64*1024];
         loop {
             let count = try_fail!(epoll::wait(epoll_handle, &mut events, 1000), "Epoll wait failed: {}");
+            // Check for signals
+            if trap.wait(SteadyTime::now()).is_some() {
+                break;
+            }
             // Process events
             for i in 0..count {
                 match &events[i as usize].data {
@@ -309,6 +316,10 @@ impl<P: Protocol> GenericCloud<P> {
                 }
                 self.next_housekeep = SteadyTime::now() + Duration::seconds(1)
             }
+        }
+        info!("Shutting down...");
+        for p in &self.peers.as_vec() {
+            let _ = self.send_msg(p, &Message::Close);
         }
     }
 }

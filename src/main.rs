@@ -3,6 +3,8 @@ extern crate time;
 extern crate docopt;
 extern crate rustc_serialize;
 extern crate epoll;
+extern crate signal;
+extern crate nix;
 #[cfg(feature = "crypto")] extern crate libsodium_sys;
 
 #[macro_use] mod util;
@@ -29,7 +31,6 @@ use cloud::GenericCloud;
 use udpmessage::VERSION;
 use crypto::Crypto;
 
-//TODO: Call close
 
 struct SimpleLogger;
 

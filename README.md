@@ -29,9 +29,7 @@ However there are some open issues:
 
 * Encryption has not been thoroughly reviewed, use with care.
 * The protocol can still change.
-* Running on IPv6 is not supported.
 * The software is not very well tested.
-* The closing message is not sent to peers.
 * The coverage score includes all unused methods from *libsodium*
 
 Please feel free to help and contribute code.
