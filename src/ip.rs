@@ -1,9 +1,10 @@
 use std::net::SocketAddr;
 use std::collections::{hash_map, HashMap};
 use std::io::Read;
+use std::ptr;
 
 use super::types::{Protocol, Error, Table, Address};
-use super::util::to_vec;
+
 
 #[allow(dead_code)]
 pub struct Packet;
@@ -14,18 +15,28 @@ impl Protocol for Packet {
             return Err(Error::ParseError("Empty header"));
         }
         let version = data[0] >> 4;
+        let mut src = [0; 16];
+        let mut dst = [0; 16];
         match version {
             4 => {
                 if data.len() < 20 {
                     return Err(Error::ParseError("Truncated header"));
                 }
-                Ok((Address(to_vec(&data[12..16])), Address(to_vec(&data[16..20]))))
+                unsafe {
+                    ptr::copy_nonoverlapping(data[12..].as_ptr(), src.as_mut_ptr(), 4);
+                    ptr::copy_nonoverlapping(data[16..].as_ptr(), dst.as_mut_ptr(), 4);
+                }
+                Ok((Address(src, 4), Address(dst, 4)))
             },
             6 => {
                 if data.len() < 40 {
                     return Err(Error::ParseError("Truncated header"));
                 }
-                Ok((Address(to_vec(&data[8..24])), Address(to_vec(&data[24..40]))))
+                unsafe {
+                    ptr::copy_nonoverlapping(data[8..].as_ptr(), src.as_mut_ptr(), 16);
+                    ptr::copy_nonoverlapping(data[24..].as_ptr(), dst.as_mut_ptr(), 16);
+                }
+                Ok((Address(src, 16), Address(dst, 16)))
             },
             _ => Err(Error::ParseError("Invalid version"))
         }
@@ -35,11 +46,11 @@ impl Protocol for Packet {
 
 struct RoutingEntry {
     address: SocketAddr,
-    bytes: Vec<u8>,
+    bytes: [u8; 16],
     prefix_len: u8
 }
 
-pub struct RoutingTable(HashMap<Vec<u8>, Vec<RoutingEntry>>);
+pub struct RoutingTable(HashMap<[u8; 16], Vec<RoutingEntry>>);
 
 impl RoutingTable {
     pub fn new() -> Self {
@@ -55,7 +66,10 @@ impl Table for RoutingTable {
         };
         info!("New routing entry: {:?}/{} => {}", addr, prefix_len, address);
         let group_len = (prefix_len as usize / 16) * 2;
-        let group_bytes: Vec<u8> = addr.0[..group_len].iter().map(|b| *b).collect();
+        assert!(group_len <= 16);
+        let mut group_bytes = [0; 16];
+        unsafe { ptr::copy_nonoverlapping(addr.0.as_ptr(), group_bytes.as_mut_ptr(), group_len) };
+
         let routing_entry = RoutingEntry{address: address, bytes: addr.0, prefix_len: prefix_len};
         match self.0.entry(group_bytes) {
             hash_map::Entry::Occupied(mut entry) => entry.get_mut().push(routing_entry),

@@ -225,7 +225,7 @@ impl<P: Protocol> GenericCloud<P> {
                 return Err(Error::WrongNetwork(options.network_id));
             }
         }
-        debug!("Recieved {:?} from {}", msg, peer);
+        debug!("Received {:?} from {}", msg, peer);
         match msg {
             Message::Data(payload) => {
                 let (src, _dst) = try!(P::parse(payload));
@@ -237,7 +237,7 @@ impl<P: Protocol> GenericCloud<P> {
                         return Err(Error::TunTapDevError("Failed to write to device"));
                     }
                 }
-                self.peers.add(&peer);
+                // not adding peer to increase performance
                 if self.learning {
                     //learn single address
                     self.table.learn(src, None, peer);

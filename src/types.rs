@@ -7,12 +7,27 @@ use super::util::{as_bytes, as_obj};
 
 pub type NetworkId = u64;
 
-#[derive(PartialEq, PartialOrd, Eq, Ord, Hash, Clone)]
-pub struct Address(pub Vec<u8>);
+#[derive(PartialOrd, Eq, Ord, Clone, Hash)]
+pub struct Address(pub [u8; 16], pub u8);
+
+impl PartialEq for Address {
+    fn eq(&self, rhs: &Self) -> bool {
+        if self.1 != rhs.1 {
+            return false;
+        }
+        for i in 0..self.1 as usize {
+            if self.0[i] != rhs.0[i] {
+                return false;
+            }
+        }
+        true
+    }
+}
+
 
 impl fmt::Debug for Address {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match self.0.len() {
+        match self.1 {
             4 => write!(formatter, "{}.{}.{}.{}", self.0[0], self.0[1], self.0[2], self.0[3]),
             6 => write!(formatter, "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
                 self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]),
@@ -36,12 +51,11 @@ impl FromStr for Address {
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         if let Ok(addr) = Ipv4Addr::from_str(text) {
             let ip = addr.octets();
-            let mut res = Vec::with_capacity(4);
+            let mut res = [0; 16];
             unsafe {
-                res.set_len(4);
                 ptr::copy_nonoverlapping(ip.as_ptr(), res.as_mut_ptr(), ip.len());
             }
-            return Ok(Address(res));
+            return Ok(Address(res, 4));
         }
         if let Ok(addr) = Ipv6Addr::from_str(text) {
             let mut segments = addr.segments();
@@ -49,20 +63,19 @@ impl FromStr for Address {
                 segments[i] = segments[i].to_be();
             }
             let bytes = unsafe { as_bytes(&segments) };
-            let mut res = Vec::with_capacity(16);
+            let mut res = [0; 16];
             unsafe {
-                res.set_len(16);
                 ptr::copy_nonoverlapping(bytes.as_ptr(), res.as_mut_ptr(), bytes.len());
             }
-            return Ok(Address(res));
+            return Ok(Address(res, 16));
         }
         let parts: Vec<&str> = text.split(':').collect();
         if parts.len() == 6 {
-            let mut bytes = Vec::with_capacity(6);
+            let mut bytes = [0; 16];
             for i in 0..6 {
-                bytes.push(try!(u8::from_str_radix(&parts[i], 16).map_err(|_| Error::ParseError("Failed to parse mac"))));
+                bytes[i] = try!(u8::from_str_radix(&parts[i], 16).map_err(|_| Error::ParseError("Failed to parse mac")));
             }
-            return Ok(Address(bytes));
+            return Ok(Address(bytes, 6));
         }
         return Err(Error::ParseError("Failed to parse address"))
     }
@@ -154,8 +167,8 @@ impl fmt::Display for Error {
 
 #[test]
 fn address_fmt() {
-    assert_eq!(format!("{:?}", Address(vec![120,45,22,5])), "120.45.22.5");
-    assert_eq!(format!("{:?}", Address(vec![120,45,22,5,1,2])), "78:2d:16:05:01:02");
-    assert_eq!(format!("{:?}", Address(vec![3,56,120,45,22,5,1,2])), "vlan824/78:2d:16:05:01:02");
-    assert_eq!(format!("{:?}", Address(vec![0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15])), "0001:0203:0405:0607:0809:0a0b:0c0d:0e0f");
+    assert_eq!(format!("{:?}", Address([120,45,22,5,0,0,0,0,0,0,0,0,0,0,0,0], 4)), "120.45.22.5");
+    assert_eq!(format!("{:?}", Address([120,45,22,5,1,2,0,0,0,0,0,0,0,0,0,0], 6)), "78:2d:16:05:01:02");
+    assert_eq!(format!("{:?}", Address([3,56,120,45,22,5,1,2,0,0,0,0,0,0,0,0], 8)), "vlan824/78:2d:16:05:01:02");
+    assert_eq!(format!("{:?}", Address([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15], 16)), "0001:0203:0405:0607:0809:0a0b:0c0d:0e0f");
 }

@@ -38,10 +38,12 @@ impl Device {
         &self.ifname
     }
 
+    #[inline]
     pub fn read(&mut self, mut buffer: &mut [u8]) -> Result<usize, Error> {
         self.fd.read(&mut buffer).map_err(|_| Error::TunTapDevError("Read error"))
     }
 
+    #[inline]
     pub fn write(&mut self, data: &[u8]) -> Result<(), Error> {
         match self.fd.write_all(&data) {
             Ok(_) => Ok(()),
@@ -51,6 +53,7 @@ impl Device {
 }
 
 impl AsRawFd for Device {
+    #[inline(always)]
     fn as_raw_fd(&self) -> RawFd {
         self.fd.as_raw_fd()
     }

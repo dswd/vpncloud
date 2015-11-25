@@ -25,27 +25,23 @@ impl Protocol for Frame {
             if data.len() < pos + 2 {
                 return Err(Error::ParseError("Vlan frame is too short"));
             }
-            let mut src = Vec::with_capacity(8);
-            let mut dst = Vec::with_capacity(8);
+            let mut src = [0; 16];
+            let mut dst = [0; 16];
             unsafe {
-                src.set_len(8);
                 ptr::copy_nonoverlapping(data[pos..].as_ptr(), src.as_mut_ptr(), 2);
                 ptr::copy_nonoverlapping(src_data.as_ptr(), src[2..].as_mut_ptr(), 6);
-                dst.set_len(8);
                 ptr::copy_nonoverlapping(data[pos..].as_ptr(), dst.as_mut_ptr(), 2);
                 ptr::copy_nonoverlapping(dst_data.as_ptr(), dst[2..].as_mut_ptr(), 6);
             }
-            Ok((Address(src), Address(dst)))
+            Ok((Address(src, 8), Address(dst, 8)))
         } else {
-            let mut src = Vec::with_capacity(6);
-            let mut dst = Vec::with_capacity(6);
+            let mut src = [0; 16];
+            let mut dst = [0; 16];
             unsafe {
                 ptr::copy_nonoverlapping(src_data.as_ptr(), src.as_mut_ptr(), 6);
-                src.set_len(6);
                 ptr::copy_nonoverlapping(dst_data.as_ptr(), dst.as_mut_ptr(), 6);
-                dst.set_len(6);
             }
-            Ok((Address(src), Address(dst)))
+            Ok((Address(src, 6), Address(dst, 6)))
         }
     }
 }
@@ -84,6 +80,7 @@ impl Table for SwitchTable {
         self.cache = None;
     }
 
+    #[inline]
     fn learn(&mut self, key: Address, _prefix_len: Option<u8>, addr: SocketAddr) {
         let value = SwitchTableValue{address: addr, timeout: SteadyTime::now()+self.timeout};
         if self.table.insert(key.clone(), value).is_none() {
@@ -91,6 +88,7 @@ impl Table for SwitchTable {
         }
     }
 
+    #[inline]
     fn lookup(&mut self, key: &Address) -> Option<SocketAddr> {
         match self.table.get(key) {
             Some(value) => Some(value.address),
@@ -108,14 +106,14 @@ impl Table for SwitchTable {
 fn without_vlan() {
     let data = [6,5,4,3,2,1,1,2,3,4,5,6,1,2,3,4,5,6,7,8];
     let (src, dst) = Frame::parse(&data).unwrap();
-    assert_eq!(src, Address(vec![1,2,3,4,5,6]));
-    assert_eq!(dst, Address(vec![6,5,4,3,2,1]));
+    assert_eq!(src, Address([1,2,3,4,5,6,0,0,0,0,0,0,0,0,0,0], 6));
+    assert_eq!(dst, Address([6,5,4,3,2,1,0,0,0,0,0,0,0,0,0,0], 6));
 }
 
 #[test]
 fn with_vlan() {
     let data = [6,5,4,3,2,1,1,2,3,4,5,6,0x81,0,4,210,1,2,3,4,5,6,7,8];
     let (src, dst) = Frame::parse(&data).unwrap();
-    assert_eq!(src, Address(vec![4,210,1,2,3,4,5,6]));
-    assert_eq!(dst, Address(vec![4,210,6,5,4,3,2,1]));
+    assert_eq!(src, Address([4,210,1,2,3,4,5,6,0,0,0,0,0,0,0,0], 8));
+    assert_eq!(dst, Address([4,210,6,5,4,3,2,1,0,0,0,0,0,0,0,0], 8));
 }

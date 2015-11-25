@@ -20,3 +20,4 @@ gcc = "0.3"
 [features]
 default = []
 crypto = ["libsodium-sys"] #not default as it requires external library
+bench = []

@@ -3,7 +3,7 @@ use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr, SocketAddrV6, Ipv6Addr};
 use std::u16;
 
 use super::types::{Error, NetworkId, Range, Address};
-use super::util::{as_obj, as_bytes, to_vec};
+use super::util::{as_obj, as_bytes};
 use super::crypto::Crypto;
 
 const MAGIC: [u8; 3] = [0x76, 0x70, 0x6e];
@@ -166,7 +166,9 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
                 if end < pos + len + 1 {
                     return Err(Error::ParseError("Init data too short"));
                 }
-                let base = Address(to_vec(&data[pos..pos+len]));
+                let mut addr = [0; 16];
+                unsafe { ptr::copy_nonoverlapping(data[pos..].as_ptr(), addr.as_mut_ptr(), len) };
+                let base = Address(addr, len as u8);
                 let prefix_len = data[pos+len];
                 pos += len + 1;
                 addrs.push(Range{base: base, prefix_len: prefix_len});
@@ -260,8 +262,7 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
             pos += 1;
             for range in ranges {
                 let base = &range.base;
-                let len = base.0.len();
-                assert!(len <= 255);
+                let len = base.1 as usize;
                 assert!(buf.len() >= pos + 1 + len + 1);
                 buf[pos] = len as u8;
                 pos += 1;
@@ -350,8 +351,8 @@ fn encode_option_network_id() {
 fn encode_message_init() {
     let mut options = Options::default();
     let mut crypto = Crypto::None;
-    let addrs = vec![Range{base: Address(vec![0,1,2,3]), prefix_len: 24},
-        Range{base: Address(vec![0,1,2,3,4,5]), prefix_len: 16}];
+    let addrs = vec![Range{base: Address([0,1,2,3,0,0,0,0,0,0,0,0,0,0,0,0], 4), prefix_len: 24},
+        Range{base: Address([0,1,2,3,4,5,0,0,0,0,0,0,0,0,0,0], 6), prefix_len: 16}];
     let msg = Message::Init(addrs);
     let mut buf = [0; 1024];
     let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);

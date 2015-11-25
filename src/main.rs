@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "bench", feature(test))]
 #[macro_use] extern crate log;
 extern crate time;
 extern crate docopt;
@@ -6,6 +7,7 @@ extern crate epoll;
 extern crate signal;
 extern crate nix;
 #[cfg(feature = "crypto")] extern crate libsodium_sys;
+#[cfg(feature = "bench")] extern crate test;
 
 #[macro_use] mod util;
 mod types;
@@ -15,6 +17,7 @@ mod ethernet;
 mod ip;
 mod cloud;
 mod device;
+#[cfg(feature = "bench")] mod benches;
 
 use time::Duration;
 use docopt::Docopt;
@@ -35,10 +38,12 @@ use crypto::Crypto;
 struct SimpleLogger;
 
 impl log::Log for SimpleLogger {
+    #[inline(always)]
     fn enabled(&self, _metadata: &log::LogMetadata) -> bool {
         true
     }
 
+    #[inline(always)]
     fn log(&self, record: &log::LogRecord) {
         if self.enabled(record.metadata()) {
             println!("{} - {}", record.level(), record.args());
