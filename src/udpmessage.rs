@@ -1,5 +1,5 @@
 use std::{mem, ptr, fmt};
-use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
+use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr, SocketAddrV6, Ipv6Addr};
 use std::u16;
 
 use super::types::{Error, NetworkId, Range, Address};
@@ -109,13 +109,13 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
             if end < pos + 1 {
                 return Err(Error::ParseError("Empty peers"));
             }
+            let mut peers = Vec::new();
             let count = data[pos];
             pos += 1;
             let len = count as usize * 6;
             if end < pos + len {
                 return Err(Error::ParseError("Peer data too short"));
             }
-            let mut peers = Vec::with_capacity(count as usize);
             for _ in 0..count {
                 let (ip, port) = unsafe {
                     let ip = as_obj::<[u8; 4]>(&data[pos..]);
@@ -126,6 +126,26 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
                     (ip, port)
                 };
                 let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(ip[0], ip[1], ip[2], ip[3]), port));
+                peers.push(addr);
+            }
+            let count = data[pos];
+            pos += 1;
+            let len = count as usize * 18;
+            if end < pos + len {
+                return Err(Error::ParseError("Peer data too short"));
+            }
+            for _ in 0..count {
+                let (ip, port) = unsafe {
+                    let ip = as_obj::<[u16; 8]>(&data[pos..]);
+                    pos += 16;
+                    let port = *as_obj::<u16>(&data[pos..]);
+                    let port = u16::from_be(port);
+                    pos += 2;
+                    (ip, port)
+                };
+                let addr = SocketAddr::V6(SocketAddrV6::new(Ipv6Addr::new(u16::from_be(ip[0]),
+                    u16::from_be(ip[1]), u16::from_be(ip[2]), u16::from_be(ip[3]), u16::from_be(ip[4]),
+                    u16::from_be(ip[5]), u16::from_be(ip[6]), u16::from_be(ip[7])), port, 0, 0));
                 peers.push(addr);
             }
             Message::Peers(peers)
@@ -192,30 +212,46 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
             pos += data.len();
         },
         &Message::Peers(ref peers) => {
-            let count_pos = pos;
-            pos += 1;
-            assert!(buf.len() >= 2 + peers.len() * mem::size_of::<SocketAddrV4>());
-            let mut count = 0;
+            let mut v4addrs = Vec::new();
+            let mut v6addrs = Vec::new();
             for p in peers {
                 match p {
-                    &SocketAddr::V4(addr) => {
-                        let ip = addr.ip().octets();
-                        let port = addr.port();
-                        unsafe {
-                            ptr::copy_nonoverlapping(ip.as_ptr(), buf[pos..].as_mut_ptr(), ip.len());
-                            pos += ip.len();
-                            let port = mem::transmute::<u16, [u8; 2]>(port.to_be());
-                            ptr::copy_nonoverlapping(port.as_ptr(), buf[pos..].as_mut_ptr(), port.len());
-                            pos += port.len();
-                        }
-                        count += 1;
-                    },
-                    &SocketAddr::V6(_addr) => unimplemented!()
+                    &SocketAddr::V4(addr) => v4addrs.push(addr),
+                    &SocketAddr::V6(addr) => v6addrs.push(addr)
                 }
             };
-            buf[count_pos] = count;
-            buf[pos] = 0;
+            assert!(v4addrs.len() <= 255);
+            assert!(v6addrs.len() <= 255);
+            assert!(buf.len() >= pos + 2 + v4addrs.len() * 6 + v6addrs.len() * 18);
+            buf[pos] = v4addrs.len() as u8;
             pos += 1;
+            for addr in v4addrs {
+                let ip = addr.ip().octets();
+                let port = addr.port();
+                unsafe {
+                    ptr::copy_nonoverlapping(ip.as_ptr(), buf[pos..].as_mut_ptr(), ip.len());
+                    pos += ip.len();
+                    let port = mem::transmute::<u16, [u8; 2]>(port.to_be());
+                    ptr::copy_nonoverlapping(port.as_ptr(), buf[pos..].as_mut_ptr(), port.len());
+                    pos += port.len();
+                }
+            };
+            buf[pos] = v6addrs.len() as u8;
+            pos += 1;
+            for addr in v6addrs {
+                let mut ip = addr.ip().segments();
+                for i in 0..ip.len() {
+                    ip[i] = ip[i].to_be();
+                }
+                let port = addr.port();
+                unsafe {
+                    ptr::copy_nonoverlapping(ip.as_ptr() as *const u8, buf[pos..].as_mut_ptr(), 16);
+                    pos += ip.len();
+                    let port = mem::transmute::<u16, [u8; 2]>(port.to_be());
+                    ptr::copy_nonoverlapping(port.as_ptr(), buf[pos..].as_mut_ptr(), port.len());
+                    pos += port.len();
+                }
+            };
         },
         &Message::Init(ref ranges) => {
             assert!(buf.len() >= pos + 1);

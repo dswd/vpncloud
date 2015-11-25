@@ -29,7 +29,6 @@ use cloud::GenericCloud;
 use udpmessage::VERSION;
 use crypto::Crypto;
 
-//TODO: Implement IPv6
 //TODO: Call close
 
 struct SimpleLogger;
