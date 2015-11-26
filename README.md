@@ -20,23 +20,27 @@ Some performance measurements can be found [here](performance.md).
 
 ### Current Status
 
-This project is under heavy development and has not reached a stable state yet.
-This is what currently works:
+This project is still under development and has yet to reach a stable state.
+However, the main functionality should work and you are invited to test it.
+This is what works:
 
-* Normal operation using TUN/TAP interfaces and different forwarding modes (Hub, Switch, Router)
-* Encryption using *libsodium*
+* Setting up tunnels between two networks via Ethernet (TAP) and IP (TUN)
+* Connecting multiple networks with multiple forwarding behaviors (Hub, Switch, Router)
+* Encrypted connections using *libsodium*
+* Automatic peer-to-peer meshing
+* NAT and (limited) firewall traversal using hole punching
+* Automatic reconnecting when connections are lost
+* Non-native forwarding modes, e.g. IP based learning switch and prefix routed Ethernet networks.
+* High throughput and low additional latency (see [performance page](performance.md))
 
 However there are some open issues:
 
 * Encryption has not been thoroughly reviewed, use with care.
-* The protocol can still change.
-* The software is not very well tested.
-* The coverage score includes all unused methods from *libsodium*
-* The software has not been optimized for speed.
+* The software is not very well tested and the protocol can change.
 
 Please feel free to help and contribute code.
 
 
 ### Semantic Versioning
 
-This project uses [semantic versioning](http://semver.org). Currently that means that everything can change between versions before 1.0 is finally released. This is especially true for the network protocol and even more for the crypto part of it. Expect them to change before 1.0.
+This project uses [semantic versioning](http://semver.org). Currently that means that everything can change between versions before 1.0 is finally released.

@@ -18,6 +18,7 @@ mod ethernet;
 mod ip;
 mod cloud;
 mod device;
+#[cfg(test)] mod tests;
 #[cfg(feature = "bench")] mod benches;
 
 use docopt::Docopt;

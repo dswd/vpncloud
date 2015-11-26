@@ -194,22 +194,22 @@ impl<P: Protocol> GenericCloud<P> {
 
     fn handle_interface_data(&mut self, payload: &[u8]) -> Result<(), Error> {
         let (src, dst) = try!(P::parse(payload));
-        debug!("Read data from interface: src: {:?}, dst: {:?}, {} bytes", src, dst, payload.len());
+        debug!("Read data from interface: src: {}, dst: {}, {} bytes", src, dst, payload.len());
         match self.table.lookup(&dst) {
             Some(addr) => {
-                debug!("Found destination for {:?} => {}", dst, addr);
+                debug!("Found destination for {} => {}", dst, addr);
                 if self.peers.contains(&addr) {
                     try!(self.send_msg(addr, &Message::Data(payload)))
                 } else {
-                    warn!("Destination for {:?} not found in peers: {}", dst, addr);
+                    warn!("Destination for {} not found in peers: {}", dst, addr);
                 }
             },
             None => {
                 if !self.broadcast {
-                    debug!("No destination for {:?} found, dropping", dst);
+                    debug!("No destination for {} found, dropping", dst);
                     return Ok(());
                 }
-                debug!("No destination for {:?} found, broadcasting", dst);
+                debug!("No destination for {} found, broadcasting", dst);
                 let msg = Message::Data(payload);
                 for addr in &self.peers.as_vec() {
                     try!(self.send_msg(addr, &msg));
@@ -234,7 +234,7 @@ impl<P: Protocol> GenericCloud<P> {
                 match self.device.write(&payload) {
                     Ok(()) => (),
                     Err(e) => {
-                        error!("Failed to send via device {:?}", e);
+                        error!("Failed to send via device: {}", e);
                         return Err(Error::TunTapDevError("Failed to write to device"));
                     }
                 }
@@ -292,14 +292,14 @@ impl<P: Protocol> GenericCloud<P> {
                         let (size, src) = try_fail!(self.socket.recv_from(&mut buffer), "Failed to read from network socket: {}");
                         match decode(&mut buffer[..size], &mut self.crypto).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
                             Ok(_) => (),
-                            Err(e) => error!("Error: {:?}", e)
+                            Err(e) => error!("Error: {}", e)
                         }
                     },
                     &1 => {
                         let size = try_fail!(self.device.read(&mut buffer), "Failed to read from tap device: {}");
                         match self.handle_interface_data(&buffer[..size]) {
                             Ok(_) => (),
-                            Err(e) => error!("Error: {:?}", e)
+                            Err(e) => error!("Error: {}", e)
                         }
                     },
                     _ => unreachable!()
@@ -313,7 +313,7 @@ impl<P: Protocol> GenericCloud<P> {
                 // Do the housekeeping
                 match self.housekeep() {
                     Ok(_) => (),
-                    Err(e) => error!("Error: {:?}", e)
+                    Err(e) => error!("Error: {}", e)
                 }
                 self.next_housekeep = now() + 1
             }

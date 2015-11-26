@@ -19,7 +19,6 @@ script:
   travis-cargo build -- --features "crypto" &&
   travis-cargo test -- --features "crypto" &&
   travis-cargo bench -- --features "crypto" &&
-  travis-cargo --only stable doc -- --features "crypto"
 '
 addons:
   apt:
@@ -28,7 +27,6 @@ addons:
     - libelf-dev
     - libdw-dev
 after_success:
-- travis-cargo --only stable doc-upload -- --features "crypto"
 - travis-cargo coveralls --no-sudo -- --features "crypto"
 notifications:
   email:

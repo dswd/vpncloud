@@ -67,7 +67,7 @@ impl Table for SwitchTable {
             }
         }
         for key in del {
-            info!("Forgot address {:?}", key);
+            info!("Forgot address {}", key);
             self.table.remove(&key);
         }
         self.cache = None;
@@ -77,7 +77,7 @@ impl Table for SwitchTable {
     fn learn(&mut self, key: Address, _prefix_len: Option<u8>, addr: SocketAddr) {
         let value = SwitchTableValue{address: addr, timeout: now()+self.timeout as Time};
         if self.table.insert(key.clone(), value).is_none() {
-            info!("Learned address {:?} => {}", key, addr);
+            info!("Learned address {} => {}", key, addr);
         }
     }
 
@@ -92,21 +92,4 @@ impl Table for SwitchTable {
     fn remove_all(&mut self, _addr: SocketAddr) {
         unimplemented!()
     }
-}
-
-
-#[test]
-fn without_vlan() {
-    let data = [6,5,4,3,2,1,1,2,3,4,5,6,1,2,3,4,5,6,7,8];
-    let (src, dst) = Frame::parse(&data).unwrap();
-    assert_eq!(src, Address{data: [1,2,3,4,5,6,0,0,0,0,0,0,0,0,0,0], len: 6});
-    assert_eq!(dst, Address{data: [6,5,4,3,2,1,0,0,0,0,0,0,0,0,0,0], len: 6});
-}
-
-#[test]
-fn with_vlan() {
-    let data = [6,5,4,3,2,1,1,2,3,4,5,6,0x81,0,4,210,1,2,3,4,5,6,7,8];
-    let (src, dst) = Frame::parse(&data).unwrap();
-    assert_eq!(src, Address{data: [4,210,1,2,3,4,5,6,0,0,0,0,0,0,0,0], len: 8});
-    assert_eq!(dst, Address{data: [4,210,6,5,4,3,2,1,0,0,0,0,0,0,0,0], len: 8});
 }

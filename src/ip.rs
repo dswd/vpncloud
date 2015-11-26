@@ -37,7 +37,7 @@ struct RoutingEntry {
     prefix_len: u8
 }
 
-pub struct RoutingTable(HashMap<[u8; 16], Vec<RoutingEntry>>);
+pub struct RoutingTable(HashMap<Vec<u8>, Vec<RoutingEntry>>);
 
 impl RoutingTable {
     pub fn new() -> Self {
@@ -51,12 +51,12 @@ impl Table for RoutingTable {
             Some(val) => val,
             None => addr.len * 8
         };
-        info!("New routing entry: {:?}/{} => {}", addr, prefix_len, address);
-        let group_len = (prefix_len as usize / 16) * 2;
+        info!("New routing entry: {}/{} => {}", addr, prefix_len, address);
+        let group_len = prefix_len as usize / 8;
         assert!(group_len <= 16);
-        let mut group_bytes = [0; 16];
+        let mut group_bytes = Vec::with_capacity(group_len);
         for i in 0..group_len {
-            group_bytes[i] = addr.data[i];
+            group_bytes.push(addr.data[i]);
         }
         let routing_entry = RoutingEntry{address: address, bytes: addr.data, prefix_len: prefix_len};
         match self.0.entry(group_bytes) {
@@ -66,9 +66,11 @@ impl Table for RoutingTable {
     }
 
     fn lookup(&mut self, addr: &Address) -> Option<SocketAddr> {
-        let len = addr.len as usize/2 * 2;
-        for i in 0..(len/2)+1 {
-            if let Some(group) = self.0.get(&addr.data[0..len-2*i]) {
+        let len = addr.len as usize;
+        let mut found = None;
+        let mut found_len: isize = -1;
+        for i in 0..len+1 {
+            if let Some(group) = self.0.get(&addr.data[0..len-i]) {
                 for entry in group {
                     let mut match_len = 0;
                     for j in 0..addr.len as usize {
@@ -80,13 +82,14 @@ impl Table for RoutingTable {
                             break;
                         }
                     }
-                    if match_len as u8 >= entry.prefix_len {
-                        return Some(entry.address);
+                    if match_len as u8 >= entry.prefix_len && match_len as isize > found_len {
+                        found = Some(entry.address);
+                        found_len = match_len as isize;
                     }
                 }
             }
         }
-        None
+        found
     }
 
     fn housekeep(&mut self) {

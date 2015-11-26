@@ -289,7 +289,9 @@ field will follow:
 
   * **Initial message** (message type 2):
     This packet contains all the local subnets claimed by the nodes.
-    The subnet list is encoded in the following way: The first byte of data
+    Its first byte marks the stage of the initial handshake process. After that,
+    the list of local subnets follows.
+    The subnet list is encoded in the following way: Its first byte of data
     contains the number of encoded subnets that follow. After that, the given
     number of encoded subnets follow.
     For each subnet, the first byte is the length of bytes in the base address

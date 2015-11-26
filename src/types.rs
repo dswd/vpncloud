@@ -62,8 +62,7 @@ impl PartialEq for Address {
     }
 }
 
-
-impl fmt::Debug for Address {
+impl fmt::Display for Address {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         let d = &self.data;
         match self.len {
@@ -77,8 +76,14 @@ impl fmt::Debug for Address {
             },
             16 => write!(formatter, "{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}",
                 d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]),
-            _ => d.fmt(formatter)
+            _ => write!(formatter, "{:?}", d)
         }
+    }
+}
+
+impl fmt::Debug for Address {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(formatter, "{}", self)
     }
 }
 
@@ -119,7 +124,7 @@ impl FromStr for Address {
 }
 
 
-#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Hash, Clone)]
+#[derive(PartialEq, PartialOrd, Eq, Ord, Hash, Clone)]
 pub struct Range {
     pub base: Address,
     pub prefix_len: u8
@@ -157,6 +162,18 @@ impl FromStr for Range {
             .map_err(|_| Error::ParseError("Failed to parse prefix length")));
         let base = try!(Address::from_str(&text[..pos]));
         Ok(Range{base: base, prefix_len: prefix_len})
+    }
+}
+
+impl fmt::Display for Range {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(formatter, "{}/{}", self.base, self.prefix_len)
+    }
+}
+
+impl fmt::Debug for Range {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(formatter, "{}", self)
     }
 }
 
@@ -220,13 +237,4 @@ impl fmt::Display for Error {
             &Error::WrongNetwork(None) => write!(formatter, "wrong network id: none"),
         }
     }
-}
-
-
-#[test]
-fn address_fmt() {
-    assert_eq!(format!("{:?}", Address{data: [120,45,22,5,0,0,0,0,0,0,0,0,0,0,0,0], len: 4}), "120.45.22.5");
-    assert_eq!(format!("{:?}", Address{data: [120,45,22,5,1,2,0,0,0,0,0,0,0,0,0,0], len: 6}), "78:2d:16:05:01:02");
-    assert_eq!(format!("{:?}", Address{data: [3,56,120,45,22,5,1,2,0,0,0,0,0,0,0,0], len: 8}), "vlan824/78:2d:16:05:01:02");
-    assert_eq!(format!("{:?}", Address{data: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15], len: 16}), "0001:0203:0405:0607:0809:0a0b:0c0d:0e0f");
 }

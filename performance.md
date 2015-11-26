@@ -15,159 +15,71 @@ Receiver node:
   * Realtek RTL8111/8168/8411 Gigabit Network
   * Ubuntu 14.04 (Kernel 3.13.0-63-generic)
 
-VpnCloud version: `VpnCloud v0.1.0 (with crypto support, protocol version 1)`
+VpnCloud version: `VpnCloud v0.2.0 (with crypto support, protocol version 1)`
 
+The sender runs the following command:
 
-### Test 1: Unencrypted throughput
-
-Node 1:
 ```
-$> ./vpncloud -t tap -l NODE1:3210 -c NODE2:3210 \
-   --ifup 'ifconfig $IFNAME 10.2.1.1/24 mtu MTU up' &
-```
-
-Node 2:
-```
-$> ./vpncloud -t tap -l NODE2:3210 -c NODE1:3210 \
-   --ifup 'ifconfig $IFNAME 10.2.1.2/24 mtu MTU up' &
-$> iperf -s &
-$> top
-```
-
-First, the test is run **without VpnCloud**:
-```
-$> iperf -c NODE2 -t 60
-```
-
-and then **via VpnCloud**:
-```
-$> iperf -c 10.2.1.2 -t 60
-```
-
-**Results:**
-  * Throughput without VpnCloud: 926 Mbits/sec
-  * Throughput via VpnCloud (MTU=1400): 885 Mbits/sec
-  * CPU usage for VpnCloud (MTU=1400): ~85%/ ~95% of one core (sender, receiver)
-  * Throughput via VpnCloud (MTU=16384): 947 Mbits/sec
-  * CPU usage for VpnCloud (MTU=16384): ~40%/ ~45% of one core (sender, receiver)
-
-
-### Test 2: Unencrypted ping
-
-Node 1:
-```
-$> ./vpncloud -t tap -l NODE1:3210 -c NODE2:3210 \
+$> ./vpncloud -t tap -l SENDER:3210 -c RECEIVER:3210 \
    --ifup 'ifconfig $IFNAME 10.2.1.1/24 mtu 1400 up' &
 ```
 
-Node 2:
+and the receiver runs:
+
 ```
-$> ./vpncloud -t tap -l NODE2:3210 -c NODE1:3210 \
+$> ./vpncloud -t tap -l RECEIVER:3210 -c SENDER:3210 \
    --ifup 'ifconfig $IFNAME 10.2.1.2/24 mtu 1400 up' &
-```
-
-Each test is first run without VpnCloud:
-```
-$> ping NODE2 -c 10000 -i 0.001 -s SIZE -U -q
-```
-
-and then with VpnCloud:
-```
-$> ping 10.2.1.2 -c 10000 -i 0.001 -s SIZE -U -q
-```
-
-For all the test, the best result out of 5 is selected.
-
-SIZE: 100 bytes
-  * Without VpnCloud: Ø= 317 µs
-  * With VpnCloud: Ø= 433 µs
-
-SIZE: 500 bytes
-  * Without VpnCloud: Ø= 330 µs
-  * With VpnCloud: Ø= 446 µs
-
-SIZE: 1000 bytes
-  * Without VpnCloud: Ø= 356 µs
-  * With VpnCloud: Ø= 473 µs
-
-
-### Test 3: Encrypted throughput
-
-Node 1:
-```
-$> ./vpncloud -t tap -l NODE1:3210 -c NODE2:3210 \
-   --ifup 'ifconfig $IFNAME 10.2.1.1/24 mtu MTU up' --shared-key test &
-```
-
-Node 2:
-```
-$> ./vpncloud -t tap -l NODE2:3210 -c NODE1:3210 \
-   --ifup 'ifconfig $IFNAME 10.2.1.2/24 mtu MTU up' --shared-key test &
 $> iperf -s &
 $> top
 ```
 
-First, the test is run **without VpnCloud**:
-```
-$> iperf -c NODE2 -t 60
-```
-
-and then **via VpnCloud**:
-```
-$> iperf -c 10.2.1.2 -t 60
-```
-
-**Results:**
-  * Throughput without VpnCloud: 926 Mbits/sec
-  * Throughput via VpnCloud (MTU=1400): 633 Mbits/sec
-  * CPU usage for VpnCloud (MTU=1400): 100% of one core on both sides
-  * Throughput via VpnCloud (MTU=16384): 918 Mbits/sec
-  * CPU usage for VpnCloud (MTU=16384): ~90% of one core on both sides
+For encrypted tests, `--shared-key test` is appended.
 
 
-### Test 4: Encrypted ping
+### Throughput
 
-Node 1:
-```
-$> ./vpncloud -t tap -l NODE1:3210 -c NODE2:3210 \
-   --ifup 'ifconfig $IFNAME 10.2.1.1/24 mtu 1400 up' --shared-key test &
-```
+The throughput is measured with the following command:
 
-Node 2:
 ```
-$> ./vpncloud -t tap -l NODE2:3210 -c NODE1:3210 \
-   --ifup 'ifconfig $IFNAME 10.2.1.2/24 mtu 1400 up' --shared-key test &
+$> iperf -c DST -t 60
 ```
 
-Each test is first run without VpnCloud:
+The test is run in 3 steps:
+* Native throughput without VpnCloud (`DST` is the native address of the receiver)
+* Throughput via VpnCloud (`DST` is `10.2.1.2`)
+* Encrypted throughput via VpnCloud (`DST` is `10.2.1.2`)
+
+
+| Throughput test      | Bandwidth     | CPU usage (one core) |
+| -------------------- | ------------- | -------------------- |
+| Without VpnCloud     | 926 Mbits/sec |  -                   |
+| Unencrypted VpnCloud | 873 Mbits/sec | 80% / 95%            |
+| Encrypted VpnCloud   | 635 Mbits/sec | 100%                 |
+
+
+### Latency
+
+The latency is measured with the following command:
 ```
-$> ping NODE2 -c 10000 -i 0.001 -s SIZE -U -q
+$> ping DST -c 10000 -i 0.001 -s SIZE -U -q
 ```
 
-and then with VpnCloud:
-```
-$> ping 10.2.1.2 -c 10000 -i 0.001 -s SIZE -U -q
-```
+For all the test, the best average RTT out of 5 runs is selected. The latency is
+assumed to be half of the RTT.
 
-For all the test, the best result out of 5 is selected.
 
-SIZE: 100 bytes
-  * Without VpnCloud: Ø= 317 µs
-  * With VpnCloud: Ø= 454 µs
-
-SIZE: 500 bytes
-  * Without VpnCloud: Ø= 330 µs
-  * With VpnCloud: Ø= 492 µs
-
-SIZE: 1000 bytes
-  * Without VpnCloud: Ø= 356 µs
-  * With VpnCloud: Ø= 543 µs
+| Payload size         | 100 bytes | 500 bytes | 1000 bytes |
+| -------------------- | --------- | --------- | ---------- |
+| Without VpnCloud     | 158 µs    | 165 µs    | 178 µs     |
+| Unencrypted VpnCloud | 210 µs    | 216 µs    | 237 µs     |
+| Difference           | +52 µs    | +51 µs    | +59 µs     |
+| Encrypted VpnCloud   | 225 µs    | 252 µs    | 262 µs     |
+| Difference           | +15 µs    | +36 µs    | +25 µs     |
 
 
 ### Conclusion
 
-* VpnCloud achieves about 885 MBit/s with default MTU settings.
-* In encrypted mode, VpnCloud reaches aboud 663 MBit/s with default MTU settings.
-* At increased MTU, VpnCloud is able to saturate a Gigabit link even when encrypting.
-* VpnCloud adds about 120µs to the round trip times, i.e. 60µs latency increase.
+* VpnCloud achieves over 850 MBit/s with default MTU settings.
+* In encrypted mode, VpnCloud reaches over 600 MBit/s with default MTU settings.
+* VpnCloud adds about 60µs to the latency.
 * Encryption adds an additional latency between 10µs and 35µs depending on the packet size.
