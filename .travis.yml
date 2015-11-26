@@ -8,24 +8,24 @@ matrix:
   allow_failures:
   - rust: nightly
 before_script:
-- ! ' set -e
-  pip install ''travis-cargo<0.2'' --user
-  export PATH=$HOME/.local/bin:$PATH
-  wget https://github.com/jedisct1/libsodium/releases/download/1.0.3/libsodium-1.0.3.tar.gz
-  tar xvfz libsodium-1.0.3.tar.gz
-  pushd libsodium-1.0.3
-    ./configure --prefix=/usr
-    make
-    sudo make install
-  popd
+- ! ' set -e ;
+  pip install ''travis-cargo<0.2'' --user ;
+  export PATH=$HOME/.local/bin:$PATH ;
+  wget https://github.com/jedisct1/libsodium/releases/download/1.0.3/libsodium-1.0.3.tar.gz ;
+  tar xvfz libsodium-1.0.3.tar.gz ;
+  pushd libsodium-1.0.3 ;
+    ./configure --prefix=/usr ;
+    make ;
+    sudo make install ;
+  popd ;
 '
 script:
-- ! ' set -e
-  travis-cargo build
-  travis-cargo build -- --features "crypto"
-  travis-cargo test -- --features "crypto"
-  travis-cargo bench -- --features "crypto"
-  travic-cargo coverage
+- ! ' set -e ;
+  travis-cargo build ;
+  travis-cargo build -- --features "crypto" ;
+  travis-cargo test -- --features "crypto" ;
+  travis-cargo bench -- --features "crypto" ;
+  travis-cargo coverage ;
 '
 addons:
   apt:
@@ -34,11 +34,11 @@ addons:
     - libelf-dev
     - libdw-dev
 after_success:
-- ! ' set -e
-  rm -rf target/kcov
-  rm target/debug/vpncloud-*
-  cargo test --features "crypto"
-  kcov/build/src/kcov --skip-solibs --exclude-pattern=/.cargo --coveralls-id=$TRAVIS_JOB_ID target/kcov target/debug/vpncloud-*
+- ! ' set -e ;
+  rm -rf target/kcov ;
+  rm target/debug/vpncloud-* ;
+  cargo test --features "crypto" ;
+  kcov/build/src/kcov --skip-solibs --exclude-pattern=/.cargo --coveralls-id=$TRAVIS_JOB_ID target/kcov ; target/debug/vpncloud-* ;
 '
 notifications:
   email:
