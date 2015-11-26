@@ -1,4 +1,3 @@
-use std::ptr;
 use std::net::SocketAddr;
 use std::collections::HashMap;
 
@@ -25,21 +24,17 @@ impl Protocol for Frame {
             }
             let mut src = [0; 16];
             let mut dst = [0; 16];
-            unsafe {
-                ptr::copy_nonoverlapping(data[pos..].as_ptr(), src.as_mut_ptr(), 2);
-                ptr::copy_nonoverlapping(src_data.as_ptr(), src[2..].as_mut_ptr(), 6);
-                ptr::copy_nonoverlapping(data[pos..].as_ptr(), dst.as_mut_ptr(), 2);
-                ptr::copy_nonoverlapping(dst_data.as_ptr(), dst[2..].as_mut_ptr(), 6);
+            src[0] = data[pos]; src[1] = data[pos+1];
+            dst[0] = data[pos]; dst[1] = data[pos+1];
+            for i in 0..6 {
+                src[i+2] = src_data[i];
+                dst[i+2] = dst_data[i];
             }
-            Ok((Address(src, 8), Address(dst, 8)))
+            Ok((Address{data: src, len: 8}, Address{data: dst, len: 8}))
         } else {
-            let mut src = [0; 16];
-            let mut dst = [0; 16];
-            unsafe {
-                ptr::copy_nonoverlapping(src_data.as_ptr(), src.as_mut_ptr(), 6);
-                ptr::copy_nonoverlapping(dst_data.as_ptr(), dst.as_mut_ptr(), 6);
-            }
-            Ok((Address(src, 6), Address(dst, 6)))
+            let src = try!(Address::read_from_fixed(&src_data, 6));
+            let dst = try!(Address::read_from_fixed(&dst_data, 6));
+            Ok((src, dst))
         }
     }
 }
@@ -104,14 +99,14 @@ impl Table for SwitchTable {
 fn without_vlan() {
     let data = [6,5,4,3,2,1,1,2,3,4,5,6,1,2,3,4,5,6,7,8];
     let (src, dst) = Frame::parse(&data).unwrap();
-    assert_eq!(src, Address([1,2,3,4,5,6,0,0,0,0,0,0,0,0,0,0], 6));
-    assert_eq!(dst, Address([6,5,4,3,2,1,0,0,0,0,0,0,0,0,0,0], 6));
+    assert_eq!(src, Address{data: [1,2,3,4,5,6,0,0,0,0,0,0,0,0,0,0], len: 6});
+    assert_eq!(dst, Address{data: [6,5,4,3,2,1,0,0,0,0,0,0,0,0,0,0], len: 6});
 }
 
 #[test]
 fn with_vlan() {
     let data = [6,5,4,3,2,1,1,2,3,4,5,6,0x81,0,4,210,1,2,3,4,5,6,7,8];
     let (src, dst) = Frame::parse(&data).unwrap();
-    assert_eq!(src, Address([4,210,1,2,3,4,5,6,0,0,0,0,0,0,0,0], 8));
-    assert_eq!(dst, Address([4,210,6,5,4,3,2,1,0,0,0,0,0,0,0,0], 8));
+    assert_eq!(src, Address{data: [4,210,1,2,3,4,5,6,0,0,0,0,0,0,0,0], len: 8});
+    assert_eq!(dst, Address{data: [4,210,6,5,4,3,2,1,0,0,0,0,0,0,0,0], len: 8});
 }

@@ -1,7 +1,5 @@
 use test::Bencher;
 
-use time::Duration;
-
 use std::str::FromStr;
 use std::net::ToSocketAddrs;
 
@@ -39,7 +37,7 @@ fn message_decode(b: &mut Bencher) {
 
 #[bench]
 fn switch_learn(b: &mut Bencher) {
-    let mut table = SwitchTable::new(Duration::seconds(10));
+    let mut table = SwitchTable::new(10);
     let addr = Address::from_str("12:34:56:78:90:ab").unwrap();
     let peer = "1.2.3.4:5678".to_socket_addrs().unwrap().next().unwrap();
     b.iter(|| {
@@ -49,7 +47,7 @@ fn switch_learn(b: &mut Bencher) {
 
 #[bench]
 fn switch_lookup(b: &mut Bencher) {
-    let mut table = SwitchTable::new(Duration::seconds(10));
+    let mut table = SwitchTable::new(10);
     let addr = Address::from_str("12:34:56:78:90:ab").unwrap();
     let peer = "1.2.3.4:5678".to_socket_addrs().unwrap().next().unwrap();
     table.learn(addr.clone(), None, peer);

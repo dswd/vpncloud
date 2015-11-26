@@ -1,9 +1,8 @@
-use std::{mem, ptr, fmt};
+use std::{mem, fmt};
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr, SocketAddrV6, Ipv6Addr};
-use std::u16;
 
 use super::types::{Error, NetworkId, Range, Address};
-use super::util::{as_obj, as_bytes};
+use super::util::{Encoder, memcopy};
 use super::crypto::Crypto;
 
 const MAGIC: [u8; 3] = [0x76, 0x70, 0x6e];
@@ -20,6 +19,34 @@ struct TopHeader {
     _reserved: u8,
     flags: u8,
     msgtype: u8
+}
+
+impl TopHeader {
+    pub fn read_from(data: &[u8]) -> Result<(TopHeader, usize), Error> {
+        if data.len() < 8 {
+            return Err(Error::ParseError("Empty message"));
+        }
+        let mut header = TopHeader::default();
+        for i in 0..3 {
+            header.magic[i] = data[i];
+        }
+        header.version = data[3];
+        header.crypto_method = data[4];
+        header.flags = data[6];
+        header.msgtype = data[7];
+        Ok((header, 8))
+    }
+
+    pub fn write_to(&self, data: &mut [u8]) -> usize {
+        for i in 0..3 {
+            data[i] = self.magic[i];
+        }
+        data[3] = self.version;
+        data[4] = self.crypto_method;
+        data[6] = self.flags;
+        data[7] = self.msgtype;
+        8
+    }
 }
 
 impl Default for TopHeader {
@@ -66,12 +93,7 @@ impl<'a> fmt::Debug for Message<'a> {
 
 pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, Message<'a>), Error> {
     let mut end = data.len();
-    if end < mem::size_of::<TopHeader>() {
-        return Err(Error::ParseError("Empty message"));
-    }
-    let mut pos = 0;
-    let header = unsafe { as_obj::<TopHeader>(&data[pos..]) }.clone();
-    pos += mem::size_of::<TopHeader>();
+    let (header, mut pos) = try!(TopHeader::read_from(&data[..end]));
     if header.magic != MAGIC {
         return Err(Error::ParseError("Wrong protocol"));
     }
@@ -99,8 +121,7 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
         if end < pos + NETWORK_ID_BYTES {
             return Err(Error::ParseError("Truncated options"));
         }
-        let id = u64::from_be(*unsafe { as_obj::<u64>(&data[pos..pos+NETWORK_ID_BYTES]) });
-        options.network_id = Some(id);
+        options.network_id = Some(Encoder::read_u64(&data[pos..pos+NETWORK_ID_BYTES]));
         pos += NETWORK_ID_BYTES;
     }
     let msg = match header.msgtype {
@@ -117,14 +138,10 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
                 return Err(Error::ParseError("Peer data too short"));
             }
             for _ in 0..count {
-                let (ip, port) = unsafe {
-                    let ip = as_obj::<[u8; 4]>(&data[pos..]);
-                    pos += 4;
-                    let port = *as_obj::<u16>(&data[pos..]);
-                    let port = u16::from_be(port);
-                    pos += 2;
-                    (ip, port)
-                };
+                let ip = &data[pos..];
+                pos += 4;
+                let port = Encoder::read_u16(&data[pos..]);
+                pos += 2;
                 let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(ip[0], ip[1], ip[2], ip[3]), port));
                 peers.push(addr);
             }
@@ -135,17 +152,15 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
                 return Err(Error::ParseError("Peer data too short"));
             }
             for _ in 0..count {
-                let (ip, port) = unsafe {
-                    let ip = as_obj::<[u16; 8]>(&data[pos..]);
-                    pos += 16;
-                    let port = *as_obj::<u16>(&data[pos..]);
-                    let port = u16::from_be(port);
+                let mut ip = [0u16; 8];
+                for i in 0..8 {
+                    ip[i] = Encoder::read_u16(&data[pos..]);
                     pos += 2;
-                    (ip, port)
-                };
-                let addr = SocketAddr::V6(SocketAddrV6::new(Ipv6Addr::new(u16::from_be(ip[0]),
-                    u16::from_be(ip[1]), u16::from_be(ip[2]), u16::from_be(ip[3]), u16::from_be(ip[4]),
-                    u16::from_be(ip[5]), u16::from_be(ip[6]), u16::from_be(ip[7])), port, 0, 0));
+                }
+                let port = Encoder::read_u16(&data[pos..]);
+                pos += 2;
+                let addr = SocketAddr::V6(SocketAddrV6::new(Ipv6Addr::new(ip[0], ip[1], ip[2],
+                    ip[3], ip[4], ip[5], ip[6], ip[7]), port, 0, 0));
                 peers.push(addr);
             }
             Message::Peers(peers)
@@ -158,20 +173,9 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
             pos += 1;
             let mut addrs = Vec::with_capacity(count);
             for _ in 0..count {
-                if end < pos + 1 {
-                    return Err(Error::ParseError("Init data too short"));
-                }
-                let len = data[pos] as usize;
-                pos += 1;
-                if end < pos + len + 1 {
-                    return Err(Error::ParseError("Init data too short"));
-                }
-                let mut addr = [0; 16];
-                unsafe { ptr::copy_nonoverlapping(data[pos..].as_ptr(), addr.as_mut_ptr(), len) };
-                let base = Address(addr, len as u8);
-                let prefix_len = data[pos+len];
-                pos += len + 1;
-                addrs.push(Range{base: base, prefix_len: prefix_len});
+                let (range, read) = try!(Range::read_from(&data[pos..end]));
+                pos += read;
+                addrs.push(range);
             }
             Message::Init(addrs)
         },
@@ -182,7 +186,6 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
 }
 
 pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Crypto) -> usize {
-    assert!(buf.len() >= mem::size_of::<TopHeader>());
     let mut pos = 0;
     let mut header = TopHeader::default();
     header.msgtype = match msg {
@@ -195,22 +198,16 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
     if options.network_id.is_some() {
         header.flags |= 0x01;
     }
-    let header_dat = unsafe { as_bytes(&header) };
-    unsafe { ptr::copy_nonoverlapping(header_dat.as_ptr(), buf[pos..].as_mut_ptr(), header_dat.len()) };
-    pos += header_dat.len();
+    pos += header.write_to(&mut buf[pos..]);
     pos += crypto.nonce_bytes();
     if let Some(id) = options.network_id {
         assert!(buf.len() >= pos + NETWORK_ID_BYTES);
-        unsafe {
-            let id_dat = mem::transmute::<u64, [u8; NETWORK_ID_BYTES]>(id.to_be());
-            ptr::copy_nonoverlapping(id_dat.as_ptr(), buf[pos..pos+NETWORK_ID_BYTES].as_mut_ptr(), id_dat.len());
-        }
+        Encoder::write_u64(id, &mut buf[pos..]);
         pos += NETWORK_ID_BYTES;
     }
     match msg {
         &Message::Data(ref data) => {
-            assert!(buf.len() >= pos + data.len());
-            unsafe { ptr::copy_nonoverlapping(data.as_ptr(), buf[pos..].as_mut_ptr(), data.len()) };
+            memcopy(data, &mut buf[pos..]);
             pos += data.len();
         },
         &Message::Peers(ref peers) => {
@@ -229,30 +226,23 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
             pos += 1;
             for addr in v4addrs {
                 let ip = addr.ip().octets();
-                let port = addr.port();
-                unsafe {
-                    ptr::copy_nonoverlapping(ip.as_ptr(), buf[pos..].as_mut_ptr(), ip.len());
-                    pos += ip.len();
-                    let port = mem::transmute::<u16, [u8; 2]>(port.to_be());
-                    ptr::copy_nonoverlapping(port.as_ptr(), buf[pos..].as_mut_ptr(), port.len());
-                    pos += port.len();
+                for i in 0..4 {
+                    buf[pos+i] = ip[i];
                 }
+                pos += 4;
+                Encoder::write_u16(addr.port(), &mut buf[pos..]);
+                pos += 2;
             };
             buf[pos] = v6addrs.len() as u8;
             pos += 1;
             for addr in v6addrs {
-                let mut ip = addr.ip().segments();
-                for i in 0..ip.len() {
-                    ip[i] = ip[i].to_be();
+                let ip = addr.ip().segments();
+                for i in 0..8 {
+                    Encoder::write_u16(ip[i], &mut buf[pos..]);
+                    pos += 2;
                 }
-                let port = addr.port();
-                unsafe {
-                    ptr::copy_nonoverlapping(ip.as_ptr() as *const u8, buf[pos..].as_mut_ptr(), 16);
-                    pos += ip.len();
-                    let port = mem::transmute::<u16, [u8; 2]>(port.to_be());
-                    ptr::copy_nonoverlapping(port.as_ptr(), buf[pos..].as_mut_ptr(), port.len());
-                    pos += port.len();
-                }
+                Encoder::write_u16(addr.port(), &mut buf[pos..]);
+                pos += 2;
             };
         },
         &Message::Init(ref ranges) => {
@@ -261,15 +251,7 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
             buf[pos] = ranges.len() as u8;
             pos += 1;
             for range in ranges {
-                let base = &range.base;
-                let len = base.1 as usize;
-                assert!(buf.len() >= pos + 1 + len + 1);
-                buf[pos] = len as u8;
-                pos += 1;
-                unsafe { ptr::copy_nonoverlapping(base.0.as_ptr(), buf[pos..].as_mut_ptr(), len) };
-                pos += len;
-                buf[pos] = range.prefix_len;
-                pos += 1;
+                pos += range.write_to(&mut buf[pos..]);
             }
         },
         &Message::Close => {
@@ -351,8 +333,8 @@ fn encode_option_network_id() {
 fn encode_message_init() {
     let mut options = Options::default();
     let mut crypto = Crypto::None;
-    let addrs = vec![Range{base: Address([0,1,2,3,0,0,0,0,0,0,0,0,0,0,0,0], 4), prefix_len: 24},
-        Range{base: Address([0,1,2,3,4,5,0,0,0,0,0,0,0,0,0,0], 6), prefix_len: 16}];
+    let addrs = vec![Range{base: Address{data: [0,1,2,3,0,0,0,0,0,0,0,0,0,0,0,0], len: 4}, prefix_len: 24},
+        Range{base: Address{data: [0,1,2,3,4,5,0,0,0,0,0,0,0,0,0,0], len: 6}, prefix_len: 16}];
     let msg = Message::Init(addrs);
     let mut buf = [0; 1024];
     let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);

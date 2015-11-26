@@ -8,15 +8,53 @@ use super::util::{as_bytes, as_obj};
 pub type NetworkId = u64;
 
 #[derive(PartialOrd, Eq, Ord, Clone, Hash)]
-pub struct Address(pub [u8; 16], pub u8);
+pub struct Address {
+    pub data: [u8; 16],
+    pub len: u8
+}
+
+impl Address {
+    #[inline]
+    pub fn read_from(data: &[u8]) -> Result<(Address, usize), Error> {
+        if data.len() < 1 {
+            return Err(Error::ParseError("Address too short"));
+        }
+        let len = data[0] as usize;
+        let addr = try!(Address::read_from_fixed(&data[1..], len));
+        Ok((addr, len + 1))
+    }
+
+    #[inline]
+    pub fn read_from_fixed(data: &[u8], len: usize) -> Result<Address, Error> {
+        if len > 16 {
+            return Err(Error::ParseError("Invalid address, too long"));
+        }
+        if data.len() < len {
+            return Err(Error::ParseError("Address too short"));
+        }
+        let mut bytes = [0; 16];
+        unsafe { ptr::copy_nonoverlapping(data.as_ptr(), bytes.as_mut_ptr(), len) };
+        Ok(Address{data: bytes, len: len as u8})
+    }
+
+    #[inline]
+    pub fn write_to(&self, data: &mut[u8]) -> usize {
+        assert!(data.len() >= self.len as usize + 1);
+        data[0] = self.len;
+        unsafe { ptr::copy_nonoverlapping(self.data.as_ptr(), data[1..].as_mut_ptr(), self.len as usize) };
+        self.len as usize + 1
+    }
+}
+
 
 impl PartialEq for Address {
+    #[inline]
     fn eq(&self, rhs: &Self) -> bool {
-        if self.1 != rhs.1 {
+        if self.len != rhs.len {
             return false;
         }
-        for i in 0..self.1 as usize {
-            if self.0[i] != rhs.0[i] {
+        for i in 0..self.len as usize {
+            if self.data[i] != rhs.data[i] {
                 return false;
             }
         }
@@ -27,20 +65,19 @@ impl PartialEq for Address {
 
 impl fmt::Debug for Address {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match self.1 {
-            4 => write!(formatter, "{}.{}.{}.{}", self.0[0], self.0[1], self.0[2], self.0[3]),
+        let d = &self.data;
+        match self.len {
+            4 => write!(formatter, "{}.{}.{}.{}", d[0], d[1], d[2], d[3]),
             6 => write!(formatter, "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-                self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]),
+                d[0], d[1], d[2], d[3], d[4], d[5]),
             8 => {
-                let vlan = u16::from_be( *unsafe { as_obj(&self.0[0..2]) });
+                let vlan = u16::from_be( *unsafe { as_obj(&d[0..2]) });
                 write!(formatter, "vlan{}/{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-                    vlan, self.0[2], self.0[3], self.0[4], self.0[5], self.0[6], self.0[7])
+                    vlan, d[2], d[3], d[4], d[5], d[6], d[7])
             },
             16 => write!(formatter, "{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}",
-                self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], self.0[6], self.0[7],
-                self.0[8], self.0[9], self.0[10], self.0[11], self.0[12], self.0[13], self.0[14], self.0[15]
-            ),
-            _ => self.0.fmt(formatter)
+                d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]),
+            _ => d.fmt(formatter)
         }
     }
 }
@@ -55,7 +92,7 @@ impl FromStr for Address {
             unsafe {
                 ptr::copy_nonoverlapping(ip.as_ptr(), res.as_mut_ptr(), ip.len());
             }
-            return Ok(Address(res, 4));
+            return Ok(Address{data: res, len: 4});
         }
         if let Ok(addr) = Ipv6Addr::from_str(text) {
             let mut segments = addr.segments();
@@ -67,7 +104,7 @@ impl FromStr for Address {
             unsafe {
                 ptr::copy_nonoverlapping(bytes.as_ptr(), res.as_mut_ptr(), bytes.len());
             }
-            return Ok(Address(res, 16));
+            return Ok(Address{data: res, len: 16});
         }
         let parts: Vec<&str> = text.split(':').collect();
         if parts.len() == 6 {
@@ -75,7 +112,7 @@ impl FromStr for Address {
             for i in 0..6 {
                 bytes[i] = try!(u8::from_str_radix(&parts[i], 16).map_err(|_| Error::ParseError("Failed to parse mac")));
             }
-            return Ok(Address(bytes, 6));
+            return Ok(Address{data: bytes, len: 6});
         }
         return Err(Error::ParseError("Failed to parse address"))
     }
@@ -86,6 +123,26 @@ impl FromStr for Address {
 pub struct Range {
     pub base: Address,
     pub prefix_len: u8
+}
+
+impl Range {
+    #[inline]
+    pub fn read_from(data: &[u8]) -> Result<(Range, usize), Error> {
+        let (address, read) = try!(Address::read_from(data));
+        if data.len() < read + 1 {
+            return Err(Error::ParseError("Range too short"));
+        }
+        let prefix_len = data[read];
+        Ok((Range{base: address, prefix_len: prefix_len}, read + 1))
+    }
+
+    #[inline]
+    pub fn write_to(&self, data: &mut[u8]) -> usize {
+        let pos = self.base.write_to(data);
+        assert!(data.len() >= pos + 1);
+        data[pos] = self.prefix_len;
+        pos + 1
+    }
 }
 
 impl FromStr for Range {
@@ -165,10 +222,11 @@ impl fmt::Display for Error {
     }
 }
 
+
 #[test]
 fn address_fmt() {
-    assert_eq!(format!("{:?}", Address([120,45,22,5,0,0,0,0,0,0,0,0,0,0,0,0], 4)), "120.45.22.5");
-    assert_eq!(format!("{:?}", Address([120,45,22,5,1,2,0,0,0,0,0,0,0,0,0,0], 6)), "78:2d:16:05:01:02");
-    assert_eq!(format!("{:?}", Address([3,56,120,45,22,5,1,2,0,0,0,0,0,0,0,0], 8)), "vlan824/78:2d:16:05:01:02");
-    assert_eq!(format!("{:?}", Address([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15], 16)), "0001:0203:0405:0607:0809:0a0b:0c0d:0e0f");
+    assert_eq!(format!("{:?}", Address{data: [120,45,22,5,0,0,0,0,0,0,0,0,0,0,0,0], len: 4}), "120.45.22.5");
+    assert_eq!(format!("{:?}", Address{data: [120,45,22,5,1,2,0,0,0,0,0,0,0,0,0,0], len: 6}), "78:2d:16:05:01:02");
+    assert_eq!(format!("{:?}", Address{data: [3,56,120,45,22,5,1,2,0,0,0,0,0,0,0,0], len: 8}), "vlan824/78:2d:16:05:01:02");
+    assert_eq!(format!("{:?}", Address{data: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15], len: 16}), "0001:0203:0405:0607:0809:0a0b:0c0d:0e0f");
 }
