@@ -65,7 +65,7 @@ pub struct Options {
 pub enum Message<'a> {
     Data(&'a[u8]),
     Peers(Vec<SocketAddr>),
-    Init(Vec<Range>),
+    Init(u8, Vec<Range>),
     Close,
 }
 
@@ -85,7 +85,7 @@ impl<'a> fmt::Debug for Message<'a> {
                 }
                 write!(formatter, "]")
             },
-            &Message::Init(ref data) => write!(formatter, "Init{:?}", data),
+            &Message::Init(stage, ref data) => write!(formatter, "Init(stage= {}, {:?})", stage, data),
             &Message::Close => write!(formatter, "Close"),
         }
     }
@@ -166,9 +166,11 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
             Message::Peers(peers)
         },
         2 => {
-            if end < pos + 1 {
+            if end < pos + 2 {
                 return Err(Error::ParseError("Init data too short"));
             }
+            let stage = data[pos];
+            pos += 1;
             let count = data[pos] as usize;
             pos += 1;
             let mut addrs = Vec::with_capacity(count);
@@ -177,7 +179,7 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
                 pos += read;
                 addrs.push(range);
             }
-            Message::Init(addrs)
+            Message::Init(stage, addrs)
         },
         3 => Message::Close,
         _ => return Err(Error::ParseError("Unknown message type"))
@@ -191,7 +193,7 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
     header.msgtype = match msg {
         &Message::Data(_) => 0,
         &Message::Peers(_) => 1,
-        &Message::Init(_) => 2,
+        &Message::Init(_, _) => 2,
         &Message::Close => 3
     };
     header.crypto_method = crypto.method();
@@ -245,8 +247,10 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
                 pos += 2;
             };
         },
-        &Message::Init(ref ranges) => {
-            assert!(buf.len() >= pos + 1);
+        &Message::Init(stage, ref ranges) => {
+            assert!(buf.len() >= pos + 2);
+            buf[pos] = stage;
+            pos += 1;
             assert!(ranges.len() <= 255);
             buf[pos] = ranges.len() as u8;
             pos += 1;
@@ -335,11 +339,11 @@ fn encode_message_init() {
     let mut crypto = Crypto::None;
     let addrs = vec![Range{base: Address{data: [0,1,2,3,0,0,0,0,0,0,0,0,0,0,0,0], len: 4}, prefix_len: 24},
         Range{base: Address{data: [0,1,2,3,4,5,0,0,0,0,0,0,0,0,0,0], len: 6}, prefix_len: 16}];
-    let msg = Message::Init(addrs);
+    let msg = Message::Init(0, addrs);
     let mut buf = [0; 1024];
     let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
-    assert_eq!(size, 23);
-    assert_eq!(&buf[..size], &[118,112,110,1,0,0,0,2,2,4,0,1,2,3,24,6,0,1,2,3,4,5,16]);
+    assert_eq!(size, 24);
+    assert_eq!(&buf[..size], &[118,112,110,1,0,0,0,2,0,2,4,0,1,2,3,24,6,0,1,2,3,4,5,16]);
     let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);

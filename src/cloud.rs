@@ -164,7 +164,7 @@ impl<P: Protocol> GenericCloud<P> {
             self.reconnect_peers.push(addr);
         }
         let addrs = self.addresses.clone();
-        self.send_msg(addr, &Message::Init(addrs))
+        self.send_msg(addr, &Message::Init(0, addrs))
     }
 
     fn housekeep(&mut self) -> Result<(), Error> {
@@ -252,17 +252,16 @@ impl<P: Protocol> GenericCloud<P> {
                     }
                 }
             },
-            Message::Init(ranges) => {
-                if self.peers.contains(&peer) {
-                    return Ok(());
-                }
+            Message::Init(stage, ranges) => {
                 self.peers.add(&peer);
                 let peers = self.peers.as_vec();
                 let own_addrs = self.addresses.clone();
-                try!(self.send_msg(peer, &Message::Init(own_addrs)));
-                try!(self.send_msg(peer, &Message::Peers(peers)));
                 for range in ranges {
                     self.table.learn(range.base, Some(range.prefix_len), peer.clone());
+                }
+                if stage == 0 {
+                    try!(self.send_msg(peer, &Message::Init(stage+1, own_addrs)));
+                    try!(self.send_msg(peer, &Message::Peers(peers)));
                 }
             },
             Message::Close => {
