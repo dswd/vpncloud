@@ -44,11 +44,15 @@ fn encode_message_peers() {
     use std::str::FromStr;
     let mut options = Options::default();
     let mut crypto = Crypto::None;
-    let msg = Message::Peers(vec![SocketAddr::from_str("1.2.3.4:123").unwrap(), SocketAddr::from_str("5.6.7.8:12345").unwrap()]);
+    let msg = Message::Peers(vec![SocketAddr::from_str("1.2.3.4:123").unwrap(), SocketAddr::from_str("5.6.7.8:12345").unwrap(), SocketAddr::from_str("[0001:0203:0405:0607:0809:0a0b:0c0d:0e0f]:6789").unwrap()]);
     let mut buf = [0; 1024];
     let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
-    assert_eq!(size, 22);
-    assert_eq!(&buf[..size], &[118,112,110,1,0,0,0,1,2,1,2,3,4,0,123,5,6,7,8,48,57,0]);
+    assert_eq!(size, 40);
+    let should = [118,112,110,1,0,0,0,1,2,1,2,3,4,0,123,5,6,7,8,48,57,1,0,1,2,3,4,5,6,7,
+        8,9,10,11,12,13,14,15,26,133];
+    for i in 0..size {
+        assert_eq!(buf[i], should[i]);
+    }
     let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
@@ -180,4 +184,18 @@ fn address_fmt() {
     assert_eq!(format!("{}", Address{data: [120,45,22,5,1,2,0,0,0,0,0,0,0,0,0,0], len: 6}), "78:2d:16:05:01:02");
     assert_eq!(format!("{}", Address{data: [3,56,120,45,22,5,1,2,0,0,0,0,0,0,0,0], len: 8}), "vlan824/78:2d:16:05:01:02");
     assert_eq!(format!("{}", Address{data: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15], len: 16}), "0001:0203:0405:0607:0809:0a0b:0c0d:0e0f");
+}
+
+#[test]
+fn message_fmt() {
+    assert_eq!(format!("{:?}", Message::Data(&[1,2,3,4,5])), "Data(5 bytes)");
+    assert_eq!(format!("{:?}", Message::Peers(vec![SocketAddr::from_str("1.2.3.4:123").unwrap(),
+        SocketAddr::from_str("5.6.7.8:12345").unwrap(),
+        SocketAddr::from_str("[0001:0203:0405:0607:0809:0a0b:0c0d:0e0f]:6789").unwrap()])),
+        "Peers [1.2.3.4:123, 5.6.7.8:12345, [1:203:405:607:809:a0b:c0d:e0f]:6789]");
+    assert_eq!(format!("{:?}", Message::Init(0, vec![
+        Range{base: Address{data: [0,1,2,3,0,0,0,0,0,0,0,0,0,0,0,0], len: 4}, prefix_len: 24},
+        Range{base: Address{data: [0,1,2,3,4,5,0,0,0,0,0,0,0,0,0,0], len: 6}, prefix_len: 16}
+        ])), "Init(stage=0, [0.1.2.3/24, 00:01:02:03:04:05/16])");
+    assert_eq!(format!("{:?}", Message::Close), "Close");
 }

@@ -72,7 +72,7 @@ pub enum Message<'a> {
 impl<'a> fmt::Debug for Message<'a> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            &Message::Data(ref data) => write!(formatter, "Data(data: {} bytes)", data.len()),
+            &Message::Data(ref data) => write!(formatter, "Data({} bytes)", data.len()),
             &Message::Peers(ref peers) => {
                 try!(write!(formatter, "Peers ["));
                 let mut first = true;
@@ -81,11 +81,11 @@ impl<'a> fmt::Debug for Message<'a> {
                         try!(write!(formatter, ", "));
                     }
                     first = false;
-                    try!(p.fmt(formatter));
+                    try!(write!(formatter, "{}", p));
                 }
                 write!(formatter, "]")
             },
-            &Message::Init(stage, ref data) => write!(formatter, "Init(stage= {}, {:?})", stage, data),
+            &Message::Init(stage, ref data) => write!(formatter, "Init(stage={}, {:?})", stage, data),
             &Message::Close => write!(formatter, "Close"),
         }
     }
