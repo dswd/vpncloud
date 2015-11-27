@@ -1,9 +1,9 @@
 use std::net::{SocketAddr, Ipv4Addr, Ipv6Addr};
 use std::hash::Hasher;
-use std::{fmt, ptr};
+use std::fmt;
 use std::str::FromStr;
 
-use super::util::{as_bytes, as_obj};
+use super::util::Encoder;
 
 pub type NetworkId = u64;
 
@@ -33,7 +33,9 @@ impl Address {
             return Err(Error::ParseError("Address too short"));
         }
         let mut bytes = [0; 16];
-        unsafe { ptr::copy_nonoverlapping(data.as_ptr(), bytes.as_mut_ptr(), len) };
+        for i in 0..len {
+            bytes[i] = data[i];
+        }
         Ok(Address{data: bytes, len: len as u8})
     }
 
@@ -41,7 +43,9 @@ impl Address {
     pub fn write_to(&self, data: &mut[u8]) -> usize {
         assert!(data.len() >= self.len as usize + 1);
         data[0] = self.len;
-        unsafe { ptr::copy_nonoverlapping(self.data.as_ptr(), data[1..].as_mut_ptr(), self.len as usize) };
+        for i in 0..self.len as usize {
+            data[i+1] = self.data[i];
+        }
         self.len as usize + 1
     }
 }
@@ -70,7 +74,7 @@ impl fmt::Display for Address {
             6 => write!(formatter, "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
                 d[0], d[1], d[2], d[3], d[4], d[5]),
             8 => {
-                let vlan = u16::from_be( *unsafe { as_obj(&d[0..2]) });
+                let vlan = Encoder::read_u16(&d[0..2]);
                 write!(formatter, "vlan{}/{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
                     vlan, d[2], d[3], d[4], d[5], d[6], d[7])
             },
@@ -94,20 +98,16 @@ impl FromStr for Address {
         if let Ok(addr) = Ipv4Addr::from_str(text) {
             let ip = addr.octets();
             let mut res = [0; 16];
-            unsafe {
-                ptr::copy_nonoverlapping(ip.as_ptr(), res.as_mut_ptr(), ip.len());
+            for i in 0..4 {
+                res[i] = ip[i];
             }
             return Ok(Address{data: res, len: 4});
         }
         if let Ok(addr) = Ipv6Addr::from_str(text) {
-            let mut segments = addr.segments();
-            for i in 0..8 {
-                segments[i] = segments[i].to_be();
-            }
-            let bytes = unsafe { as_bytes(&segments) };
+            let segments = addr.segments();
             let mut res = [0; 16];
-            unsafe {
-                ptr::copy_nonoverlapping(bytes.as_ptr(), res.as_mut_ptr(), bytes.len());
+            for i in 0..8 {
+                Encoder::write_u16(segments[i], &mut res[2*i..]);
             }
             return Ok(Address{data: res, len: 16});
         }

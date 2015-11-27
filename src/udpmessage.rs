@@ -1,4 +1,4 @@
-use std::{mem, fmt};
+use std::fmt;
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr, SocketAddrV6, Ipv6Addr};
 
 use super::types::{Error, NetworkId, Range};
@@ -22,8 +22,13 @@ struct TopHeader {
 }
 
 impl TopHeader {
+    #[inline(always)]
+    pub fn size() -> usize {
+        8
+    }
+
     pub fn read_from(data: &[u8]) -> Result<(TopHeader, usize), Error> {
-        if data.len() < 8 {
+        if data.len() < TopHeader::size() {
             return Err(Error::ParseError("Empty message"));
         }
         let mut header = TopHeader::default();
@@ -34,7 +39,7 @@ impl TopHeader {
         header.crypto_method = data[4];
         header.flags = data[6];
         header.msgtype = data[7];
-        Ok((header, 8))
+        Ok((header, TopHeader::size()))
     }
 
     pub fn write_to(&self, data: &mut [u8]) -> usize {
@@ -45,7 +50,7 @@ impl TopHeader {
         data[4] = self.crypto_method;
         data[6] = self.flags;
         data[7] = self.msgtype;
-        8
+        TopHeader::size()
     }
 }
 
@@ -112,7 +117,7 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
             let (before, after) = data.split_at_mut(pos);
             let (nonce, crypto_data) = after.split_at_mut(len);
             pos += len;
-            end = try!(crypto.decrypt(crypto_data, nonce, &before[..mem::size_of::<TopHeader>()])) + pos;
+            end = try!(crypto.decrypt(crypto_data, nonce, &before[..TopHeader::size()])) + pos;
         }
         assert_eq!(end, data.len()-crypto.additional_bytes());
     }
@@ -262,7 +267,7 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
         }
     }
     if crypto.method() > 0 {
-        let (header, rest) = buf.split_at_mut(mem::size_of::<TopHeader>());
+        let (header, rest) = buf.split_at_mut(TopHeader::size());
         let (nonce, rest) = rest.split_at_mut(crypto.nonce_bytes());
         let crypto_start = header.len() + nonce.len();
         assert!(rest.len() >= pos - crypto_start + crypto.additional_bytes());

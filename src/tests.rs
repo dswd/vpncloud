@@ -179,11 +179,11 @@ fn routing_table() {
 }
 
 #[test]
-fn address_fmt() {
-    assert_eq!(format!("{}", Address{data: [120,45,22,5,0,0,0,0,0,0,0,0,0,0,0,0], len: 4}), "120.45.22.5");
-    assert_eq!(format!("{}", Address{data: [120,45,22,5,1,2,0,0,0,0,0,0,0,0,0,0], len: 6}), "78:2d:16:05:01:02");
+fn address_parse_fmt() {
+    assert_eq!(format!("{}", Address::from_str("120.45.22.5").unwrap()), "120.45.22.5");
+    assert_eq!(format!("{}", Address::from_str("78:2d:16:05:01:02").unwrap()), "78:2d:16:05:01:02");
     assert_eq!(format!("{}", Address{data: [3,56,120,45,22,5,1,2,0,0,0,0,0,0,0,0], len: 8}), "vlan824/78:2d:16:05:01:02");
-    assert_eq!(format!("{}", Address{data: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15], len: 16}), "0001:0203:0405:0607:0809:0a0b:0c0d:0e0f");
+    assert_eq!(format!("{}", Address::from_str("0001:0203:0405:0607:0809:0a0b:0c0d:0e0f").unwrap()), "0001:0203:0405:0607:0809:0a0b:0c0d:0e0f");
 }
 
 #[test]
