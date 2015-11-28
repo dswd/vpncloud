@@ -3,6 +3,13 @@ name = "vpncloud"
 version = "0.2.0"
 authors = ["Dennis Schwerdel <schwerdel@informatik.uni-kl.de>"]
 build = "build.rs"
+license = "GPL-3.0"
+description = "Peer-to-peer VPN"
+homepage = "https://github.com/dswd/vpncloud.rs"
+repository = "https://github.com/dswd/vpncloud.rs"
+keywords = ["vpn", "p2p", "tun", "tap", "network"]
+readme = "README.md"
+
 
 [dependencies]
 time = "0.1"
@@ -11,8 +18,8 @@ rustc-serialize = "0.3"
 log = "0.3"
 epoll = "0.2"
 signal = "0.1"
-nix = "*"
-libc = "*"
+nix = "0.4"
+libc = "0.2"
 libsodium-sys = {version = "0.0.9", optional = true}
 
 [build-dependencies]
