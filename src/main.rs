@@ -111,6 +111,7 @@ fn run<T: Protocol> (args: Args) {
         name.hash(&mut s);
         s.finish()
     });
+    Crypto::init();
     let crypto = match args.flag_shared_key {
         Some(key) => Crypto::from_shared_key(&key),
         None => Crypto::None

@@ -18,6 +18,10 @@ fn inc_nonce(nonce: [u8; 8]) -> [u8; 8] {
 }
 
 impl Crypto {
+    pub fn init() {
+        unsafe { sodium_init() };
+    }
+
     pub fn method(&self) -> u8 {
         match self {
             &Crypto::None => 0,
@@ -40,6 +44,7 @@ impl Crypto {
     }
 
     pub fn from_shared_key(password: &str) -> Self {
+
         let salt = "vpncloudVPNCLOUDvpncl0udVpnCloud".as_bytes();
         assert_eq!(salt.len(), crypto_pwhash_scryptsalsa208sha256_SALTBYTES);
         let mut key = [0; crypto_pwhash_scryptsalsa208sha256_STRBYTES];

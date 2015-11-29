@@ -5,6 +5,10 @@ pub enum Crypto {
 }
 
 impl Crypto {
+    pub fn init() {
+        
+    }
+
     pub fn method(&self) -> u8 {
         0
     }
