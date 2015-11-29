@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use super::types::{Error, Table, Protocol, Address};
 use super::util::{now, Time, Duration};
 
-#[derive(PartialEq)]
 pub struct Frame;
 
 impl Protocol for Frame {

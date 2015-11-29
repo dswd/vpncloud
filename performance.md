@@ -8,12 +8,14 @@ Sender node:
   * 8 GiB Ram
   * Intel 82579LM Gigabit Network
   * Ubuntu 14.04 (Kernel 3.13.0-65-generic)
+  * Libsodium 1.0.7
 
 Receiver node:
   * Intel(R) Core(TM) i5-3450 CPU @ 3.10GHz
   * 16 GiB Ram
   * Realtek RTL8111/8168/8411 Gigabit Network
   * Ubuntu 14.04 (Kernel 3.13.0-63-generic)
+  * Libsodium 1.0.7
 
 VpnCloud version: `VpnCloud v0.2.0 (with crypto support, protocol version 1)`
 
@@ -54,7 +56,7 @@ The test is run in 3 steps:
 | -------------------- | ------------- | -------------------- |
 | Without VpnCloud     | 926 Mbits/sec |  -                   |
 | Unencrypted VpnCloud | 873 Mbits/sec | 80% / 95%            |
-| Encrypted VpnCloud   | 635 Mbits/sec | 100%                 |
+| Encrypted VpnCloud   | 770 Mbits/sec | 100%                 |
 
 
 ### Latency
@@ -73,13 +75,13 @@ assumed to be half of the RTT.
 | Without VpnCloud     | 158 µs    | 165 µs    | 178 µs     |
 | Unencrypted VpnCloud | 210 µs    | 216 µs    | 237 µs     |
 | Difference           | +52 µs    | +51 µs    | +59 µs     |
-| Encrypted VpnCloud   | 225 µs    | 252 µs    | 262 µs     |
-| Difference           | +15 µs    | +36 µs    | +25 µs     |
+| Encrypted VpnCloud   | 218 µs    | 230 µs    | 257 µs     |
+| Difference           |  +8 µs    | +14 µs    | +20 µs     |
 
 
 ### Conclusion
 
 * VpnCloud achieves over 850 MBit/s with default MTU settings.
-* In encrypted mode, VpnCloud reaches over 600 MBit/s with default MTU settings.
+* In encrypted mode, VpnCloud reaches over 750 MBit/s with default MTU settings.
 * VpnCloud adds about 60µs to the latency.
-* Encryption adds an additional latency between 10µs and 35µs depending on the packet size.
+* Encryption adds an additional latency up to 20µs depending on the packet size.

@@ -16,11 +16,17 @@ impl Protocol for Packet {
         let version = data[0] >> 4;
         match version {
             4 => {
+                if data.len() < 20 {
+                    return Err(Error::ParseError("Truncated IPv4 header"));
+                }
                 let src = try!(Address::read_from_fixed(&data[12..], 4));
                 let dst = try!(Address::read_from_fixed(&data[16..], 4));
                 Ok((src, dst))
             },
             6 => {
+                if data.len() < 40 {
+                    return Err(Error::ParseError("Truncated IPv6 header"));
+                }
                 let src = try!(Address::read_from_fixed(&data[8..], 16));
                 let dst = try!(Address::read_from_fixed(&data[24..], 16));
                 Ok((src, dst))

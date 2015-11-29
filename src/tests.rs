@@ -9,7 +9,7 @@ use super::crypto::Crypto;
 
 
 #[test]
-fn encode_message_packet() {
+fn udpmessage_packet() {
     let mut options = Options::default();
     let mut crypto = Crypto::None;
     let payload = [1,2,3,4,5];
@@ -25,7 +25,7 @@ fn encode_message_packet() {
 
 #[cfg(feature = "crypto")]
 #[test]
-fn encode_message_encrypted() {
+fn udpmessage_encrypted() {
     let mut options = Options::default();
     let mut crypto = Crypto::from_shared_key("test");
     let payload = [1,2,3,4,5];
@@ -40,7 +40,7 @@ fn encode_message_encrypted() {
 }
 
 #[test]
-fn encode_message_peers() {
+fn udpmessage_peers() {
     use std::str::FromStr;
     let mut options = Options::default();
     let mut crypto = Crypto::None;
@@ -59,7 +59,7 @@ fn encode_message_peers() {
 }
 
 #[test]
-fn encode_option_network_id() {
+fn udpmessage_option_network_id() {
     let mut options = Options::default();
     options.network_id = Some(134);
     let mut crypto = Crypto::None;
@@ -74,7 +74,7 @@ fn encode_option_network_id() {
 }
 
 #[test]
-fn encode_message_init() {
+fn udpmessage_init() {
     use super::types::Address;
     let mut options = Options::default();
     let mut crypto = Crypto::None;
@@ -91,7 +91,7 @@ fn encode_message_init() {
 }
 
 #[test]
-fn encode_message_close() {
+fn udpmessage_close() {
     let mut options = Options::default();
     let mut crypto = Crypto::None;
     let msg = Message::Close;
@@ -103,6 +103,34 @@ fn encode_message_close() {
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
 }
+
+#[test]
+fn udpmessage_invalid() {
+    let mut crypto = Crypto::None;
+    assert!(decode(&mut [0x76,0x70,0x6e,1,0,0,0,0], &mut crypto).is_ok());
+    // too short
+    assert!(decode(&mut [], &mut crypto).is_err());
+    // invalid protocol
+    assert!(decode(&mut [0,1,2,0,0,0,0,0], &mut crypto).is_err());
+    // invalid version
+    assert!(decode(&mut [0x76,0x70,0x6e,0xaa,0,0,0,0], &mut crypto).is_err());
+    // invalid crypto
+    assert!(decode(&mut [0x76,0x70,0x6e,1,0xaa,0,0,0], &mut crypto).is_err());
+    // invalid msg type
+    assert!(decode(&mut [0x76,0x70,0x6e,1,0,0,0,0xaa], &mut crypto).is_err());
+    // truncated options
+    assert!(decode(&mut [0x76,0x70,0x6e,1,0,0,1,0], &mut crypto).is_err());
+}
+
+#[cfg(feature = "crypto")]
+#[test]
+fn udpmessage_invalid_crypto() {
+    let mut options = Options::default();
+    let mut crypto = Crypto::from_shared_key("test");
+    // truncated crypto
+    assert!(decode(&mut [0x76,0x70,0x6e,1,1,0,0,0], &mut crypto).is_err());
+}
+
 
 #[test]
 fn decode_frame_without_vlan() {
@@ -121,6 +149,16 @@ fn decode_frame_with_vlan() {
 }
 
 #[test]
+fn decode_invalid_frame() {
+    assert!(Frame::parse(&[6,5,4,3,2,1,1,2,3,4,5,6,1,2,3,4,5,6,7,8]).is_ok());
+    // truncated frame
+    assert!(Frame::parse(&[]).is_err());
+    // truncated vlan frame
+    assert!(Frame::parse(&[6,5,4,3,2,1,1,2,3,4,5,6,0x81,0x00]).is_err());
+}
+
+
+#[test]
 fn decode_ipv4_packet() {
     let data = [0x40,0,0,0,0,0,0,0,0,0,0,0,192,168,1,1,192,168,1,2];
     let (src, dst) = Packet::parse(&data).unwrap();
@@ -135,6 +173,21 @@ fn decode_ipv6_packet() {
     assert_eq!(src, Address{data: [1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6], len: 16});
     assert_eq!(dst, Address{data: [0,9,8,7,6,5,4,3,2,1,6,5,4,3,2,1], len: 16});
 }
+
+#[test]
+fn decode_invalid_packet() {
+    assert!(Packet::parse(&[0x40,0,0,0,0,0,0,0,0,0,0,0,192,168,1,1,192,168,1,2]).is_ok());
+    assert!(Packet::parse(&[0x60,0,0,0,0,0,0,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,0,9,8,7,6,5,4,3,2,1,6,5,4,3,2,1]).is_ok());
+    // no data
+    assert!(Packet::parse(&[]).is_err());
+    // wrong version
+    assert!(Packet::parse(&[0x20]).is_err());
+    // truncated ipv4
+    assert!(Packet::parse(&[0x40,0,0,0,0,0,0,0,0,0,0,0,192,168,1,1,192,168,1]).is_err());
+    // truncated ipv6
+    assert!(Packet::parse(&[0x60,0,0,0,0,0,0,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,0,9,8,7,6,5,4,3,2,1,6,5,4,3,2]).is_err());
+}
+
 
 #[test]
 fn switch() {
