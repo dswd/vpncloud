@@ -54,6 +54,7 @@ extern {
     pub fn sodium_init() -> c_int;
     pub fn randombytes_buf(buf: *mut u8, size: size_t);
     pub fn sodium_version_string() -> *const c_char;
+    pub fn crypto_aead_aes256gcm_is_available() -> c_int;
     pub fn crypto_pwhash_scryptsalsa208sha256(
         out: *mut u8,
         outlen: c_ulonglong,
@@ -149,6 +150,12 @@ impl Crypto {
         }
     }
 
+    pub fn aes256_available() -> bool {
+        unsafe {
+            crypto_aead_aes256gcm_is_available() == 1
+        }
+    }
+
     pub fn method(&self) -> u8 {
         match self {
             &Crypto::None => 0,
@@ -200,6 +207,9 @@ impl Crypto {
                 Crypto::ChaCha20Poly1305{key: crypto_key, nonce: nonce}
             },
             CryptoMethod::AES256 => {
+                if ! Crypto::aes256_available() {
+                    fail!("AES256 is not supported by this processor, use ChaCha20 instead");
+                }
                 let mut nonce = [0u8; crypto_aead_aes256gcm_NPUBBYTES];
                 unsafe { randombytes_buf(nonce.as_mut_ptr(), nonce.len()) };
                 let state = Aes256State::new();

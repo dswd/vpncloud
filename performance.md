@@ -8,16 +8,14 @@ Sender node:
   * 8 GiB Ram
   * Intel 82579LM Gigabit Network
   * Ubuntu 14.04 (Kernel 3.13.0-65-generic)
-  * Libsodium 1.0.7
 
 Receiver node:
   * Intel(R) Core(TM) i5-3450 CPU @ 3.10GHz
   * 16 GiB Ram
   * Realtek RTL8111/8168/8411 Gigabit Network
   * Ubuntu 14.04 (Kernel 3.13.0-63-generic)
-  * Libsodium 1.0.7
 
-VpnCloud version: `VpnCloud v0.3.0 (protocol version 1, libsodium 1.0.7)`
+VpnCloud version: `VpnCloud v0.3.0, protocol version 1, libsodium 1.0.7 (AES256: true)`
 
 The sender runs the following command:
 

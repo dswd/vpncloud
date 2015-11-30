@@ -133,8 +133,12 @@ fn run<T: Protocol> (args: Args) {
 fn main() {
     let args: Args = Docopt::new(USAGE).and_then(|d| d.decode()).unwrap_or_else(|e| e.exit());
     if args.flag_version {
-        println!("VpnCloud v{} (protocol version {}, libsodium {})", env!("CARGO_PKG_VERSION"),
-            VERSION, Crypto::sodium_version()
+        Crypto::init();
+        println!("VpnCloud v{}, protocol version {}, libsodium {} (AES256: {})",
+            env!("CARGO_PKG_VERSION"),
+            VERSION,
+            Crypto::sodium_version(),
+            Crypto::aes256_available()
         );
         return;
     }

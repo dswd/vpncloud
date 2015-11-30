@@ -15,7 +15,7 @@ Options:
     --network-id <id>               Optional token that identifies the network.
     --shared-key <key>              The shared key to encrypt all traffic.
     --crypto <method>               The encryption method to use ("aes256", or
-                                    "chacha20"). [default: aes256]
+                                    "chacha20"). [default: chacha20]
     --peer-timeout <secs>           Peer timeout in seconds. [default: 1800]
     --dst-timeout <secs>            Switch table entry timeout in seconds.
                                     [default: 300]

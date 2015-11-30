@@ -292,7 +292,7 @@ impl<P: Protocol> GenericCloud<P> {
                         let (size, src) = try_fail!(self.socket.recv_from(&mut buffer), "Failed to read from network socket: {}");
                         match decode(&mut buffer[..size], &mut self.crypto).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
                             Ok(_) => (),
-                            Err(e) => error!("Error: {}", e)
+                            Err(e) => error!("Error: {}, from: {}", e, src)
                         }
                     },
                     &1 => {

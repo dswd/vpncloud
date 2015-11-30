@@ -53,8 +53,8 @@ vpncloud(1) -- Peer-to-peer VPN
 
     The encryption method to use ("aes256", or "chacha20"). Most current CPUs
     have special support for AES256 so this should be faster. For older
-    computers lacking this support, CHACHA20 should be faster.
-    [default: `aes256`]
+    computers lacking this support, only CHACHA20 is supported.
+    [default: `chacha20`]
 
   * `--network-id <id>`:
 
