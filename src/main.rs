@@ -7,6 +7,7 @@ extern crate epoll;
 extern crate signal;
 extern crate nix;
 extern crate libc;
+extern crate aligned_alloc;
 #[cfg(feature = "bench")] extern crate test;
 
 #[macro_use] mod util;

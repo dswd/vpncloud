@@ -17,7 +17,7 @@ Receiver node:
   * Ubuntu 14.04 (Kernel 3.13.0-63-generic)
   * Libsodium 1.0.7
 
-VpnCloud version: `VpnCloud v0.2.0 (with crypto support, protocol version 1)`
+VpnCloud version: `VpnCloud v0.3.0 (protocol version 1, libsodium 1.0.7)`
 
 The sender runs the following command:
 
@@ -35,7 +35,7 @@ $> iperf -s &
 $> top
 ```
 
-For encrypted tests, `--shared-key test` is appended.
+For encrypted tests, `--shared-key test --crypto METHOD` is appended.
 
 
 ### Throughput
@@ -57,14 +57,14 @@ The test is run in 3 steps:
 | Without VpnCloud              | 926 Mbits/sec |  -                   |
 | Unencrypted VpnCloud          | 873 Mbits/sec | 80% / 95%            |
 | Encrypted VpnCloud (ChaCha20) | 770 Mbits/sec | 100%                 |
-| Encrypted VpnCloud (AES256)   | 813 Mbits/sec | 90% / 100%           |
+| Encrypted VpnCloud (AES256)   | 835 Mbits/sec | 90% / 100%           |
 
 
 ### Latency
 
 The latency is measured with the following command:
 ```
-$> ping DST -c 10000 -i 0.001 -s SIZE -U -q
+$> ping DST -c 100000 -i 0.001 -s SIZE -U -q
 ```
 
 For all the test, the best average RTT out of 5 runs is selected. The latency is
@@ -73,18 +73,18 @@ assumed to be half of the RTT.
 
 | Payload size                  | 100 bytes | 500 bytes | 1000 bytes |
 | ----------------------------- | --------- | --------- | ---------- |
-| Without VpnCloud              | 158 µs    | 165 µs    | 178 µs     |
-| Unencrypted VpnCloud          | 210 µs    | 216 µs    | 237 µs     |
-| Difference                    | +52 µs    | +51 µs    | +59 µs     |
-| Encrypted VpnCloud (ChaCha20) | 218 µs    | 230 µs    | 257 µs     |
-| Difference                    |  +8 µs    | +14 µs    | +20 µs     |
-| Encrypted VpnCloud (AES256)   | 224 µs    | 230 µs    | 255 µs     |
-| Difference                    | +14 µs    | +14 µs    | +18 µs     |
+| Without VpnCloud              | 158 µs    | 164 µs    | 171 µs     |
+| Unencrypted VpnCloud          | 217 µs    | 227 µs    | 242 µs     |
+| Difference                    | +59 µs    | +63 µs    | +71 µs     |
+| Encrypted VpnCloud (ChaCha20) | 231 µs    | 245 µs    | 259 µs     |
+| Difference                    | +14 µs    | +18 µs    | +17 µs     |
+| Encrypted VpnCloud (AES256)   | 223 µs    | 237 µs    | 251 µs     |
+| Difference                    |  +6 µs    | +10 µs    |  +9 µs     |
 
 
 ### Conclusion
 
 * VpnCloud achieves over 850 MBit/s with default MTU settings.
-* In encrypted mode, VpnCloud reaches over 750 MBit/s with default MTU settings.
-* VpnCloud adds about 60µs to the latency.
+* In encrypted mode, VpnCloud reaches over 800 MBit/s with default MTU settings.
+* VpnCloud adds about 70µs to the latency.
 * Encryption adds an additional latency up to 20µs depending on the packet size.
