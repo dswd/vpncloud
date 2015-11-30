@@ -5,7 +5,7 @@ use super::ethernet::{Frame, SwitchTable};
 use super::ip::{RoutingTable, Packet};
 use super::types::{Protocol, Address, Range, Table};
 use super::udpmessage::{Options, Message, decode, encode};
-use super::crypto::Crypto;
+use super::crypto::{Crypto, CryptoMethod};
 
 
 #[test]
@@ -23,11 +23,10 @@ fn udpmessage_packet() {
     assert_eq!(msg, msg2);
 }
 
-#[cfg(feature = "crypto")]
 #[test]
 fn udpmessage_encrypted() {
     let mut options = Options::default();
-    let mut crypto = Crypto::from_shared_key("test");
+    let mut crypto = Crypto::from_shared_key(CryptoMethod::ChaCha20, "test");
     let payload = [1,2,3,4,5];
     let msg = Message::Data(&payload);
     let mut buf = [0; 1024];
@@ -122,11 +121,9 @@ fn udpmessage_invalid() {
     assert!(decode(&mut [0x76,0x70,0x6e,1,0,0,1,0], &mut crypto).is_err());
 }
 
-#[cfg(feature = "crypto")]
 #[test]
 fn udpmessage_invalid_crypto() {
-    let mut options = Options::default();
-    let mut crypto = Crypto::from_shared_key("test");
+    let mut crypto = Crypto::from_shared_key(CryptoMethod::ChaCha20, "test");
     // truncated crypto
     assert!(decode(&mut [0x76,0x70,0x6e,1,1,0,0,0], &mut crypto).is_err());
 }
@@ -251,4 +248,52 @@ fn message_fmt() {
         Range{base: Address{data: [0,1,2,3,4,5,0,0,0,0,0,0,0,0,0,0], len: 6}, prefix_len: 16}
         ])), "Init(stage=0, [0.1.2.3/24, 00:01:02:03:04:05/16])");
     assert_eq!(format!("{:?}", Message::Close), "Close");
+}
+
+#[test]
+fn encrypt_decrypt_chacha20poly1305() {
+    let mut sender = Crypto::from_shared_key(CryptoMethod::ChaCha20, "test");
+    let receiver = Crypto::from_shared_key(CryptoMethod::ChaCha20, "test");
+    let msg = "HelloWorld0123456789";
+    let msg_bytes = msg.as_bytes();
+    let mut buffer = [0u8; 1024];
+    let header = [0u8; 8];
+    for i in 0..msg_bytes.len() {
+        buffer[i] = msg_bytes[i];
+    }
+    let mut nonce1 = [0u8; 8];
+    let size = sender.encrypt(&mut buffer, msg_bytes.len(), &mut nonce1, &header);
+    assert_eq!(size, msg_bytes.len() + sender.additional_bytes());
+    assert!(msg_bytes != &buffer[..msg_bytes.len()] as &[u8]);
+    receiver.decrypt(&mut buffer[..size], &nonce1, &header).unwrap();
+    assert_eq!(msg_bytes, &buffer[..msg_bytes.len()] as &[u8]);
+    let mut nonce2 = [0u8; 8];
+    let size = sender.encrypt(&mut buffer, msg_bytes.len(), &mut nonce2, &header);
+    assert!(nonce1 != nonce2);
+    receiver.decrypt(&mut buffer[..size], &nonce2, &header).unwrap();
+    assert_eq!(msg_bytes, &buffer[..msg_bytes.len()] as &[u8]);
+}
+
+#[test]
+fn encrypt_decrypt_aes256() {
+    let mut sender = Crypto::from_shared_key(CryptoMethod::AES256, "test");
+    let receiver = Crypto::from_shared_key(CryptoMethod::AES256, "test");
+    let msg = "HelloWorld0123456789";
+    let msg_bytes = msg.as_bytes();
+    let mut buffer = [0u8; 1024];
+    let header = [0u8; 8];
+    for i in 0..msg_bytes.len() {
+        buffer[i] = msg_bytes[i];
+    }
+    let mut nonce1 = [0u8; 8];
+    let size = sender.encrypt(&mut buffer, msg_bytes.len(), &mut nonce1, &header);
+    assert_eq!(size, msg_bytes.len() + sender.additional_bytes());
+    assert!(msg_bytes != &buffer[..msg_bytes.len()] as &[u8]);
+    receiver.decrypt(&mut buffer[..size], &nonce1, &header).unwrap();
+    assert_eq!(msg_bytes, &buffer[..msg_bytes.len()] as &[u8]);
+    let mut nonce2 = [0u8; 8];
+    let size = sender.encrypt(&mut buffer, msg_bytes.len(), &mut nonce2, &header);
+    assert!(nonce1 != nonce2);
+    receiver.decrypt(&mut buffer[..size], &nonce2, &header).unwrap();
+    assert_eq!(msg_bytes, &buffer[..msg_bytes.len()] as &[u8]);
 }

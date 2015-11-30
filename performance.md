@@ -52,11 +52,12 @@ The test is run in 3 steps:
 * Encrypted throughput via VpnCloud (`DST` is `10.2.1.2`)
 
 
-| Throughput test      | Bandwidth     | CPU usage (one core) |
-| -------------------- | ------------- | -------------------- |
-| Without VpnCloud     | 926 Mbits/sec |  -                   |
-| Unencrypted VpnCloud | 873 Mbits/sec | 80% / 95%            |
-| Encrypted VpnCloud   | 770 Mbits/sec | 100%                 |
+| Throughput test               | Bandwidth     | CPU usage (one core) |
+| ----------------------------- | ------------- | -------------------- |
+| Without VpnCloud              | 926 Mbits/sec |  -                   |
+| Unencrypted VpnCloud          | 873 Mbits/sec | 80% / 95%            |
+| Encrypted VpnCloud (ChaCha20) | 770 Mbits/sec | 100%                 |
+| Encrypted VpnCloud (AES256)   | 813 Mbits/sec | 90% / 100%           |
 
 
 ### Latency
@@ -70,13 +71,15 @@ For all the test, the best average RTT out of 5 runs is selected. The latency is
 assumed to be half of the RTT.
 
 
-| Payload size         | 100 bytes | 500 bytes | 1000 bytes |
-| -------------------- | --------- | --------- | ---------- |
-| Without VpnCloud     | 158 µs    | 165 µs    | 178 µs     |
-| Unencrypted VpnCloud | 210 µs    | 216 µs    | 237 µs     |
-| Difference           | +52 µs    | +51 µs    | +59 µs     |
-| Encrypted VpnCloud   | 218 µs    | 230 µs    | 257 µs     |
-| Difference           |  +8 µs    | +14 µs    | +20 µs     |
+| Payload size                  | 100 bytes | 500 bytes | 1000 bytes |
+| ----------------------------- | --------- | --------- | ---------- |
+| Without VpnCloud              | 158 µs    | 165 µs    | 178 µs     |
+| Unencrypted VpnCloud          | 210 µs    | 216 µs    | 237 µs     |
+| Difference                    | +52 µs    | +51 µs    | +59 µs     |
+| Encrypted VpnCloud (ChaCha20) | 218 µs    | 230 µs    | 257 µs     |
+| Difference                    |  +8 µs    | +14 µs    | +20 µs     |
+| Encrypted VpnCloud (AES256)   | 224 µs    | 230 µs    | 255 µs     |
+| Difference                    | +14 µs    | +14 µs    | +18 µs     |
 
 
 ### Conclusion

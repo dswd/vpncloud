@@ -13,7 +13,7 @@ vpncloud: ../../target/release/vpncloud
 	cp ../../target/release/vpncloud vpncloud
 
 ../../target/release/vpncloud: ../../src/*.rs ../../Cargo.toml ../../src/usage.txt ../../src/c/*
-	(cd ../..; cargo build --release --features "crypto")
+	(cd ../..; cargo build --release)
 
 install:
 	install -d $(DESTDIR)/usr/bin

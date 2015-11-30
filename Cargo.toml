@@ -10,7 +10,6 @@ repository = "https://github.com/dswd/vpncloud.rs"
 keywords = ["vpn", "p2p", "tun", "tap", "network"]
 readme = "README.md"
 
-
 [dependencies]
 time = "0.1"
 docopt = "0.6"
@@ -20,12 +19,11 @@ epoll = "0.2"
 signal = "0.1"
 nix = "0.4"
 libc = "0.2"
-libsodium-sys = {version = "0.0.9", optional = true}
 
 [build-dependencies]
 gcc = "0.3"
+pkg-config = "0.3.6"
 
 [features]
 default = []
-crypto = ["libsodium-sys"] #not default as it requires external library
 bench = []

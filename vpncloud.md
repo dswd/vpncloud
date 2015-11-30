@@ -49,6 +49,13 @@ vpncloud(1) -- Peer-to-peer VPN
     An optional shared key to encrypt the VPN data. If this option is not set,
     the traffic will be sent unencrypted.
 
+  * `--crypto <method>`:
+
+    The encryption method to use ("aes256", or "chacha20"). Most current CPUs
+    have special support for AES256 so this should be faster. For older
+    computers lacking this support, CHACHA20 should be faster.
+    [default: `aes256`]
+
   * `--network-id <id>`:
 
     An optional token that identifies the network and helps to distinguish it
@@ -231,6 +238,11 @@ Every packet sent over UDP contains the following header (in order):
     - Method `1`, **ChaCha20Poly1305**: The header is followed by a 8 byte
       *nonce*. The rest of the data is encrypted with the
       `libsodium::crypto_aead_chacha20poly1305` method, using the 8 byte header
+      as additional data.
+
+    - Method `2`, **AES256GCM**: The header is followed by a 12 byte *nonce*.
+      The rest of the data is encrypted with the
+      `libsodium::crypto_aead_aes256gcm` method, using the 8 byte header
       as additional data.
 
   * 1 `reserved byte` that is currently unused

@@ -11,9 +11,10 @@ before_script:
 - ! ' set -e ;
   pip install ''travis-cargo<0.2'' --user ;
   export PATH=$HOME/.local/bin:$PATH ;
-  wget https://github.com/jedisct1/libsodium/releases/download/1.0.3/libsodium-1.0.3.tar.gz ;
-  tar xvfz libsodium-1.0.3.tar.gz ;
-  pushd libsodium-1.0.3 ;
+  export VERSION=1.0.6 ;
+  wget https://github.com/jedisct1/libsodium/releases/download/$VERSION/libsodium-$VERSION.tar.gz ;
+  tar xvfz libsodium-$VERSION.tar.gz ;
+  pushd libsodium-$VERSION ;
     ./configure --prefix=/usr ;
     make ;
     sudo make install ;
@@ -22,9 +23,8 @@ before_script:
 script:
 - ! ' set -e ;
   travis-cargo build ;
-  travis-cargo build -- --features "crypto" ;
-  travis-cargo test -- --features "crypto" ;
-  travis-cargo bench -- --features "crypto" ;
+  travis-cargo test ;
+  travis-cargo bench ;
   travis-cargo coverage ;
 '
 addons:
@@ -37,7 +37,7 @@ after_success:
 - ! ' set -e ;
   rm -rf target/kcov ;
   rm target/debug/vpncloud-* ;
-  cargo test --features "crypto" ;
+  cargo test ;
   kcov/build/src/kcov --exclude-pattern=/libsodium/,/x86_64-linux-gnu/,/.cargo --coveralls-id=$TRAVIS_JOB_ID target/kcov target/debug/vpncloud-* ;
 '
 notifications:

@@ -7,7 +7,6 @@ extern crate epoll;
 extern crate signal;
 extern crate nix;
 extern crate libc;
-#[cfg(feature = "crypto")] extern crate libsodium_sys;
 #[cfg(feature = "bench")] extern crate test;
 
 #[macro_use] mod util;
@@ -33,7 +32,7 @@ use ip::RoutingTable;
 use types::{Error, Mode, Type, Range, Table, Protocol};
 use cloud::GenericCloud;
 use udpmessage::VERSION;
-use crypto::Crypto;
+use crypto::{Crypto, CryptoMethod};
 use util::Duration;
 
 
@@ -60,6 +59,7 @@ struct Args {
     flag_type: Type,
     flag_mode: Mode,
     flag_shared_key: Option<String>,
+    flag_crypto: CryptoMethod,
     flag_subnet: Vec<String>,
     flag_device: String,
     flag_listen: String,
@@ -113,7 +113,7 @@ fn run<T: Protocol> (args: Args) {
     });
     Crypto::init();
     let crypto = match args.flag_shared_key {
-        Some(key) => Crypto::from_shared_key(&key),
+        Some(key) => Crypto::from_shared_key(args.flag_crypto, &key),
         None => Crypto::None
     };
     let mut cloud = GenericCloud::<T>::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges, crypto);
@@ -132,9 +132,8 @@ fn run<T: Protocol> (args: Args) {
 fn main() {
     let args: Args = Docopt::new(USAGE).and_then(|d| d.decode()).unwrap_or_else(|e| e.exit());
     if args.flag_version {
-        println!("VpnCloud v{} ({}, protocol version {})", env!("CARGO_PKG_VERSION"),
-            if cfg!(feature = "crypto") { "with crypto support" } else { "without crypto support" },
-            VERSION
+        println!("VpnCloud v{} (protocol version {}, libsodium {})", env!("CARGO_PKG_VERSION"),
+            VERSION, Crypto::sodium_version()
         );
         return;
     }
