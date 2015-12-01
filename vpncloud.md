@@ -235,12 +235,12 @@ Every packet sent over UDP contains the following header (in order):
     - Method `0`, **No encryption**: Rest of the data can be read without
       decrypting it.
 
-    - Method `1`, **ChaCha20Poly1305**: The header is followed by a 8 byte
+    - Method `1`, **ChaCha20**: The header is followed by a 12 byte
       *nonce*. The rest of the data is encrypted with the
-      `libsodium::crypto_aead_chacha20poly1305` method, using the 8 byte header
-      as additional data.
+      `libsodium::crypto_aead_chacha20poly1305_ietf` method, using the 8 byte
+      header as additional data.
 
-    - Method `2`, **AES256GCM**: The header is followed by a 12 byte *nonce*.
+    - Method `2`, **AES256**: The header is followed by a 12 byte *nonce*.
       The rest of the data is encrypted with the
       `libsodium::crypto_aead_aes256gcm` method, using the 8 byte header
       as additional data.

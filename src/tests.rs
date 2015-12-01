@@ -31,7 +31,7 @@ fn udpmessage_encrypted() {
     let msg = Message::Data(&payload);
     let mut buf = [0; 1024];
     let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
-    assert_eq!(size, 37);
+    assert_eq!(size, 41);
     assert_eq!(&buf[..8], &[118,112,110,1,1,0,0,0]);
     let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);
@@ -261,13 +261,13 @@ fn encrypt_decrypt_chacha20poly1305() {
     for i in 0..msg_bytes.len() {
         buffer[i] = msg_bytes[i];
     }
-    let mut nonce1 = [0u8; 8];
+    let mut nonce1 = [0u8; 12];
     let size = sender.encrypt(&mut buffer, msg_bytes.len(), &mut nonce1, &header);
     assert_eq!(size, msg_bytes.len() + sender.additional_bytes());
     assert!(msg_bytes != &buffer[..msg_bytes.len()] as &[u8]);
     receiver.decrypt(&mut buffer[..size], &nonce1, &header).unwrap();
     assert_eq!(msg_bytes, &buffer[..msg_bytes.len()] as &[u8]);
-    let mut nonce2 = [0u8; 8];
+    let mut nonce2 = [0u8; 12];
     let size = sender.encrypt(&mut buffer, msg_bytes.len(), &mut nonce2, &header);
     assert!(nonce1 != nonce2);
     receiver.decrypt(&mut buffer[..size], &nonce2, &header).unwrap();
@@ -276,6 +276,10 @@ fn encrypt_decrypt_chacha20poly1305() {
 
 #[test]
 fn encrypt_decrypt_aes256() {
+    Crypto::init();
+    if ! Crypto::aes256_available() {
+        return
+    }
     let mut sender = Crypto::from_shared_key(CryptoMethod::AES256, "test");
     let receiver = Crypto::from_shared_key(CryptoMethod::AES256, "test");
     let msg = "HelloWorld0123456789";
@@ -285,13 +289,13 @@ fn encrypt_decrypt_aes256() {
     for i in 0..msg_bytes.len() {
         buffer[i] = msg_bytes[i];
     }
-    let mut nonce1 = [0u8; 8];
+    let mut nonce1 = [0u8; 12];
     let size = sender.encrypt(&mut buffer, msg_bytes.len(), &mut nonce1, &header);
     assert_eq!(size, msg_bytes.len() + sender.additional_bytes());
     assert!(msg_bytes != &buffer[..msg_bytes.len()] as &[u8]);
     receiver.decrypt(&mut buffer[..size], &nonce1, &header).unwrap();
     assert_eq!(msg_bytes, &buffer[..msg_bytes.len()] as &[u8]);
-    let mut nonce2 = [0u8; 8];
+    let mut nonce2 = [0u8; 12];
     let size = sender.encrypt(&mut buffer, msg_bytes.len(), &mut nonce2, &header);
     assert!(nonce1 != nonce2);
     receiver.decrypt(&mut buffer[..size], &nonce2, &header).unwrap();
