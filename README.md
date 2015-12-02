@@ -26,7 +26,7 @@ This is what works:
 
 * Setting up tunnels between two networks via Ethernet (TAP) and IP (TUN)
 * Connecting multiple networks with multiple forwarding behaviors (Hub, Switch, Router)
-* Encrypted connections using *libsodium*
+* Encrypted connections using [libsodium](https://github.com/jedisct1/libsodium)
 * Automatic peer-to-peer meshing
 * NAT and (limited) firewall traversal using hole punching
 * Automatic reconnecting when connections are lost

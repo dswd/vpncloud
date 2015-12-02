@@ -1,3 +1,10 @@
+vpncloud (0.3.0) stable; urgency=medium
+
+  * Inluding libsodium-1.0.7
+  * Support for AES256
+
+ -- Dennis Schwerdel <schwerdel@informatik.uni-kl.de>  Tue, 01 Dec 2015 16:12:16 +0100
+
 vpncloud (0.2.0) stable; urgency=medium
 
   * More stable release

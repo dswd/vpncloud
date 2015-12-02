@@ -220,11 +220,9 @@ impl<P: Protocol> GenericCloud<P> {
     }
 
     fn handle_net_message(&mut self, peer: SocketAddr, options: Options, msg: Message) -> Result<(), Error> {
-        if let Some(id) = self.options.network_id {
-            if options.network_id != Some(id) {
-                info!("Ignoring message from {} with wrong token {:?}", peer, options.network_id);
-                return Err(Error::WrongNetwork(options.network_id));
-            }
+        if self.options.network_id != options.network_id {
+            info!("Ignoring message from {} with wrong token {:?}", peer, options.network_id);
+            return Err(Error::WrongNetwork(options.network_id));
         }
         debug!("Received {:?} from {}", msg, peer);
         match msg {
