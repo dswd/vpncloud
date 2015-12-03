@@ -11,8 +11,9 @@ use epoll;
 use nix::sys::signal::{SIGTERM, SIGQUIT, SIGINT};
 use signal::trap::Trap;
 use time::SteadyTime;
+use rand::random;
 
-use super::types::{Table, Protocol, Range, Error, NetworkId};
+use super::types::{Table, Protocol, Range, Error, NetworkId, NodeId};
 use super::device::Device;
 use super::udpmessage::{encode, decode, Options, Message};
 use super::crypto::Crypto;
@@ -87,11 +88,13 @@ impl PeerList {
 
 
 pub struct GenericCloud<P: Protocol> {
+    node_id: NodeId,
     peers: PeerList,
     addresses: Vec<Range>,
     learning: bool,
     broadcast: bool,
     reconnect_peers: Vec<SocketAddr>,
+    blacklist_peers: Vec<SocketAddr>,
     table: Box<Table>,
     socket: UdpSocket,
     device: Device,
@@ -115,11 +118,13 @@ impl<P: Protocol> GenericCloud<P> {
         let mut options = Options::default();
         options.network_id = network_id;
         GenericCloud{
+            node_id: random(),
             peers: PeerList::new(peer_timeout),
             addresses: addresses,
             learning: learning,
             broadcast: broadcast,
             reconnect_peers: Vec::new(),
+            blacklist_peers: Vec::new(),
             table: table,
             socket: socket,
             device: device,
@@ -153,7 +158,7 @@ impl<P: Protocol> GenericCloud<P> {
     pub fn connect<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr, reconnect: bool) -> Result<(), Error> {
         if let Ok(mut addrs) = addr.to_socket_addrs() {
             while let Some(addr) = addrs.next() {
-                if self.peers.contains(&addr) {
+                if self.peers.contains(&addr) || self.blacklist_peers.contains(&addr) {
                     return Ok(());
                 }
             }
@@ -164,7 +169,8 @@ impl<P: Protocol> GenericCloud<P> {
             self.reconnect_peers.push(addr);
         }
         let addrs = self.addresses.clone();
-        self.send_msg(addr, &Message::Init(0, addrs))
+        let node_id = self.node_id.clone();
+        self.send_msg(addr, &Message::Init(0, node_id, addrs))
     }
 
     fn housekeep(&mut self) -> Result<(), Error> {
@@ -245,20 +251,25 @@ impl<P: Protocol> GenericCloud<P> {
             Message::Peers(peers) => {
                 self.peers.add(&peer);
                 for p in &peers {
-                    if ! self.peers.contains(p) {
+                    if ! self.peers.contains(p) && ! self.blacklist_peers.contains(p) {
                         try!(self.connect(p, false));
                     }
                 }
             },
-            Message::Init(stage, ranges) => {
+            Message::Init(stage, node_id, ranges) => {
+                if node_id == self.node_id {
+                    self.blacklist_peers.push(peer);
+                    return Ok(())
+                }
                 self.peers.add(&peer);
-                let peers = self.peers.as_vec();
-                let own_addrs = self.addresses.clone();
                 for range in ranges {
                     self.table.learn(range.base, Some(range.prefix_len), peer.clone());
                 }
                 if stage == 0 {
-                    try!(self.send_msg(peer, &Message::Init(stage+1, own_addrs)));
+                    let peers = self.peers.as_vec();
+                    let own_addrs = self.addresses.clone();
+                    let own_node_id = self.node_id.clone();
+                    try!(self.send_msg(peer, &Message::Init(stage+1, own_node_id, own_addrs)));
                     try!(self.send_msg(peer, &Message::Peers(peers)));
                 }
             },

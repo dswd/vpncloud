@@ -46,7 +46,7 @@ impl Device {
     #[inline]
     pub fn write(&mut self, data: &[u8]) -> Result<(), Error> {
         match self.fd.write_all(&data) {
-            Ok(_) => Ok(()),
+            Ok(_) => self.fd.flush().map_err(|_| Error::TunTapDevError("Flush error")),
             Err(_) => Err(Error::TunTapDevError("Write error"))
         }
     }

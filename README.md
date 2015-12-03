@@ -32,6 +32,7 @@ This is what works:
 * Automatic reconnecting when connections are lost
 * Non-native forwarding modes, e.g. IP based learning switch and prefix routed Ethernet networks.
 * High throughput and low additional latency (see [performance page](performance.md))
+* Support for tunneled VLans (TAP device)
 
 However there are some open issues:
 

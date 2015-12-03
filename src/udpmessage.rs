@@ -1,8 +1,8 @@
 use std::fmt;
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr, SocketAddrV6, Ipv6Addr};
 
-use super::types::{Error, NetworkId, Range};
-use super::util::{Encoder, memcopy};
+use super::types::{NodeId, Error, NetworkId, Range, NODE_ID_BYTES};
+use super::util::{bytes_to_hex, Encoder, memcopy};
 use super::crypto::Crypto;
 
 const MAGIC: [u8; 3] = [0x76, 0x70, 0x6e];
@@ -70,7 +70,7 @@ pub struct Options {
 pub enum Message<'a> {
     Data(&'a[u8]),
     Peers(Vec<SocketAddr>),
-    Init(u8, Vec<Range>),
+    Init(u8, NodeId, Vec<Range>),
     Close,
 }
 
@@ -90,7 +90,7 @@ impl<'a> fmt::Debug for Message<'a> {
                 }
                 write!(formatter, "]")
             },
-            &Message::Init(stage, ref data) => write!(formatter, "Init(stage={}, {:?})", stage, data),
+            &Message::Init(stage, ref node_id, ref peers) => write!(formatter, "Init(stage={}, node_id={}, {:?})", stage, bytes_to_hex(node_id), peers),
             &Message::Close => write!(formatter, "Close"),
         }
     }
@@ -171,11 +171,16 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
             Message::Peers(peers)
         },
         2 => {
-            if end < pos + 2 {
+            if end < pos + 2 + NODE_ID_BYTES {
                 return Err(Error::ParseError("Init data too short"));
             }
             let stage = data[pos];
             pos += 1;
+            let mut node_id = [0; NODE_ID_BYTES];
+            for i in 0..NODE_ID_BYTES {
+                node_id[i] = data[pos+i];
+            }
+            pos += NODE_ID_BYTES;
             let count = data[pos] as usize;
             pos += 1;
             let mut addrs = Vec::with_capacity(count);
@@ -184,7 +189,7 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
                 pos += read;
                 addrs.push(range);
             }
-            Message::Init(stage, addrs)
+            Message::Init(stage, node_id, addrs)
         },
         3 => Message::Close,
         _ => return Err(Error::ParseError("Unknown message type"))
@@ -198,7 +203,7 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
     header.msgtype = match msg {
         &Message::Data(_) => 0,
         &Message::Peers(_) => 1,
-        &Message::Init(_, _) => 2,
+        &Message::Init(_, _, _) => 2,
         &Message::Close => 3
     };
     header.crypto_method = crypto.method();
@@ -252,10 +257,14 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
                 pos += 2;
             };
         },
-        &Message::Init(stage, ref ranges) => {
-            assert!(buf.len() >= pos + 2);
+        &Message::Init(stage, ref node_id, ref ranges) => {
+            assert!(buf.len() >= pos + 2 + NODE_ID_BYTES);
             buf[pos] = stage;
             pos += 1;
+            for i in 0..NODE_ID_BYTES {
+                buf[pos+i] = node_id[i];
+            }
+            pos += NODE_ID_BYTES;
             assert!(ranges.len() <= 255);
             buf[pos] = ranges.len() as u8;
             pos += 1;

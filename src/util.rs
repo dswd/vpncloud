@@ -24,6 +24,19 @@ pub fn memcopy(src: &[u8], dst: &mut[u8]) {
     unsafe { ptr::copy_nonoverlapping(src.as_ptr(), dst.as_mut_ptr(), src.len()) };
 }
 
+const HEX_CHARS: &'static [u8] = b"0123456789abcdef";
+
+pub fn bytes_to_hex(bytes: &[u8]) -> String {
+    let mut v = Vec::with_capacity(bytes.len() * 2);
+    for &byte in bytes {
+        v.push(HEX_CHARS[(byte >> 4) as usize]);
+        v.push(HEX_CHARS[(byte & 0xf) as usize]);
+    }
+    unsafe {
+        String::from_utf8_unchecked(v)
+    }
+}
+
 
 pub struct Encoder;
 

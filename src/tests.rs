@@ -79,11 +79,15 @@ fn udpmessage_init() {
     let mut crypto = Crypto::None;
     let addrs = vec![Range{base: Address{data: [0,1,2,3,0,0,0,0,0,0,0,0,0,0,0,0], len: 4}, prefix_len: 24},
         Range{base: Address{data: [0,1,2,3,4,5,0,0,0,0,0,0,0,0,0,0], len: 6}, prefix_len: 16}];
-    let msg = Message::Init(0, addrs);
+    let node_id = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
+    let msg = Message::Init(0, node_id, addrs);
     let mut buf = [0; 1024];
     let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
-    assert_eq!(size, 24);
-    assert_eq!(&buf[..size], &[118,112,110,1,0,0,0,2,0,2,4,0,1,2,3,24,6,0,1,2,3,4,5,16]);
+    assert_eq!(size, 40);
+    let should = [118,112,110,1,0,0,0,2,0,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,2,4,0,1,2,3,24,6,0,1,2,3,4,5,16];
+    for i in 0..size {
+        assert_eq!(buf[i], should[i]);
+    }
     let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
@@ -243,10 +247,10 @@ fn message_fmt() {
         SocketAddr::from_str("5.6.7.8:12345").unwrap(),
         SocketAddr::from_str("[0001:0203:0405:0607:0809:0a0b:0c0d:0e0f]:6789").unwrap()])),
         "Peers [1.2.3.4:123, 5.6.7.8:12345, [1:203:405:607:809:a0b:c0d:e0f]:6789]");
-    assert_eq!(format!("{:?}", Message::Init(0, vec![
+    assert_eq!(format!("{:?}", Message::Init(0, [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15], vec![
         Range{base: Address{data: [0,1,2,3,0,0,0,0,0,0,0,0,0,0,0,0], len: 4}, prefix_len: 24},
         Range{base: Address{data: [0,1,2,3,4,5,0,0,0,0,0,0,0,0,0,0], len: 6}, prefix_len: 16}
-        ])), "Init(stage=0, [0.1.2.3/24, 00:01:02:03:04:05/16])");
+        ])), "Init(stage=0, node_id=000102030405060708090a0b0c0d0e0f, [0.1.2.3/24, 00:01:02:03:04:05/16])");
     assert_eq!(format!("{:?}", Message::Close), "Close");
 }
 

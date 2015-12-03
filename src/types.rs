@@ -3,9 +3,13 @@ use std::hash::Hasher;
 use std::fmt;
 use std::str::FromStr;
 
-use super::util::Encoder;
+use super::util::{bytes_to_hex, Encoder};
+
+pub const NODE_ID_BYTES: usize = 16;
 
 pub type NetworkId = u64;
+pub type NodeId = [u8; NODE_ID_BYTES];
+
 
 #[derive(PartialOrd, Eq, Ord, Clone, Hash)]
 pub struct Address {
@@ -80,7 +84,7 @@ impl fmt::Display for Address {
             },
             16 => write!(formatter, "{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}",
                 d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]),
-            _ => write!(formatter, "{:?}", d)
+            _ => write!(formatter, "{}", bytes_to_hex(d))
         }
     }
 }
