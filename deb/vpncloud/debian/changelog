@@ -1,3 +1,10 @@
+vpncloud (0.3.1) stable; urgency=medium
+
+  * Preventing nodes from connecting to themselves
+  * Flushing TAP/TUN device after writing to it
+
+ -- Dennis Schwerdel <schwerdel@informatik.uni-kl.de>  Thu, 03 Dec 2015 21:53:43 +0100
+
 vpncloud (0.3.0) stable; urgency=medium
 
   * Inluding libsodium-1.0.7
