@@ -69,15 +69,12 @@ For all the test, the best average RTT out of 3 runs is selected. The latency is
 assumed to be half of the RTT.
 
 
-| Payload size                  | 100 bytes | 500 bytes | 1000 bytes |
-| ----------------------------- | --------- | --------- | ---------- |
-| Without VpnCloud              | 158 µs    | 164 µs    | 171 µs     |
-| Unencrypted VpnCloud          | 208 µs    | 225 µs    | 236 µs     |
-| Difference                    | +50 µs    | +61 µs    | +65 µs     |
-| Encrypted VpnCloud (ChaCha20) | 229 µs    | 242 µs    | 259 µs     |
-| Difference                    | +21 µs    | +17 µs    | +23 µs     |
-| Encrypted VpnCloud (AES256)   | 223 µs    | 232 µs    | 249 µs     |
-| Difference                    | +15 µs    |  +7 µs    | +13 µs     |
+| Payload size                  | 100 bytes       | 500 bytes       | 1000 bytes      |
+| ----------------------------- | --------------- | --------------- | --------------- |
+| Without VpnCloud              | 158 µs          | 164 µs          | 171 µs          |
+| Unencrypted VpnCloud          | 208 µs (+50 µs) | 225 µs (+61 µs) | 236 µs (+65 µs) |
+| Encrypted VpnCloud (ChaCha20) | 229 µs (+21 µs) | 242 µs (+17 µs) | 259 µs (+23 µs) |
+| Encrypted VpnCloud (AES256)   | 223 µs (+15 µs) | 232 µs ( +7 µs) | 249 µs (+13 µs) |
 
 
 ### Conclusion

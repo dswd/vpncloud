@@ -11,13 +11,13 @@ use epoll;
 use nix::sys::signal::{SIGTERM, SIGQUIT, SIGINT};
 use signal::trap::Trap;
 use time::SteadyTime;
-use rand::random;
+use rand::{random, sample, thread_rng};
 
 use super::types::{Table, Protocol, Range, Error, NetworkId, NodeId};
 use super::device::Device;
 use super::udpmessage::{encode, decode, Options, Message};
 use super::crypto::Crypto;
-use super::util::{now, Time, Duration, time_rand};
+use super::util::{now, Time, Duration};
 
 struct PeerList {
     timeout: Duration,
@@ -67,15 +67,8 @@ impl PeerList {
     }
 
     #[inline]
-    fn subset(&self, size: usize, seed: u32) -> Vec<SocketAddr> {
-        let mut peers = self.as_vec();
-        let mut psrng = seed;
-        let len = peers.len();
-        for i in size..len {
-            peers.swap_remove(psrng as usize % (len - i));
-            psrng = ((1664525 as u64) * (psrng as u64) + (1013904223 as u64)) as u32;
-        }
-        peers
+    fn subset(&self, size: usize) -> Vec<SocketAddr> {
+        sample(&mut thread_rng(), self.as_vec(), size)
     }
 
     #[inline]
@@ -165,8 +158,11 @@ impl<P: Protocol> GenericCloud<P> {
         }
         debug!("Connecting to {}", addr);
         if reconnect {
-            let addr = addr.to_socket_addrs().unwrap().next().unwrap();
-            self.reconnect_peers.push(addr);
+            if let Ok(mut addrs) = addr.to_socket_addrs() {
+                while let Some(addr) = addrs.next() {
+                    self.reconnect_peers.push(addr);
+                }
+            }
         }
         let addrs = self.addresses.clone();
         let node_id = self.node_id.clone();
@@ -185,7 +181,7 @@ impl<P: Protocol> GenericCloud<P> {
                     peer_num = 10;
                 }
             }
-            let peers = self.peers.subset(peer_num, time_rand() as u32);
+            let peers = self.peers.subset(peer_num);
             let msg = Message::Peers(peers);
             for addr in &self.peers.as_vec() {
                 try!(self.send_msg(addr, &msg));

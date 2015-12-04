@@ -11,13 +11,6 @@ pub fn now() -> Time {
     tv.tv_sec
 }
 
-#[inline]
-pub fn time_rand() -> i64 {
-    let mut tv = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut tv); }
-    tv.tv_sec ^ tv.tv_nsec
-}
-
 #[inline(always)]
 pub fn memcopy(src: &[u8], dst: &mut[u8]) {
     assert!(dst.len() >= src.len());

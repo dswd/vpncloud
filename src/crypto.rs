@@ -143,7 +143,9 @@ fn inc_nonce_12(nonce: &mut [u8; 12]) {
 
 impl Crypto {
     pub fn init() {
-        unsafe { sodium_init() };
+        if unsafe { sodium_init() } != 0 {
+            fail!("Failed to initialize crypto library");
+        }
     }
 
     pub fn sodium_version() -> String {
@@ -196,7 +198,7 @@ impl Crypto {
             crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_INTERACTIVE
         ) };
         if res != 0 {
-            panic!("Key derivation failed");
+            fail!("Key derivation failed");
         }
         match method {
             CryptoMethod::ChaCha20 => {

@@ -182,8 +182,8 @@ vpncloud -t tun -c REMOTE_HOST:PORT --subnet 10.0.0.X/32 --ifup 'ifconfig $IFNAM
 ### Important notes
 
 - It is important to configure the interface in a way that all addresses on the
-  VPN can be reached directly. E.g. if addresses 10.0.0.1 and 10.0.0.2 are used,
-  the interface needs to be configured as /24.
+  VPN can be reached directly. E.g. if addresses 10.0.0.1, 10.0.0.2 and so on
+  are used, the interface needs to be configured as /24.
   For TUN devices, this means that the prefix length of the subnets must be
   different than the prefix length that the interface is configured with.
 
@@ -201,12 +201,12 @@ vpncloud -t tun -c REMOTE_HOST:PORT --subnet 10.0.0.X/32 --ifup 'ifconfig $IFNAM
   primitives are expected to be very secure, their application has not been
   reviewed.
   The shared key is hashed using *ScryptSalsa208Sha256* to derive a key,
-  which is used to encrypt the payload of messages using *ChaCha20Poly1305*.
-  The encryption includes an authentication that also protects the header and
-  all additional headers.
+  which is used to encrypt the payload of messages using *ChaCha20Poly1305* or
+  *AES256-GCM*. The encryption includes an authentication that also protects the
+  header and all additional headers.
   This method does only protect against attacks on single messages but not
-  on attacks that manipulate the message series itself (i.e. suppress messages,
-  reorder them, and duplicate them).
+  against attacks that manipulate the message series itself (i.e. suppress
+  messages, reorder them, or duplicate them).
 
 
 ## NETWORK PROTOCOL
@@ -300,8 +300,11 @@ field will follow:
     and the later 2 bytes are port number (both in network byte order).
 
   * **Initial message** (message type 2):
-    This packet contains all the local subnets claimed by the nodes.
-    Its first byte marks the stage of the initial handshake process. After that,
+    This packet contains the following information:
+      - A random node id to distinguish different nodes
+      - All the local subnets claimed by the nodes
+    Its first byte marks the stage of the initial handshake process.
+    The next 16 bytes contain the unique node id. After that,
     the list of local subnets follows.
     The subnet list is encoded in the following way: Its first byte of data
     contains the number of encoded subnets that follow. After that, the given
@@ -328,8 +331,7 @@ of their peers to spread this information and to avoid peer timeouts.
 To avoid the cubic growth of management traffic, nodes should at a certain
 network size start sending partial peer lists instead of the full list.
 A reasonable number would be the square root of the number of peers.
-The subsets can be selected using round robin (making sure all peers eventually
-receive all information) or randomly.
+The subsets should be selected randomly.
 
 Nodes should remove peers from their peer list after a certain period of
 inactivity or when receiving a **closing message**. Before shutting down, nodes
