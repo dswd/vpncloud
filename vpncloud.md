@@ -301,8 +301,10 @@ field will follow:
 
   * **Initial message** (message type 2):
     This packet contains the following information:
+      - The stage of the initialization process
       - A random node id to distinguish different nodes
       - All the local subnets claimed by the nodes
+
     Its first byte marks the stage of the initial handshake process.
     The next 16 bytes contain the unique node id. After that,
     the list of local subnets follows.
@@ -319,12 +321,12 @@ field will follow:
     and the later 6 bytes are the MAC address.
 
   * **Closing message** (message type 3):
-    This packet does not contain any further data.
+    This packet does not contain any more data.
 
 Nodes are expected to send an **initial message** whenever they connect to a
 node they were not connected to before. As a reply to this message, another
-initial should be sent if the node was not known before. Also a **peer list**
-message should be sent as a reply.
+initial should be sent with stage 2. Also a **peer list** message should be
+sent as a reply.
 
 When connected, nodes should periodically send their **peer list** to all
 of their peers to spread this information and to avoid peer timeouts.
