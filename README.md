@@ -20,7 +20,7 @@ Some performance measurements can be found [here](performance.md).
 
 ### Current Status
 
-This project is still under development and has yet to reach a stable state.
+This project is still [under development](CHANGELOG.md) and has yet to reach a stable state.
 However, the main functionality should work and you are invited to test it.
 This is what works:
 
