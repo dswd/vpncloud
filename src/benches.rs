@@ -14,11 +14,11 @@ use super::ip::Packet;
 fn message_encode(b: &mut Bencher) {
     let mut options = Options::default();
     let mut crypto = Crypto::None;
-    let payload = [0; 1400];
-    let msg = Message::Data(&payload);
-    let mut buf = [0; 1500];
+    let mut payload = [0; 1600];
+    let mut msg = Message::Data(&mut payload, 64, 1464);
+    let mut buf = [0; 1600];
     b.iter(|| {
-        encode(&mut options, &msg, &mut buf[..], &mut crypto);
+        encode(&mut options, &mut msg, &mut buf[..], &mut crypto);
     });
 }
 
@@ -26,12 +26,12 @@ fn message_encode(b: &mut Bencher) {
 fn message_decode(b: &mut Bencher) {
     let mut options = Options::default();
     let mut crypto = Crypto::None;
-    let payload = [0; 1400];
-    let msg = Message::Data(&payload);
-    let mut buf = [0; 1500];
-    let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
+    let mut payload = [0; 1600];
+    let mut msg = Message::Data(&mut payload, 64, 1464);
+    let mut buf = [0; 1600];
+    let mut res = encode(&mut options, &mut msg, &mut buf[..], &mut crypto);
     b.iter(|| {
-        decode(&mut buf[..size], &mut crypto).unwrap();
+        decode(&mut res, &mut crypto).unwrap();
     });
 }
 
