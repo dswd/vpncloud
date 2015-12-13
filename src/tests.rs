@@ -8,34 +8,82 @@ use super::udpmessage::{Options, Message, decode, encode};
 use super::crypto::{Crypto, CryptoMethod};
 
 
+impl<'a> PartialEq for Message<'a> {
+    fn eq(&self, other: &Message) -> bool {
+        match self {
+            &Message::Data(ref data1, start1, end1) => if let &Message::Data(ref data2, start2, end2) = other {
+                data1[start1..end1] == data2[start2..end2]
+            } else { false },
+            &Message::Peers(ref peers1) => if let &Message::Peers(ref peers2) = other {
+                peers1 == peers2
+            } else { false },
+            &Message::Init(step1, node_id1, ref ranges1) => if let &Message::Init(step2, node_id2, ref ranges2) = other {
+                step1 == step2 && node_id1 == node_id2 && ranges1 == ranges2
+            } else { false },
+            &Message::Close => if let &Message::Close = other {
+                true
+            } else { false }
+        }
+    }
+}
+
 #[test]
+#[allow(unused_assignments)]
 fn udpmessage_packet() {
     let mut options = Options::default();
     let mut crypto = Crypto::None;
-    let payload = [1,2,3,4,5];
-    let msg = Message::Data(&payload);
+    let mut payload = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                       1,2,3,4,5,
+                       0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+    let mut msg = Message::Data(&mut payload, 64, 69);
     let mut buf = [0; 1024];
-    let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
-    assert_eq!(size, 13);
-    assert_eq!(&buf[..8], &[118,112,110,1,0,0,0,0]);
-    let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
+    let mut len = 0;
+    {
+        let res = encode(&mut options, &mut msg, &mut [], &mut crypto);
+        assert_eq!(res.len(), 13);
+        assert_eq!(&res[..8], &[118,112,110,1,0,0,0,0]);
+        for i in 0..res.len() {
+            buf[i] = res[i];
+        }
+        len = res.len();
+    }
+    let (options2, msg2) = decode(&mut buf[..len], &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
 }
 
 #[test]
+#[allow(unused_assignments)]
 fn udpmessage_encrypted() {
     let mut options = Options::default();
     let mut crypto = Crypto::from_shared_key(CryptoMethod::ChaCha20, "test");
-    let payload = [1,2,3,4,5];
-    let msg = Message::Data(&payload);
+    let mut payload = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                       1,2,3,4,5,
+                       0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                       0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+    let mut orig_payload = [0; 133];
+    for i in 0..payload.len() {
+        orig_payload[i] = payload[i];
+    }
+    let orig_msg = Message::Data(&mut orig_payload, 64, 69);
+    let mut msg = Message::Data(&mut payload, 64, 69);
     let mut buf = [0; 1024];
-    let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
-    assert_eq!(size, 41);
-    assert_eq!(&buf[..8], &[118,112,110,1,1,0,0,0]);
-    let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
+    let mut len = 0;
+    {
+        let res = encode(&mut options, &mut msg, &mut [], &mut crypto);
+        assert_eq!(res.len(), 41);
+        assert_eq!(&res[..8], &[118,112,110,1,1,0,0,0]);
+        for i in 0..res.len() {
+            buf[i] = res[i];
+        }
+        len = res.len();
+    }
+    let (options2, msg2) = decode(&mut buf[..len], &mut crypto).unwrap();
     assert_eq!(options, options2);
-    assert_eq!(msg, msg2);
+    assert_eq!(orig_msg, msg2);
 }
 
 #[test]
@@ -43,16 +91,18 @@ fn udpmessage_peers() {
     use std::str::FromStr;
     let mut options = Options::default();
     let mut crypto = Crypto::None;
-    let msg = Message::Peers(vec![SocketAddr::from_str("1.2.3.4:123").unwrap(), SocketAddr::from_str("5.6.7.8:12345").unwrap(), SocketAddr::from_str("[0001:0203:0405:0607:0809:0a0b:0c0d:0e0f]:6789").unwrap()]);
-    let mut buf = [0; 1024];
-    let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
-    assert_eq!(size, 40);
-    let should = [118,112,110,1,0,0,0,1,2,1,2,3,4,0,123,5,6,7,8,48,57,1,0,1,2,3,4,5,6,7,
+    let mut msg = Message::Peers(vec![SocketAddr::from_str("1.2.3.4:123").unwrap(), SocketAddr::from_str("5.6.7.8:12345").unwrap(), SocketAddr::from_str("[0001:0203:0405:0607:0809:0a0b:0c0d:0e0f]:6789").unwrap()]);
+    let mut should = [118,112,110,1,0,0,0,1,2,1,2,3,4,0,123,5,6,7,8,48,57,1,0,1,2,3,4,5,6,7,
         8,9,10,11,12,13,14,15,26,133];
-    for i in 0..size {
-        assert_eq!(buf[i], should[i]);
+    {
+        let mut buf = [0; 1024];
+        let res = encode(&mut options, &mut msg, &mut buf[..], &mut crypto);
+        assert_eq!(res.len(), 40);
+        for i in 0..res.len() {
+            assert_eq!(res[i], should[i]);
+        }
     }
-    let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
+    let (options2, msg2) = decode(&mut should, &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
 }
@@ -62,12 +112,15 @@ fn udpmessage_option_network_id() {
     let mut options = Options::default();
     options.network_id = Some(134);
     let mut crypto = Crypto::None;
-    let msg = Message::Close;
-    let mut buf = [0; 1024];
-    let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
-    assert_eq!(size, 16);
-    assert_eq!(&buf[..size], &[118,112,110,1,0,0,1,3,0,0,0,0,0,0,0,134]);
-    let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
+    let mut msg = Message::Close;
+    let mut should = [118,112,110,1,0,0,1,3,0,0,0,0,0,0,0,134];
+    {
+        let mut buf = [0; 1024];
+        let res = encode(&mut options, &mut msg, &mut buf[..], &mut crypto);
+        assert_eq!(res.len(), 16);
+        assert_eq!(&res, &should);
+    }
+    let (options2, msg2) = decode(&mut should, &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
 }
@@ -80,15 +133,17 @@ fn udpmessage_init() {
     let addrs = vec![Range{base: Address{data: [0,1,2,3,0,0,0,0,0,0,0,0,0,0,0,0], len: 4}, prefix_len: 24},
         Range{base: Address{data: [0,1,2,3,4,5,0,0,0,0,0,0,0,0,0,0], len: 6}, prefix_len: 16}];
     let node_id = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
-    let msg = Message::Init(0, node_id, addrs);
-    let mut buf = [0; 1024];
-    let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
-    assert_eq!(size, 40);
-    let should = [118,112,110,1,0,0,0,2,0,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,2,4,0,1,2,3,24,6,0,1,2,3,4,5,16];
-    for i in 0..size {
-        assert_eq!(buf[i], should[i]);
+    let mut msg = Message::Init(0, node_id, addrs);
+    let mut should = [118,112,110,1,0,0,0,2,0,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,2,4,0,1,2,3,24,6,0,1,2,3,4,5,16];
+    {
+        let mut buf = [0; 1024];
+        let res = encode(&mut options, &mut msg, &mut buf[..], &mut crypto);
+        assert_eq!(res.len(), 40);
+        for i in 0..res.len() {
+            assert_eq!(res[i], should[i]);
+        }
     }
-    let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
+    let (options2, msg2) = decode(&mut should, &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
 }
@@ -97,12 +152,15 @@ fn udpmessage_init() {
 fn udpmessage_close() {
     let mut options = Options::default();
     let mut crypto = Crypto::None;
-    let msg = Message::Close;
-    let mut buf = [0; 1024];
-    let size = encode(&mut options, &msg, &mut buf[..], &mut crypto);
-    assert_eq!(size, 8);
-    assert_eq!(&buf[..size], &[118,112,110,1,0,0,0,3]);
-    let (options2, msg2) = decode(&mut buf[..size], &mut crypto).unwrap();
+    let mut msg = Message::Close;
+    let mut should = [118,112,110,1,0,0,0,3];
+    {
+        let mut buf = [0; 1024];
+        let res = encode(&mut options, &mut msg, &mut buf[..], &mut crypto);
+        assert_eq!(res.len(), 8);
+        assert_eq!(&res, &should);
+    }
+    let (options2, msg2) = decode(&mut should, &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
 }
@@ -242,7 +300,7 @@ fn address_parse_fmt() {
 
 #[test]
 fn message_fmt() {
-    assert_eq!(format!("{:?}", Message::Data(&[1,2,3,4,5])), "Data(5 bytes)");
+    assert_eq!(format!("{:?}", Message::Data(&mut [1,2,3,4,5], 0, 5)), "Data(5 bytes)");
     assert_eq!(format!("{:?}", Message::Peers(vec![SocketAddr::from_str("1.2.3.4:123").unwrap(),
         SocketAddr::from_str("5.6.7.8:12345").unwrap(),
         SocketAddr::from_str("[0001:0203:0405:0607:0809:0a0b:0c0d:0e0f]:6789").unwrap()])),

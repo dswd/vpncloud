@@ -2,7 +2,7 @@ use std::fmt;
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr, SocketAddrV6, Ipv6Addr};
 
 use super::types::{NodeId, Error, NetworkId, Range, NODE_ID_BYTES};
-use super::util::{bytes_to_hex, Encoder, memcopy};
+use super::util::{bytes_to_hex, Encoder};
 use super::crypto::Crypto;
 
 const MAGIC: [u8; 3] = [0x76, 0x70, 0x6e];
@@ -65,19 +65,17 @@ pub struct Options {
     pub network_id: Option<NetworkId>,
 }
 
-
-#[derive(PartialEq)]
 pub enum Message<'a> {
-    Data(&'a[u8]),
-    Peers(Vec<SocketAddr>),
-    Init(u8, NodeId, Vec<Range>),
+    Data(&'a mut[u8], usize, usize), // data, start, end
+    Peers(Vec<SocketAddr>), // peers
+    Init(u8, NodeId, Vec<Range>), // step, node_id, ranges
     Close,
 }
 
 impl<'a> fmt::Debug for Message<'a> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            &Message::Data(ref data) => write!(formatter, "Data({} bytes)", data.len()),
+            &Message::Data(_, start, end) => write!(formatter, "Data({} bytes)", end-start),
             &Message::Peers(ref peers) => {
                 try!(write!(formatter, "Peers ["));
                 let mut first = true;
@@ -130,7 +128,7 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
         pos += NETWORK_ID_BYTES;
     }
     let msg = match header.msgtype {
-        0 => Message::Data(&data[pos..end]),
+        0 => Message::Data(data, pos, end),
         1 => {
             if end < pos + 1 {
                 return Err(Error::ParseError("Empty peers"));
@@ -197,32 +195,16 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
     Ok((options, msg))
 }
 
-pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Crypto) -> usize {
-    let mut pos = 0;
-    let mut header = TopHeader::default();
-    header.msgtype = match msg {
-        &Message::Data(_) => 0,
-        &Message::Peers(_) => 1,
-        &Message::Init(_, _, _) => 2,
-        &Message::Close => 3
-    };
-    header.crypto_method = crypto.method();
-    if options.network_id.is_some() {
-        header.flags |= 0x01;
-    }
-    pos += header.write_to(&mut buf[pos..]);
-    pos += crypto.nonce_bytes();
-    if let Some(id) = options.network_id {
-        assert!(buf.len() >= pos + NETWORK_ID_BYTES);
-        Encoder::write_u64(id, &mut buf[pos..]);
-        pos += NETWORK_ID_BYTES;
-    }
+pub fn encode<'a>(options: &Options, msg: &'a mut Message, mut buf: &'a mut [u8], crypto: &mut Crypto) -> &'a mut [u8] {
+    let mut start = 64;
+    let mut end = 64;
     match msg {
-        &Message::Data(ref data) => {
-            memcopy(data, &mut buf[pos..]);
-            pos += data.len();
+        &mut Message::Data(ref mut data, data_start, data_end) => {
+            buf = data;
+            start = data_start;
+            end = data_end;
         },
-        &Message::Peers(ref peers) => {
+        &mut Message::Peers(ref peers) => {
             let mut v4addrs = Vec::new();
             let mut v6addrs = Vec::new();
             for p in peers {
@@ -233,6 +215,7 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
             };
             assert!(v4addrs.len() <= 255);
             assert!(v6addrs.len() <= 255);
+            let mut pos = start;
             assert!(buf.len() >= pos + 2 + v4addrs.len() * 6 + v6addrs.len() * 18);
             buf[pos] = v4addrs.len() as u8;
             pos += 1;
@@ -256,8 +239,10 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
                 Encoder::write_u16(addr.port(), &mut buf[pos..]);
                 pos += 2;
             };
+            end = pos;
         },
-        &Message::Init(stage, ref node_id, ref ranges) => {
+        &mut Message::Init(stage, ref node_id, ref ranges) => {
+            let mut pos = start;
             assert!(buf.len() >= pos + 2 + NODE_ID_BYTES);
             buf[pos] = stage;
             pos += 1;
@@ -271,16 +256,40 @@ pub fn encode(options: &Options, msg: &Message, buf: &mut [u8], crypto: &mut Cry
             for range in ranges {
                 pos += range.write_to(&mut buf[pos..]);
             }
+            end = pos;
         },
-        &Message::Close => {
+        &mut Message::Close => {
         }
     }
-    if crypto.method() > 0 {
-        let (header, rest) = buf.split_at_mut(TopHeader::size());
-        let (nonce, rest) = rest.split_at_mut(crypto.nonce_bytes());
-        let crypto_start = header.len() + nonce.len();
-        assert!(rest.len() >= pos - crypto_start + crypto.additional_bytes());
-        pos = crypto.encrypt(rest, pos-crypto_start, nonce, header) + crypto_start;
+    assert!(start >= 64);
+    assert!(buf.len() >= end + 64);
+    if let Some(id) = options.network_id {
+        assert!(start >= NETWORK_ID_BYTES);
+        Encoder::write_u64(id, &mut buf[start-NETWORK_ID_BYTES..]);
+        start -= NETWORK_ID_BYTES;
     }
-    pos
+    let crypto_start = start;
+    start -= crypto.nonce_bytes();
+    let mut header = TopHeader::default();
+    header.msgtype = match msg {
+        &mut Message::Data(_, _, _) => 0,
+        &mut Message::Peers(_) => 1,
+        &mut Message::Init(_, _, _) => 2,
+        &mut Message::Close => 3
+    };
+    header.crypto_method = crypto.method();
+    if options.network_id.is_some() {
+        header.flags |= 0x01;
+    }
+    start -= TopHeader::size();
+    header.write_to(&mut buf[start..]);
+    if crypto.method() > 0 {
+        let (junk_before, rest) = buf.split_at_mut(start);
+        let (header, rest) = rest.split_at_mut(TopHeader::size());
+        let (nonce, rest) = rest.split_at_mut(crypto.nonce_bytes());
+        debug_assert_eq!(junk_before.len() + header.len() + crypto.nonce_bytes(), crypto_start);
+        assert!(rest.len() >= end - crypto_start + crypto.additional_bytes());
+        end = crypto.encrypt(rest, end-crypto_start, nonce, header) + crypto_start;
+    }
+    &mut buf[start..end]
 }

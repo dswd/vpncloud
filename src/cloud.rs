@@ -135,11 +135,11 @@ impl<P: Protocol> GenericCloud<P> {
         self.device.ifname()
     }
 
-    fn send_msg<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr, msg: &Message) -> Result<(), Error> {
+    fn send_msg<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr, msg: &mut Message) -> Result<(), Error> {
         debug!("Sending {:?} to {}", msg, addr);
-        let size = encode(&mut self.options, msg, &mut self.buffer_out, &mut self.crypto);
-        match self.socket.send_to(&self.buffer_out[..size], addr) {
-            Ok(written) if written == size => Ok(()),
+        let msg_data = encode(&mut self.options, msg, &mut self.buffer_out, &mut self.crypto);
+        match self.socket.send_to(msg_data, addr) {
+            Ok(written) if written == msg_data.len() => Ok(()),
             Ok(_) => Err(Error::SocketError("Sent out truncated packet")),
             Err(e) => {
                 error!("Failed to send via network {:?}", e);
@@ -166,7 +166,7 @@ impl<P: Protocol> GenericCloud<P> {
         }
         let addrs = self.addresses.clone();
         let node_id = self.node_id.clone();
-        self.send_msg(addr, &Message::Init(0, node_id, addrs))
+        self.send_msg(addr, &mut Message::Init(0, node_id, addrs))
     }
 
     fn housekeep(&mut self) -> Result<(), Error> {
@@ -182,9 +182,9 @@ impl<P: Protocol> GenericCloud<P> {
                 }
             }
             let peers = self.peers.subset(peer_num);
-            let msg = Message::Peers(peers);
+            let mut msg = Message::Peers(peers);
             for addr in &self.peers.as_vec() {
-                try!(self.send_msg(addr, &msg));
+                try!(self.send_msg(addr, &mut msg));
             }
             self.next_peerlist = now() + self.update_freq as Time;
         }
@@ -194,14 +194,14 @@ impl<P: Protocol> GenericCloud<P> {
         Ok(())
     }
 
-    fn handle_interface_data(&mut self, payload: &[u8]) -> Result<(), Error> {
+    fn handle_interface_data(&mut self, payload: &mut [u8], start: usize, end: usize) -> Result<(), Error> {
         let (src, dst) = try!(P::parse(payload));
         debug!("Read data from interface: src: {}, dst: {}, {} bytes", src, dst, payload.len());
         match self.table.lookup(&dst) {
             Some(addr) => {
                 debug!("Found destination for {} => {}", dst, addr);
                 if self.peers.contains(&addr) {
-                    try!(self.send_msg(addr, &Message::Data(payload)))
+                    try!(self.send_msg(addr, &mut Message::Data(payload, start, end)))
                 } else {
                     warn!("Destination for {} not found in peers: {}", dst, addr);
                 }
@@ -212,9 +212,9 @@ impl<P: Protocol> GenericCloud<P> {
                     return Ok(());
                 }
                 debug!("No destination for {} found, broadcasting", dst);
-                let msg = Message::Data(payload);
+                let mut msg = Message::Data(payload, start, end);
                 for addr in &self.peers.as_vec() {
-                    try!(self.send_msg(addr, &msg));
+                    try!(self.send_msg(addr, &mut msg));
                 }
             }
         }
@@ -228,10 +228,10 @@ impl<P: Protocol> GenericCloud<P> {
         }
         debug!("Received {:?} from {}", msg, peer);
         match msg {
-            Message::Data(payload) => {
-                let (src, _dst) = try!(P::parse(payload));
-                debug!("Writing data to device: {} bytes", payload.len());
-                match self.device.write(&payload) {
+            Message::Data(payload, start, end) => {
+                let (src, _dst) = try!(P::parse(&payload[start..end]));
+                debug!("Writing data to device: {} bytes", end-start);
+                match self.device.write(&payload[start..end]) {
                     Ok(()) => (),
                     Err(e) => {
                         error!("Failed to send via device: {}", e);
@@ -265,8 +265,8 @@ impl<P: Protocol> GenericCloud<P> {
                     let peers = self.peers.as_vec();
                     let own_addrs = self.addresses.clone();
                     let own_node_id = self.node_id.clone();
-                    try!(self.send_msg(peer, &Message::Init(stage+1, own_node_id, own_addrs)));
-                    try!(self.send_msg(peer, &Message::Peers(peers)));
+                    try!(self.send_msg(peer, &mut Message::Init(stage+1, own_node_id, own_addrs)));
+                    try!(self.send_msg(peer, &mut Message::Peers(peers)));
                 }
             },
             Message::Close => {
@@ -301,8 +301,9 @@ impl<P: Protocol> GenericCloud<P> {
                         }
                     },
                     &1 => {
-                        let size = try_fail!(self.device.read(&mut buffer), "Failed to read from tap device: {}");
-                        match self.handle_interface_data(&buffer[..size]) {
+                        let start = 64;
+                        let size = try_fail!(self.device.read(&mut buffer[start..]), "Failed to read from tap device: {}");
+                        match self.handle_interface_data(&mut buffer, start, start+size) {
                             Ok(_) => (),
                             Err(e) => error!("Error: {}", e)
                         }
@@ -325,7 +326,7 @@ impl<P: Protocol> GenericCloud<P> {
         }
         info!("Shutting down...");
         for p in &self.peers.as_vec() {
-            let _ = self.send_msg(p, &Message::Close);
+            let _ = self.send_msg(p, &mut Message::Close);
         }
     }
 }

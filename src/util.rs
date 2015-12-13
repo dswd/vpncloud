@@ -1,4 +1,3 @@
-use std::ptr;
 use libc;
 
 pub type Duration = u32;
@@ -9,12 +8,6 @@ pub fn now() -> Time {
     let mut tv = libc::timespec { tv_sec: 0, tv_nsec: 0 };
     unsafe { libc::clock_gettime(6, &mut tv); }
     tv.tv_sec
-}
-
-#[inline(always)]
-pub fn memcopy(src: &[u8], dst: &mut[u8]) {
-    assert!(dst.len() >= src.len());
-    unsafe { ptr::copy_nonoverlapping(src.as_ptr(), dst.as_mut_ptr(), src.len()) };
 }
 
 const HEX_CHARS: &'static [u8] = b"0123456789abcdef";

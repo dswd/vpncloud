@@ -5,6 +5,7 @@ This project follows [semantic versioning](http://semver.org).
 
 ### UNRELEASED
 
+- [changed] Removed last payload memcopy
 - [changed] Using RNG to select peers for peers list exchange
 - [changed] Updated dependency versions
 - [changed] Updated documentation
