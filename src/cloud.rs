@@ -150,8 +150,8 @@ impl<P: Protocol> GenericCloud<P> {
 
     pub fn connect<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr, reconnect: bool) -> Result<(), Error> {
         if let Ok(mut addrs) = addr.to_socket_addrs() {
-            while let Some(addr) = addrs.next() {
-                if self.peers.contains(&addr) || self.blacklist_peers.contains(&addr) {
+            while let Some(a) = addrs.next() {
+                if self.peers.contains(&a) || self.blacklist_peers.contains(&a) {
                     return Ok(());
                 }
             }
@@ -159,14 +159,21 @@ impl<P: Protocol> GenericCloud<P> {
         debug!("Connecting to {}", addr);
         if reconnect {
             if let Ok(mut addrs) = addr.to_socket_addrs() {
-                while let Some(addr) = addrs.next() {
-                    self.reconnect_peers.push(addr);
+                while let Some(a) = addrs.next() {
+                    self.reconnect_peers.push(a);
                 }
             }
         }
-        let addrs = self.addresses.clone();
+        let subnets = self.addresses.clone();
         let node_id = self.node_id.clone();
-        self.send_msg(addr, &mut Message::Init(0, node_id, addrs))
+        let mut msg = Message::Init(0, node_id, subnets);
+        if let Ok(mut addrs) = addr.to_socket_addrs() {
+            while let Some(a) = addrs.next() {
+                //Ignore error this time
+                self.send_msg(a, &mut msg).ok();
+            }
+        }
+        Ok(())
     }
 
     fn housekeep(&mut self) -> Result<(), Error> {
