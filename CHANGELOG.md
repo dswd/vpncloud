@@ -2,6 +2,9 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### Unreleased
+
+- [changed] Logging more verbosely
 
 ### v0.4 (2015-12-22)
 

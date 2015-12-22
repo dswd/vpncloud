@@ -58,7 +58,7 @@ do_start() {
     unset DEVICE LISTEN TYPE MODE SHARED_KEY CRYPTO IFUP IFDOWN NETWORK_ID PEER_TIMEOUT DST_TIMEOUT PEERS SUBNETS
     [ -f "$NETCONFIGS/$net.net" ] && . $NETCONFIGS/$net.net
     if [ $ENABLED -eq 1 ]; then
-      PARAMS="-q"
+      PARAMS=""
       [ -z "$DEVICE" ] || PARAMS="$PARAMS --device $DEVICE"
       [ -z "$LISTEN" ] || PARAMS="$PARAMS --listen $LISTEN"
       [ -z "$TYPE" ] || PARAMS="$PARAMS --type $TYPE"
