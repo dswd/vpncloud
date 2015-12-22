@@ -2,7 +2,7 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### Unreleased
+### v0.4.1 (2015-12-22)
 
 - [changed] Logging more verbosely
 - [fixed] Removing NULL-bytes from interface name
@@ -11,7 +11,7 @@ This project follows [semantic versioning](http://semver.org).
 - [fixed] Properly decoding protocol header when sending
 - [fixed] Corrected size of read data
 
-### v0.4 (2015-12-22)
+### v0.4.0 (2015-12-22)
 
 - [added] Init script
 - [changed] Removed last payload memcopy
