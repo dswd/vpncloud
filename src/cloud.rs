@@ -131,11 +131,30 @@ impl<P: Protocol> GenericCloud<P> {
         }
     }
 
+    #[inline]
     pub fn ifname(&self) -> &str {
         self.device.ifname()
     }
 
-    fn send_msg<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr, msg: &mut Message) -> Result<(), Error> {
+    #[inline]
+    fn broadcast_msg(&mut self, msg: &mut Message) -> Result<(), Error> {
+        debug!("Broadcasting {:?}", msg);
+        let msg_data = encode(&mut self.options, msg, &mut self.buffer_out, &mut self.crypto);
+        for addr in &self.peers.as_vec() {
+            try!(match self.socket.send_to(msg_data, addr) {
+                Ok(written) if written == msg_data.len() => Ok(()),
+                Ok(_) => Err(Error::SocketError("Sent out truncated packet")),
+                Err(e) => {
+                    error!("Failed to send via network {:?}", e);
+                    Err(Error::SocketError("IOError when sending"))
+                }
+            })
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn send_msg(&mut self, addr: SocketAddr, msg: &mut Message) -> Result<(), Error> {
         debug!("Sending {:?} to {}", msg, addr);
         let msg_data = encode(&mut self.options, msg, &mut self.buffer_out, &mut self.crypto);
         match self.socket.send_to(msg_data, addr) {
@@ -190,9 +209,7 @@ impl<P: Protocol> GenericCloud<P> {
             }
             let peers = self.peers.subset(peer_num);
             let mut msg = Message::Peers(peers);
-            for addr in &self.peers.as_vec() {
-                try!(self.send_msg(addr, &mut msg));
-            }
+            try!(self.broadcast_msg(&mut msg));
             self.next_peerlist = now() + self.update_freq as Time;
         }
         for addr in self.reconnect_peers.clone() {
@@ -220,9 +237,7 @@ impl<P: Protocol> GenericCloud<P> {
                 }
                 debug!("No destination for {} found, broadcasting", dst);
                 let mut msg = Message::Data(payload, start, end);
-                for addr in &self.peers.as_vec() {
-                    try!(self.send_msg(addr, &mut msg));
-                }
+                try!(self.broadcast_msg(&mut msg));
             }
         }
         Ok(())
@@ -332,8 +347,6 @@ impl<P: Protocol> GenericCloud<P> {
             }
         }
         info!("Shutting down...");
-        for p in &self.peers.as_vec() {
-            let _ = self.send_msg(p, &mut Message::Close);
-        }
+        self.broadcast_msg(&mut Message::Close).ok();
     }
 }

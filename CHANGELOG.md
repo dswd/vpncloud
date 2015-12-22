@@ -7,6 +7,7 @@ This project follows [semantic versioning](http://semver.org).
 - [changed] Logging more verbosely
 - [fixed] Removing NULL-bytes from interface name
 - [fixed] Supporting hostnames as peers
+- [fixed] No longer encrypting multiple times
 
 ### v0.4 (2015-12-22)
 
