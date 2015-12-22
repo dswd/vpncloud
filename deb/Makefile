@@ -13,7 +13,7 @@ $(PACKAGE)_*.deb: $(PACKAGE)/vpncloud.1.ronn $(PACKAGE)/vpncloud
 clean:
 	(cd $(PACKAGE); debuild clean; cd ..)
 	rm -rf $(PACKAGE)_*
-	rm ../target/release/vpncloud
+	rm -f ../target/release/vpncloud
 
 $(PACKAGE)/vpncloud.1.ronn: ../vpncloud.md
 	cp ../vpncloud.md $(PACKAGE)/vpncloud.1.ronn
