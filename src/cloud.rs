@@ -219,8 +219,8 @@ impl<P: Protocol> GenericCloud<P> {
     }
 
     fn handle_interface_data(&mut self, payload: &mut [u8], start: usize, end: usize) -> Result<(), Error> {
-        let (src, dst) = try!(P::parse(payload));
-        debug!("Read data from interface: src: {}, dst: {}, {} bytes", src, dst, payload.len());
+        let (src, dst) = try!(P::parse(&payload[start..end]));
+        debug!("Read data from interface: src: {}, dst: {}, {} bytes", src, dst, end-start);
         match self.table.lookup(&dst) {
             Some(addr) => {
                 debug!("Found destination for {} => {}", dst, addr);

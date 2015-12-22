@@ -8,6 +8,8 @@ This project follows [semantic versioning](http://semver.org).
 - [fixed] Removing NULL-bytes from interface name
 - [fixed] Supporting hostnames as peers
 - [fixed] No longer encrypting multiple times
+- [fixed] Properly decoding protocol header when sending
+- [fixed] Corrected size of read data
 
 ### v0.4 (2015-12-22)
 
