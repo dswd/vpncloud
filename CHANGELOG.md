@@ -3,13 +3,15 @@
 This project follows [semantic versioning](http://semver.org).
 
 
-### UNRELEASED
+### v0.4 (2015-12-22)
 
+- [added] Init script
 - [changed] Removed last payload memcopy
 - [changed] Using RNG to select peers for peers list exchange
 - [changed] Updated dependency versions
 - [changed] Updated documentation
 - [fixed] Printing errors instead of panics in some cases
+- [fixed] Build script for Debian packages
 
 ### v0.3.1 (2015-12-03)
 
