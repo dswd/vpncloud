@@ -4,11 +4,39 @@ use std::str::FromStr;
 use std::net::ToSocketAddrs;
 
 use super::udpmessage::{Options, Message, encode, decode};
-use super::crypto::Crypto;
+use super::crypto::{Crypto, CryptoMethod};
 use super::ethernet::{Frame, SwitchTable};
 use super::types::{Address, Table, Protocol};
 use super::ip::Packet;
 
+#[bench]
+fn crypto_salsa20(b: &mut Bencher) {
+    let mut crypto = Crypto::from_shared_key(CryptoMethod::ChaCha20, "test");
+    let mut payload = [0; 1500];
+    let header = [0; 8];
+    let mut nonce_bytes = [0; 12];
+    b.iter(|| {
+        let len = crypto.encrypt(&mut payload, 1400, &mut nonce_bytes, &header);
+        assert!(crypto.decrypt(&mut payload[..len], &nonce_bytes, &header).is_ok())
+    });
+    b.bytes = 1400;
+}
+
+#[bench]
+fn crypto_aes256(b: &mut Bencher) {
+    if !Crypto::aes256_available() {
+        return
+    }
+    let mut crypto = Crypto::from_shared_key(CryptoMethod::AES256, "test");
+    let mut payload = [0; 1500];
+    let header = [0; 8];
+    let mut nonce_bytes = [0; 12];
+    b.iter(|| {
+        let len = crypto.encrypt(&mut payload, 1400, &mut nonce_bytes, &header);
+        assert!(crypto.decrypt(&mut payload[..len], &nonce_bytes, &header).is_ok());
+    });
+    b.bytes = 1400;
+}
 
 #[bench]
 fn message_encode(b: &mut Bencher) {
