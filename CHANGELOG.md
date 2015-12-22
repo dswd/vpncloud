@@ -5,6 +5,7 @@ This project follows [semantic versioning](http://semver.org).
 ### Unreleased
 
 - [changed] Logging more verbosely
+- [fixed] Removing NULL-bytes from interface name
 
 ### v0.4 (2015-12-22)
 

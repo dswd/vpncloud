@@ -28,7 +28,12 @@ impl Device {
             Type::Tap => unsafe { setup_tap_device(fd.as_raw_fd(), ifname_c.as_mut_ptr()) }
         };
         match res {
-            0 => Ok(Device{fd: fd, ifname: String::from_utf8(ifname_c).unwrap()}),
+            0 => {
+                while ifname_c.last() == Some(&0) {
+                    ifname_c.pop();
+                }
+                Ok(Device{fd: fd, ifname: String::from_utf8(ifname_c).unwrap()})
+            },
             _ => Err(IoError::last_os_error())
         }
     }
