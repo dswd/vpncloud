@@ -1,11 +1,11 @@
 vpncloud (0.4.1) stable; urgency=medium
 
- * [changed] Logging more verbosely
- * [fixed] Removing NULL-bytes from interface name
- * [fixed] Supporting hostnames as peers
- * [fixed] No longer encrypting multiple times
- * [fixed] Properly decoding protocol header when sending
- * [fixed] Corrected size of read data
+  * [changed] Logging more verbosely
+  * [fixed] Removing NULL-bytes from interface name
+  * [fixed] Supporting hostnames as peers
+  * [fixed] No longer encrypting multiple times
+  * [fixed] Properly decoding protocol header when sending
+  * [fixed] Corrected size of read data
 
  -- Dennis Schwerdel <schwerdel@informatik.uni-kl.de>  Tue, 22 Dec 2015 22:51:30 +0100
 
