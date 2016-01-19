@@ -10,7 +10,7 @@ pub const VERSION: u8 = 1;
 
 const NETWORK_ID_BYTES: usize = 8;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 #[repr(packed)]
 struct TopHeader {
     magic: [u8; 3],

@@ -75,7 +75,7 @@ impl Table for SwitchTable {
     #[inline]
     fn learn(&mut self, key: Address, _prefix_len: Option<u8>, addr: SocketAddr) {
         let value = SwitchTableValue{address: addr, timeout: now()+self.timeout as Time};
-        if self.table.insert(key.clone(), value).is_none() {
+        if self.table.insert(key, value).is_none() {
             info!("Learned address {} => {}", key, addr);
         }
     }
