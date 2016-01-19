@@ -52,10 +52,10 @@ The test is run in 3 steps:
 
 | Throughput test               | Bandwidth     | CPU usage (one core) |
 | ----------------------------- | ------------- | -------------------- |
-| Without VpnCloud              | 926 Mbits/sec |  -                   |
-| Unencrypted VpnCloud          | 875 Mbits/sec | 80% / 95%            |
-| Encrypted VpnCloud (ChaCha20) | 799 Mbits/sec | 100%                 |
-| Encrypted VpnCloud (AES256)   | 837 Mbits/sec | 90% / 100%           |
+| Without VpnCloud              | 920 Mbits/sec |  -                   |
+| Unencrypted VpnCloud          | 883 Mbits/sec | 80% / 75%            |
+| Encrypted VpnCloud (ChaCha20) | 814 Mbits/sec | 90% / 90%            |
+| Encrypted VpnCloud (AES256)   | 821 Mbits/sec | 85% / 85%           |
 
 
 ### Latency
@@ -71,10 +71,10 @@ assumed to be half of the RTT.
 
 | Payload size                  | 100 bytes       | 500 bytes       | 1000 bytes      |
 | ----------------------------- | --------------- | --------------- | --------------- |
-| Without VpnCloud              | 158 µs          | 164 µs          | 171 µs          |
-| Unencrypted VpnCloud          | 208 µs (+50 µs) | 225 µs (+61 µs) | 236 µs (+65 µs) |
-| Encrypted VpnCloud (ChaCha20) | 229 µs (+21 µs) | 242 µs (+17 µs) | 259 µs (+23 µs) |
-| Encrypted VpnCloud (AES256)   | 223 µs (+15 µs) | 232 µs ( +7 µs) | 249 µs (+13 µs) |
+| Without VpnCloud              | 156 µs          | 164 µs          | 171 µs          |
+| Unencrypted VpnCloud          | 205 µs (+50 µs) | 220 µs (+61 µs) | 236 µs (+65 µs) |
+| Encrypted VpnCloud (ChaCha20) | 222 µs (+17 µs) | 242 µs (+22 µs) | 258 µs (+22 µs) |
+| Encrypted VpnCloud (AES256)   | 216 µs (+15 µs) | 232 µs (+12 µs) | 250 µs (+14 µs) |
 
 
 ### Conclusion
