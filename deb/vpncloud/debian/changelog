@@ -1,3 +1,12 @@
+vpncloud (0.4.2) stable; urgency=medium
+
+  * [changed] Updated dependencies
+  * [changed] New measurements
+  * [changed] Using copy trait more often
+  * [fixed] Fixed deb changelog
+
+ -- Dennis Schwerdel <schwerdel@informatik.uni-kl.de>  Tue, 19 Jan 2016 21:56:12 +0100
+
 vpncloud (0.4.1) stable; urgency=medium
 
   * [changed] Logging more verbosely

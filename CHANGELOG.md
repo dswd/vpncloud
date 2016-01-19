@@ -2,6 +2,13 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### v0.4.2 (2016-01-19)
+
+- [changed] Updated dependencies
+- [changed] New measurements
+- [changed] Using copy trait more often
+- [fixed] Fixed deb changelog
+
 ### v0.4.1 (2015-12-22)
 
 - [changed] Logging more verbosely
