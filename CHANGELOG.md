@@ -2,6 +2,13 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### UNRELEASED
+
+- [added] Script for performance measurements
+- [changed] Using display format for addresses
+- [changed] Updated dependencies
+- [changed] New measurements
+
 ### v0.4.3 (2016-02-02)
 
 - [changed] Updated libsodium to 1.0.8
