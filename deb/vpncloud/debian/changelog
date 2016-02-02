@@ -1,3 +1,10 @@
+vpncloud (0.4.3) stable; urgency=medium
+
+  * [changed] Updated libsodium to 1.0.8
+  * [fixed] Fixed problem with nodes broadcasting to themselves
+
+ -- Dennis Schwerdel <schwerdel@informatik.uni-kl.de>  Tue, 02 Feb 2016 11:27:04 +0100
+
 vpncloud (0.4.2) stable; urgency=medium
 
   * [changed] Updated dependencies

@@ -2,7 +2,7 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### UNRELEASED
+### v0.4.3 (2016-02-02)
 
 - [changed] Updated libsodium to 1.0.8
 - [fixed] Fixed problem with nodes broadcasting to themselves
