@@ -84,7 +84,7 @@ impl fmt::Display for Address {
             },
             16 => write!(formatter, "{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}",
                 d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]),
-            _ => write!(formatter, "{}", bytes_to_hex(d))
+            _ => write!(formatter, "{}", bytes_to_hex(&d[0..self.len as usize]))
         }
     }
 }
@@ -222,7 +222,7 @@ pub trait Protocol: Sized {
     fn parse(&[u8]) -> Result<(Address, Address), Error>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     ParseError(&'static str),
     WrongNetwork(Option<NetworkId>),

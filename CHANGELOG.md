@@ -5,9 +5,11 @@ This project follows [semantic versioning](http://semver.org).
 ### UNRELEASED
 
 - [added] Script for performance measurements
+- [added] Added more tests
 - [changed] Using display format for addresses
 - [changed] Updated dependencies
 - [changed] New measurements
+- [fixed] Fixed wrong hex address formatting
 
 ### v0.4.3 (2016-02-02)
 
