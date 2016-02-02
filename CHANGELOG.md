@@ -2,6 +2,10 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### UNRELEASED
+
+- [fixed] Fixed problem with nodes broadcasting to themselves
+
 ### v0.4.2 (2016-01-19)
 
 - [changed] Updated dependencies

@@ -267,7 +267,6 @@ impl<P: Protocol> GenericCloud<P> {
                 }
             },
             Message::Peers(peers) => {
-                self.peers.add(&peer);
                 for p in &peers {
                     if ! self.peers.contains(p) && ! self.blacklist_peers.contains(p) {
                         try!(self.connect(p, false));
