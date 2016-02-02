@@ -38,7 +38,7 @@ impl PeerList {
             }
         }
         for addr in &del {
-            debug!("Forgot peer: {:?}", addr);
+            debug!("Forgot peer: {}", addr);
             self.peers.remove(addr);
         }
         del
@@ -52,7 +52,7 @@ impl PeerList {
     #[inline]
     fn add(&mut self, addr: &SocketAddr) {
         if self.peers.insert(*addr, now()+self.timeout as Time).is_none() {
-            info!("New peer: {:?}", addr);
+            info!("New peer: {}", addr);
         }
     }
 
@@ -74,7 +74,7 @@ impl PeerList {
     #[inline]
     fn remove(&mut self, addr: &SocketAddr) {
         if self.peers.remove(&addr).is_some() {
-            info!("Removed peer: {:?}", addr);
+            info!("Removed peer: {}", addr);
         }
     }
 }
