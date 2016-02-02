@@ -31,7 +31,7 @@ use std::process::Command;
 use device::Device;
 use ethernet::SwitchTable;
 use ip::RoutingTable;
-use types::{Error, Mode, Type, Range, Table, Protocol};
+use types::{Mode, Type, Range, Table, Protocol};
 use cloud::GenericCloud;
 use udpmessage::VERSION;
 use crypto::{Crypto, CryptoMethod};

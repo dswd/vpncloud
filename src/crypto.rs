@@ -35,7 +35,7 @@ const crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_INTERACTIVE: usize = 524288;
 #[allow(non_upper_case_globals)]
 const crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_INTERACTIVE: usize = 16777216;
 
-struct Aes256State(*mut [u8; crypto_aead_aes256gcm_STATEBYTES]);
+pub struct Aes256State(*mut [u8; crypto_aead_aes256gcm_STATEBYTES]);
 
 impl Aes256State {
     fn new() -> Aes256State {
