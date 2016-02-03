@@ -23,7 +23,7 @@ USER=root
 GROUP=root
 UMASK=022
 
-NETWORKS="default"
+NETWORKS=$(for net in $(ls $NETCONFIGS); do basename $net .net; done);
 
 DAEMON=$(which $NAME)
 

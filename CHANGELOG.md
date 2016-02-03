@@ -4,8 +4,10 @@ This project follows [semantic versioning](http://semver.org).
 
 ### UNRELEASED
 
+- [added] Added documentation for daemon config files
 - [added] Script for performance measurements
 - [added] Added more tests
+- [changed] Daemon now detects network config files on its own
 - [changed] Using display format for addresses
 - [changed] Updated dependencies
 - [changed] New measurements
