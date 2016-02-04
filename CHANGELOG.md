@@ -12,6 +12,7 @@ This project follows [semantic versioning](http://semver.org).
 - [changed] Updated dependencies
 - [changed] New measurements
 - [fixed] Fixed wrong hex address formatting
+- [fixed] Fixed peer exchange for more than 65000 peers
 
 ### v0.4.3 (2016-02-02)
 

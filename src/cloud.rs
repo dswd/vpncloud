@@ -206,6 +206,9 @@ impl<P: Protocol> GenericCloud<P> {
                 if peer_num < 10 {
                     peer_num = 10;
                 }
+                if peer_num > 255 {
+                    peer_num = 255
+                }
             }
             let peers = self.peers.subset(peer_num);
             let mut msg = Message::Peers(peers);
