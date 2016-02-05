@@ -348,4 +348,5 @@ alive.
 
 ## COPYRIGHT
 
-Copyright (C) 2015 Dennis Schwerdel
+Copyright (C) 2015-2016  Dennis Schwerdel
+This software is licensed under GPL-3 or newer (see LICENSE.md)

@@ -1,3 +1,7 @@
+// VpnCloud - Peer-to-Peer VPN
+// Copyright (C) 2015-2016  Dennis Schwerdel
+// This software is licensed under GPL-3 or newer (see LICENSE.md)
+
 #![cfg_attr(feature = "bench", feature(test))]
 #[macro_use] extern crate log;
 extern crate time;

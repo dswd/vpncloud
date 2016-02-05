@@ -1,3 +1,7 @@
+// VpnCloud - Peer-to-Peer VPN
+// Copyright (C) 2015-2016  Dennis Schwerdel
+// This software is licensed under GPL-3 or newer (see LICENSE.md)
+
 use std::fmt;
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr, SocketAddrV6, Ipv6Addr};
 

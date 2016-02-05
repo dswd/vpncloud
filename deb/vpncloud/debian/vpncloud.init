@@ -10,6 +10,9 @@
 ### END INIT INFO
 
 # Author: Dennis Schwerdel <schwerdel@informatik.uni-kl.de>
+# Copyright (C) 2015-2016  Dennis Schwerdel
+# This software is licensed unter GPL-3 or newer (see LICENSE.md)
+
 
 # PATH should only include /usr/* if it runs after the mountnfs.sh script
 PATH=/sbin:/usr/sbin:/bin:/usr/bin

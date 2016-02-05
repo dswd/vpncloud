@@ -4,6 +4,7 @@ This project follows [semantic versioning](http://semver.org).
 
 ### UNRELEASED
 
+- [added] Added license and copyright information
 - [added] Added documentation for daemon config files
 - [added] Script for performance measurements
 - [added] Added more tests

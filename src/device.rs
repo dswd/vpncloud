@@ -1,3 +1,7 @@
+// VpnCloud - Peer-to-Peer VPN
+// Copyright (C) 2015-2016  Dennis Schwerdel
+// This software is licensed under GPL-3 or newer (see LICENSE.md)
+
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::io::{Result as IoResult, Error as IoError, Read, Write};
 use std::fs;
