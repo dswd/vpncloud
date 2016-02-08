@@ -7,13 +7,16 @@ This project follows [semantic versioning](http://semver.org).
 - [added] Added license and copyright information
 - [added] Added documentation for daemon config files
 - [added] Script for performance measurements
-- [added] Added more tests
+- [added] Added more tests and benchmarks
 - [changed] Daemon now detects network config files on its own
 - [changed] Using display format for addresses
 - [changed] Updated dependencies
 - [changed] New measurements
+- [changed] Only calling crypto_init once
+- [changed] Passing listen address as &str
 - [fixed] Fixed wrong hex address formatting
 - [fixed] Fixed peer exchange for more than 65000 peers
+- [fixed] Initializing crypto for benchmarks
 
 ### v0.4.3 (2016-02-02)
 
