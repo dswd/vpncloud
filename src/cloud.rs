@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::hash::Hasher;
 use std::net::UdpSocket;
 use std::io::Read;
+use std::io::Result as IoResult;
 use std::fmt;
 use std::os::unix::io::AsRawFd;
 use std::marker::PhantomData;
@@ -171,6 +172,16 @@ impl<P: Protocol> GenericCloud<P> {
         }
     }
 
+    #[allow(dead_code)]
+    pub fn address(&self) -> IoResult<SocketAddr> {
+        self.socket.local_addr()
+    }
+
+    #[allow(dead_code)]
+    pub fn peer_count(&self) -> usize {
+        self.peers.len()
+    }
+
     pub fn connect<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr, reconnect: bool) -> Result<(), Error> {
         if let Ok(mut addrs) = addr.to_socket_addrs() {
             while let Some(a) = addrs.next() {
@@ -225,7 +236,7 @@ impl<P: Protocol> GenericCloud<P> {
         Ok(())
     }
 
-    fn handle_interface_data(&mut self, payload: &mut [u8], start: usize, end: usize) -> Result<(), Error> {
+    pub fn handle_interface_data(&mut self, payload: &mut [u8], start: usize, end: usize) -> Result<(), Error> {
         let (src, dst) = try!(P::parse(&payload[start..end]));
         debug!("Read data from interface: src: {}, dst: {}, {} bytes", src, dst, end-start);
         match self.table.lookup(&dst) {
@@ -250,7 +261,7 @@ impl<P: Protocol> GenericCloud<P> {
         Ok(())
     }
 
-    fn handle_net_message(&mut self, peer: SocketAddr, options: Options, msg: Message) -> Result<(), Error> {
+    pub fn handle_net_message(&mut self, peer: SocketAddr, options: Options, msg: Message) -> Result<(), Error> {
         if self.options.network_id != options.network_id {
             info!("Ignoring message from {} with wrong token {:?}", peer, options.network_id);
             return Err(Error::WrongNetwork(options.network_id));

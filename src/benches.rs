@@ -5,13 +5,19 @@
 use test::Bencher;
 
 use std::str::FromStr;
-use std::net::ToSocketAddrs;
+use std::net::{UdpSocket, ToSocketAddrs, Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::os::unix::io::AsRawFd;
 
+use super::cloud::GenericCloud;
+use super::device::Device;
 use super::udpmessage::{Options, Message, encode, decode};
 use super::crypto::{Crypto, CryptoMethod};
 use super::ethernet::{Frame, SwitchTable};
 use super::types::{Address, Table, Protocol};
 use super::ip::Packet;
+use super::util::now as util_now;
+
+use epoll;
 
 #[bench]
 fn crypto_salsa20(b: &mut Bencher) {
@@ -116,4 +122,63 @@ fn ipv6_parse(b: &mut Bencher) {
     b.iter(|| {
         Packet::parse(&data).unwrap()
     })
+}
+
+#[bench]
+fn now(b: &mut Bencher) {
+    b.iter(|| {
+        util_now()
+    })
+}
+
+#[bench]
+fn epoll_wait(b: &mut Bencher) {
+    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let epoll_handle = epoll::create1(0).unwrap();
+    let fd = socket.as_raw_fd();
+    let mut event = epoll::EpollEvent{events: epoll::util::event_type::EPOLLOUT, data: 0};
+    epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, fd, &mut event).unwrap();
+    let mut events = [epoll::EpollEvent{events: 0, data: 0}; 1];
+    b.iter(|| {
+        epoll::wait(epoll_handle, &mut events, 1000).unwrap()
+    });
+}
+
+#[bench]
+fn handle_interface_data(b: &mut Bencher) {
+    let mut node = GenericCloud::<Frame>::new(
+        Device::dummy("vpncloud0", "/dev/null").unwrap(), "127.0.0.1:0", None,
+        Box::new(SwitchTable::new(300)), 1800, true, true, vec![], Crypto::None
+    );
+    let mut data = [0; 1500];
+    data[105] = 45;
+    b.iter(|| {
+        node.handle_interface_data(&mut data, 100, 1400).unwrap()
+    });
+    b.bytes = 1400;
+}
+
+#[bench]
+fn handle_net_message(b: &mut Bencher) {
+    let mut node = GenericCloud::<Frame>::new(
+        Device::dummy("vpncloud0", "/dev/null").unwrap(), "127.0.0.1:0", None,
+        Box::new(SwitchTable::new(300)), 1800, true, true, vec![], Crypto::None
+    );
+    let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 1));
+    let mut data = [0; 1500];
+    data[105] = 45;
+    b.iter(|| {
+        node.handle_net_message(addr.clone(), Options::default(), Message::Data(&mut data, 0, 1400)).unwrap()
+    });
+    b.bytes = 1400;
+}
+
+#[bench]
+fn udp_send(b: &mut Bencher) {
+    let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let data = [0; 1400];
+    b.iter(|| {
+        sock.send_to(&data, "127.0.0.1:1").unwrap()
+    });
+    b.bytes = 1400;
 }

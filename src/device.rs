@@ -42,6 +42,11 @@ impl Device {
         }
     }
 
+    #[allow(dead_code)]
+    pub fn dummy(ifname: &str, path: &str) -> IoResult<Self> {
+        Ok(Device{fd: try!(fs::OpenOptions::new().create(true).read(true).write(true).open(path)), ifname: ifname.to_string()})
+    }
+
     #[inline(always)]
     pub fn ifname(&self) -> &str {
         &self.ifname
