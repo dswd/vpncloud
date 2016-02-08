@@ -122,7 +122,7 @@ fn run<T: Protocol> (args: Args) {
         Some(key) => Crypto::from_shared_key(args.flag_crypto, &key),
         None => Crypto::None
     };
-    let mut cloud = GenericCloud::<T>::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges, crypto);
+    let mut cloud = GenericCloud::<T>::new(device, &args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges, crypto);
     if let Some(script) = args.flag_ifup {
         run_script(script, cloud.ifname());
     }

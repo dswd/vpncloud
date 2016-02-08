@@ -105,10 +105,10 @@ pub struct GenericCloud<P: Protocol> {
 }
 
 impl<P: Protocol> GenericCloud<P> {
-    pub fn new(device: Device, listen: String, network_id: Option<NetworkId>, table: Box<Table>,
+    pub fn new(device: Device, listen: &str, network_id: Option<NetworkId>, table: Box<Table>,
         peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>,
         crypto: Crypto) -> Self {
-        let socket = match UdpSocket::bind(&listen as &str) {
+        let socket = match UdpSocket::bind(listen) {
             Ok(socket) => socket,
             _ => fail!("Failed to open socket {}", listen)
         };
