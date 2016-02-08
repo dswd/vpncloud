@@ -4,6 +4,9 @@
 
 use std::ptr;
 use std::ffi::CStr;
+use std::sync::{Once, ONCE_INIT};
+
+static CRYPTO_INIT: Once = ONCE_INIT;
 
 use libc::{size_t, c_char, c_ulonglong, c_int};
 use aligned_alloc::{aligned_alloc, aligned_free};
@@ -147,9 +150,11 @@ fn inc_nonce_12(nonce: &mut [u8; 12]) {
 
 impl Crypto {
     pub fn init() {
-        if unsafe { sodium_init() } != 0 {
-            fail!("Failed to initialize crypto library");
-        }
+        CRYPTO_INIT.call_once(|| {
+            if unsafe { sodium_init() } != 0 {
+                fail!("Failed to initialize crypto library");
+            }
+        });
     }
 
     pub fn sodium_version() -> String {
