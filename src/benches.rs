@@ -15,6 +15,7 @@ use super::ip::Packet;
 
 #[bench]
 fn crypto_salsa20(b: &mut Bencher) {
+    Crypto::init();
     let mut crypto = Crypto::from_shared_key(CryptoMethod::ChaCha20, "test");
     let mut payload = [0; 1500];
     let header = [0; 8];
@@ -28,6 +29,7 @@ fn crypto_salsa20(b: &mut Bencher) {
 
 #[bench]
 fn crypto_aes256(b: &mut Bencher) {
+    Crypto::init();
     if !Crypto::aes256_available() {
         return
     }
