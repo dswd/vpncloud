@@ -212,9 +212,7 @@ impl Crypto {
         match method {
             CryptoMethod::ChaCha20 => {
                 let mut crypto_key = [0; crypto_aead_chacha20poly1305_ietf_KEYBYTES];
-                for i in 0..crypto_key.len() {
-                    crypto_key[i] = key[i];
-                }
+                crypto_key.clone_from_slice(&key[..crypto_aead_chacha20poly1305_ietf_KEYBYTES]);
                 let mut nonce = [0u8; crypto_aead_chacha20poly1305_ietf_NPUBBYTES];
                 unsafe { randombytes_buf(nonce.as_mut_ptr(), nonce.len()) };
                 Crypto::ChaCha20Poly1305{key: crypto_key, nonce: nonce}

@@ -15,6 +15,7 @@ This project follows [semantic versioning](http://semver.org).
 - [changed] Only calling crypto_init once
 - [changed] Passing listen address as &str
 - [changed] Using FNV hash for better performance
+- [changed] Using slice operations instead of loops
 - [fixed] Fixed wrong hex address formatting
 - [fixed] Fixed peer exchange for more than 65000 peers
 - [fixed] Initializing crypto for benchmarks

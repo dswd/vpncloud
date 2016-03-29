@@ -70,9 +70,7 @@ impl Table for RoutingTable {
         let group_len = prefix_len as usize / 8;
         assert!(group_len <= 16);
         let mut group_bytes = Vec::with_capacity(group_len);
-        for i in 0..group_len {
-            group_bytes.push(addr.data[i]);
-        }
+        group_bytes.extend_from_slice(&addr.data[0..group_len]);
         let routing_entry = RoutingEntry{address: address, bytes: addr.data, prefix_len: prefix_len};
         match self.0.entry(group_bytes) {
             hash_map::Entry::Occupied(mut entry) => entry.get_mut().push(routing_entry),
