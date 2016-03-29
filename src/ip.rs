@@ -5,6 +5,9 @@
 use std::net::SocketAddr;
 use std::collections::{hash_map, HashMap};
 use std::io::Read;
+use std::hash::BuildHasherDefault;
+
+use fnv::FnvHasher;
 
 use super::types::{Protocol, Error, Table, Address};
 
@@ -47,11 +50,13 @@ struct RoutingEntry {
     prefix_len: u8
 }
 
-pub struct RoutingTable(HashMap<Vec<u8>, Vec<RoutingEntry>>);
+type Hash = BuildHasherDefault<FnvHasher>;
+
+pub struct RoutingTable(HashMap<Vec<u8>, Vec<RoutingEntry>, Hash>);
 
 impl RoutingTable {
     pub fn new() -> Self {
-        RoutingTable(HashMap::new())
+        RoutingTable(HashMap::default())
     }
 }
 

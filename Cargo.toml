@@ -17,14 +17,15 @@ rustc-serialize = "0.3"
 log = "0.3"
 epoll = "0.2"
 signal = "0.1"
-nix = "0.4"
+nix = "0.5"
 libc = "0.2"
 aligned_alloc = "0.1.1"
 rand = "0.3"
+fnv = "1"
 
 [build-dependencies]
 gcc = "0.3"
-pkg-config = "0.3.6"
+pkg-config = "0.3"
 
 [features]
 default = []

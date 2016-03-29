@@ -4,6 +4,9 @@
 
 use std::net::SocketAddr;
 use std::collections::HashMap;
+use std::hash::BuildHasherDefault;
+
+use fnv::FnvHasher;
 
 use super::types::{Error, Table, Protocol, Address};
 use super::util::{now, Time, Duration};
@@ -48,15 +51,17 @@ struct SwitchTableValue {
     timeout: Time
 }
 
+type Hash = BuildHasherDefault<FnvHasher>;
+
 pub struct SwitchTable {
-    table: HashMap<Address, SwitchTableValue>,
+    table: HashMap<Address, SwitchTableValue, Hash>,
     cache: Option<(Address, SocketAddr)>,
     timeout: Duration
 }
 
 impl SwitchTable {
     pub fn new(timeout: Duration) -> Self {
-        SwitchTable{table: HashMap::new(), cache: None, timeout: timeout}
+        SwitchTable{table: HashMap::default(), cache: None, timeout: timeout}
     }
 }
 

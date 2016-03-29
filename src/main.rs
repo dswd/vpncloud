@@ -13,6 +13,7 @@ extern crate nix;
 extern crate libc;
 extern crate aligned_alloc;
 extern crate rand;
+extern crate fnv;
 #[cfg(feature = "bench")] extern crate test;
 
 #[macro_use] mod util;

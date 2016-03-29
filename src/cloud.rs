@@ -11,7 +11,9 @@ use std::io::Result as IoResult;
 use std::fmt;
 use std::os::unix::io::AsRawFd;
 use std::marker::PhantomData;
+use std::hash::BuildHasherDefault;
 
+use fnv::FnvHasher;
 use epoll;
 use nix::sys::signal::{SIGTERM, SIGQUIT, SIGINT};
 use signal::trap::Trap;
@@ -24,14 +26,16 @@ use super::udpmessage::{encode, decode, Options, Message};
 use super::crypto::Crypto;
 use super::util::{now, Time, Duration};
 
+type Hash = BuildHasherDefault<FnvHasher>;
+
 struct PeerList {
     timeout: Duration,
-    peers: HashMap<SocketAddr, Time>
+    peers: HashMap<SocketAddr, Time, Hash>
 }
 
 impl PeerList {
     fn new(timeout: Duration) -> PeerList {
-        PeerList{peers: HashMap::new(), timeout: timeout}
+        PeerList{peers: HashMap::default(), timeout: timeout}
     }
 
     fn timeout(&mut self) -> Vec<SocketAddr> {
