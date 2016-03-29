@@ -219,7 +219,8 @@ pub trait Table {
     fn learn(&mut self, Address, Option<u8>, SocketAddr);
     fn lookup(&mut self, &Address) -> Option<SocketAddr>;
     fn housekeep(&mut self);
-    fn remove_all(&mut self, SocketAddr);
+    fn remove(&mut self, &Address) -> bool;
+    fn remove_all(&mut self, &SocketAddr);
 }
 
 pub trait Protocol: Sized {

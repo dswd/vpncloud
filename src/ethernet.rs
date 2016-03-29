@@ -97,7 +97,20 @@ impl Table for SwitchTable {
         }
     }
 
-    fn remove_all(&mut self, _addr: SocketAddr) {
-        unimplemented!()
+    #[inline]
+    fn remove(&mut self, key: &Address) -> bool {
+        self.table.remove(key).is_some()
+    }
+
+    fn remove_all(&mut self, addr: &SocketAddr) {
+        let mut remove = Vec::new();
+        for (key, val) in self.table.iter() {
+            if &val.address == addr {
+                remove.push(key.clone());
+            }
+        }
+        for key in remove {
+            self.table.remove(&key);
+        }
     }
 }

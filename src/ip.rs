@@ -111,7 +111,40 @@ impl Table for RoutingTable {
         //nothing to do
     }
 
-    fn remove_all(&mut self, _addr: SocketAddr) {
-        unimplemented!()
+    #[inline]
+    fn remove(&mut self, addr: &Address) -> bool {
+        let len = addr.len as usize;
+        let mut found = false;
+        let mut found_len: isize = -1;
+        for i in 0..len+1 {
+            if let Some(group) = self.0.get(&addr.data[0..len-i]) {
+                for entry in group {
+                    let mut match_len = 0;
+                    for j in 0..addr.len as usize {
+                        let b = addr.data[j] ^ entry.bytes[j];
+                        if b == 0 {
+                            match_len += 8;
+                        } else {
+                            match_len += b.leading_zeros();
+                            break;
+                        }
+                    }
+                    if match_len as u8 >= entry.prefix_len && match_len as isize > found_len {
+                        found = true;
+                        found_len = match_len as isize;
+                    }
+                }
+            }
+        }
+        if found {
+            self.0.remove(&addr.data[0..found_len as usize]);
+        }
+        found
+    }
+
+    fn remove_all(&mut self, addr: &SocketAddr) {
+        for (_key, entry) in self.0.iter_mut() {
+            entry.retain(|entr| &entr.address != addr);
+        }
     }
 }

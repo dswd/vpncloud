@@ -250,6 +250,7 @@ impl<P: Protocol> GenericCloud<P> {
                     try!(self.send_msg(addr, &mut Message::Data(payload, start, end)))
                 } else {
                     warn!("Destination for {} not found in peers: {}", dst, addr);
+                    self.table.remove(&dst);
                 }
             },
             None => {
@@ -314,6 +315,7 @@ impl<P: Protocol> GenericCloud<P> {
             },
             Message::Close => {
                 self.peers.remove(&peer);
+                self.table.remove_all(&peer);
             }
         }
         Ok(())
@@ -332,10 +334,10 @@ impl<P: Protocol> GenericCloud<P> {
         let mut events = [epoll::EpollEvent{events: 0, data: 0}; 2];
         let mut buffer = [0; 64*1024];
         loop {
-            let count = try_fail!(epoll::wait(epoll_handle, &mut events, 1000), "Epoll wait failed: {}");
+            let count = try_fail!(epoll::wait(epoll_handle, &mut events, 1000), "Epoll wait failed: {}") as usize;
             // Process events
             for i in 0..count {
-                match &events[i as usize].data {
+                match &events[i].data {
                     &0 => {
                         let (size, src) = try_fail!(self.socket.recv_from(&mut buffer), "Failed to read from network socket: {}");
                         match decode(&mut buffer[..size], &mut self.crypto).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {

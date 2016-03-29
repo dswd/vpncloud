@@ -60,6 +60,7 @@ fn message_encode(b: &mut Bencher) {
     b.iter(|| {
         encode(&mut options, &mut msg, &mut buf[..], &mut crypto);
     });
+    b.bytes = 1400;
 }
 
 #[bench]
@@ -73,6 +74,7 @@ fn message_decode(b: &mut Bencher) {
     b.iter(|| {
         decode(&mut res, &mut crypto).unwrap();
     });
+    b.bytes = 1400;
 }
 
 #[bench]
@@ -82,7 +84,8 @@ fn switch_learn(b: &mut Bencher) {
     let peer = "1.2.3.4:5678".to_socket_addrs().unwrap().next().unwrap();
     b.iter(|| {
         table.learn(addr.clone(), None, peer);
-    })
+    });
+    b.bytes = 1400;
 }
 
 #[bench]
@@ -93,8 +96,8 @@ fn switch_lookup(b: &mut Bencher) {
     table.learn(addr.clone(), None, peer);
     b.iter(|| {
         table.lookup(&addr);
-    })
-
+    });
+    b.bytes = 1400;
 }
 
 #[bench]
@@ -103,7 +106,8 @@ fn ethernet_parse(b: &mut Bencher) {
     data[5] = 45;
     b.iter(|| {
         Frame::parse(&data).unwrap()
-    })
+    });
+    b.bytes = 1400;
 }
 
 #[bench]
@@ -112,7 +116,8 @@ fn ipv4_parse(b: &mut Bencher) {
     data[0] = 4*16;
     b.iter(|| {
         Packet::parse(&data).unwrap()
-    })
+    });
+    b.bytes = 1400;
 }
 
 #[bench]
@@ -121,14 +126,16 @@ fn ipv6_parse(b: &mut Bencher) {
     data[0] = 6*16;
     b.iter(|| {
         Packet::parse(&data).unwrap()
-    })
+    });
+    b.bytes = 1400;
 }
 
 #[bench]
 fn now(b: &mut Bencher) {
     b.iter(|| {
         util_now()
-    })
+    });
+    b.bytes = 1400;
 }
 
 #[bench]
@@ -142,6 +149,7 @@ fn epoll_wait(b: &mut Bencher) {
     b.iter(|| {
         epoll::wait(epoll_handle, &mut events, 1000).unwrap()
     });
+    b.bytes = 1400;
 }
 
 #[bench]

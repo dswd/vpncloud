@@ -18,6 +18,7 @@ This project follows [semantic versioning](http://semver.org).
 - [fixed] Fixed wrong hex address formatting
 - [fixed] Fixed peer exchange for more than 65000 peers
 - [fixed] Initializing crypto for benchmarks
+- [fixed] Removing learned addresses of lost peers
 
 ### v0.4.3 (2016-02-02)
 
