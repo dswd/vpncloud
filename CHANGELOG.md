@@ -16,7 +16,7 @@ This project follows [semantic versioning](http://semver.org).
 - [changed] Passing listen address as &str
 - [changed] Using FNV hash for better performance
 - [changed] Using slice operations instead of loops
-- [changed] Updated libsodium to  1.0.10
+- [changed] Updated libsodium to 1.0.10
 - [changed] Renamed default.net to example.net
 - [fixed] Fixed wrong hex address formatting
 - [fixed] Fixed peer exchange for more than 65000 peers

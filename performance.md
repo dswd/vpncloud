@@ -15,7 +15,7 @@ Receiver node:
   * Realtek RTL8111/8168/8411 Gigabit Network
   * Ubuntu 14.04 (Kernel 3.13.0-63-generic)
 
-VpnCloud version: `VpnCloud v0.4.3, protocol version 1, libsodium 1.0.8 (AES256: true)`
+VpnCloud version: `VpnCloud v0.5.0, protocol version 1, libsodium 1.0.10 (AES256: true)`
 
 The sender runs the following command:
 
@@ -53,13 +53,13 @@ The test is run in 3 steps:
 
 | Throughput test                         | Bandwidth     | CPU usage (one core) |
 | --------------------------------------- | ------------- | -------------------- |
-| Without VpnCloud                        | 920 Mbits/sec |  -                   |
-| Unencrypted VpnCloud                    | 882 Mbits/sec | 80% / 95%            |
-| Encrypted VpnCloud (ChaCha20)           | 787 Mbits/sec | 90% / 90%            |
-| Encrypted VpnCloud (AES256)             | 838 Mbits/sec | 85% / 85%            |
-| Unencrypted VpnCloud (MTU 7000)         | 923 Mbits/sec | 75% / 75%            |
-| Encrypted VpnCloud (ChaCha20, MTU 7000) | 919 Mbits/sec | 75% / 75%            |
-| Encrypted VpnCloud (AES256, MTU 7000)   | 926 Mbits/sec | 75% / 75%            |
+| Without VpnCloud                        | 923 Mbits/sec |  -                   |
+| Unencrypted VpnCloud                    | 877 Mbits/sec | 85% / 95%            |
+| Encrypted VpnCloud (ChaCha20)           | 760 Mbits/sec | 90% / 90%            |
+| Encrypted VpnCloud (AES256)             | 824 Mbits/sec | 85% / 85%            |
+| Unencrypted VpnCloud (MTU 7000)         | 943 Mbits/sec | 75% / 75%            |
+| Encrypted VpnCloud (ChaCha20, MTU 7000) | 922 Mbits/sec | 75% / 75%            |
+| Encrypted VpnCloud (AES256, MTU 7000)   | 928 Mbits/sec | 75% / 75%            |
 
 ### Latency
 
@@ -74,10 +74,10 @@ assumed to be half of the RTT.
 
 | Payload size                  | 100 bytes       | 500 bytes       | 1000 bytes      |
 | ----------------------------- | --------------- | --------------- | --------------- |
-| Without VpnCloud              | 159 µs          | 166 µs          | 174 µs          |
-| Unencrypted VpnCloud          | 221 µs (+62 µs) | 231 µs (+65 µs) | 242 µs (+68 µs) |
-| Encrypted VpnCloud (ChaCha20) | 235 µs (+14 µs) | 248 µs (+17 µs) | 262 µs (+20 µs) |
-| Encrypted VpnCloud (AES256)   | 227 µs ( +6 µs) | 238 µs ( +7 µs) | 255 µs (+13 µs) |
+| Without VpnCloud              | 159 µs          | 167 µs          | 174 µs          |
+| Unencrypted VpnCloud          | 220 µs (+61 µs) | 228 µs (+61 µs) | 238 µs (+64 µs) |
+| Encrypted VpnCloud (ChaCha20) | 230 µs (+10 µs) | 246 µs (+18 µs) | 263 µs (+25 µs) |
+| Encrypted VpnCloud (AES256)   | 227 µs ( +7 µs) | 241 µs (+13 µs) | 258 µs (+20 µs) |
 
 
 ### Conclusion
