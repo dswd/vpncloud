@@ -1,3 +1,25 @@
+vpncloud (0.5.0) stable; urgency=medium
+
+  * [added] Added license and copyright information
+  * [added] Added documentation for daemon config files
+  * [added] Script for performance measurements
+  * [added] Added more tests and benchmarks
+  * [changed] Daemon now detects network config files on its own
+  * [changed] Using display format for addresses
+  * [changed] Updated dependencies
+  * [changed] New measurements
+  * [changed] Only calling crypto_init once
+  * [changed] Passing listen address as &str
+  * [changed] Using FNV hash for better performance
+  * [changed] Using slice operations instead of loops
+  * [changed] Updated libsodium to  1.0.10
+  * [fixed] Fixed wrong hex address formatting
+  * [fixed] Fixed peer exchange for more than 65000 peers
+  * [fixed] Initializing crypto for benchmarks
+  * [fixed] Removing learned addresses of lost peers
+
+ -- Dennis Schwerdel <schwerdel@informatik.uni-kl.de>  Tue, 05 Apr 2016 15:33:20 +0200
+
 vpncloud (0.4.3) stable; urgency=medium
 
   * [changed] Updated libsodium to 1.0.8

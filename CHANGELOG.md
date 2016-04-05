@@ -2,7 +2,7 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### UNRELEASED
+### v0.5.0 (2016-04-05)
 
 - [added] Added license and copyright information
 - [added] Added documentation for daemon config files
