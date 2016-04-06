@@ -54,12 +54,12 @@ The test is run in 3 steps:
 | Throughput test                         | Bandwidth     | CPU usage (one core) |
 | --------------------------------------- | ------------- | -------------------- |
 | Without VpnCloud                        | 923 Mbits/sec |  -                   |
-| Unencrypted VpnCloud                    | 877 Mbits/sec | 85% / 95%            |
-| Encrypted VpnCloud (ChaCha20)           | 760 Mbits/sec | 90% / 90%            |
-| Encrypted VpnCloud (AES256)             | 824 Mbits/sec | 85% / 85%            |
-| Unencrypted VpnCloud (MTU 7000)         | 943 Mbits/sec | 75% / 75%            |
-| Encrypted VpnCloud (ChaCha20, MTU 7000) | 922 Mbits/sec | 75% / 75%            |
-| Encrypted VpnCloud (AES256, MTU 7000)   | 928 Mbits/sec | 75% / 75%            |
+| Unencrypted VpnCloud                    | 881 Mbits/sec | 85% / 95%            |
+| Encrypted VpnCloud (ChaCha20)           | 820 Mbits/sec | 90% / 90%            |
+| Encrypted VpnCloud (AES256)             | 832 Mbits/sec | 85% / 85%            |
+| Unencrypted VpnCloud (MTU 7000)         | 942 Mbits/sec | 75% / 75%            |
+| Encrypted VpnCloud (ChaCha20, MTU 7000) | 923 Mbits/sec | 75% / 75%            |
+| Encrypted VpnCloud (AES256, MTU 7000)   | 926 Mbits/sec | 75% / 75%            |
 
 ### Latency
 
@@ -75,9 +75,9 @@ assumed to be half of the RTT.
 | Payload size                  | 100 bytes       | 500 bytes       | 1000 bytes      |
 | ----------------------------- | --------------- | --------------- | --------------- |
 | Without VpnCloud              | 159 µs          | 167 µs          | 174 µs          |
-| Unencrypted VpnCloud          | 220 µs (+61 µs) | 228 µs (+61 µs) | 238 µs (+64 µs) |
-| Encrypted VpnCloud (ChaCha20) | 230 µs (+10 µs) | 246 µs (+18 µs) | 263 µs (+25 µs) |
-| Encrypted VpnCloud (AES256)   | 227 µs ( +7 µs) | 241 µs (+13 µs) | 258 µs (+20 µs) |
+| Unencrypted VpnCloud          | 223 µs (+64 µs) | 233 µs (+66 µs) | 245 µs (+71 µs) |
+| Encrypted VpnCloud (ChaCha20) | 236 µs (+12 µs) | 250 µs (+17 µs) | 266 µs (+21 µs) |
+| Encrypted VpnCloud (AES256)   | 230 µs ( +7 µs) | 239 µs ( +6 µs) | 258 µs (+13 µs) |
 
 
 ### Conclusion
