@@ -2,16 +2,27 @@
 // Copyright (C) 2015-2016  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
+#[cfg(target_os = "linux")]
 use libc;
+
+#[cfg(not(target_os = "linux"))]
+use time;
 
 pub type Duration = u32;
 pub type Time = i64;
 
 #[inline]
+#[cfg(target_os = "linux")]
 pub fn now() -> Time {
     let mut tv = libc::timespec { tv_sec: 0, tv_nsec: 0 };
     unsafe { libc::clock_gettime(6, &mut tv); }
-    tv.tv_sec
+    tv.tv_sec as Time
+}
+
+#[inline]
+#[cfg(not(target_os = "linux"))]
+pub fn now() -> Time {
+    time::get_time().sec
 }
 
 const HEX_CHARS: &'static [u8] = b"0123456789abcdef";
