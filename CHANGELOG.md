@@ -4,6 +4,7 @@ This project follows [semantic versioning](http://semver.org).
 
 ### Unreleased
 
+- [changed] Listening on IPv4 and IPv6
 - [changed] Using SO_REUSEADDR to allow frequent rebinding
 - [changed] Building and using local libsodium library automatically
 - [changed] Updated dependencies

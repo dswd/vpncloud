@@ -2,8 +2,8 @@
 // Copyright (C) 2015-2016  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6, ToSocketAddrs};
-use std::collections::{HashSet, HashMap};
+use std::net::{SocketAddr, ToSocketAddrs};
+use std::collections::{HashMap, HashSet};
 use std::hash::Hasher;
 use std::net::UdpSocket;
 use std::io::Read;
@@ -31,44 +31,77 @@ type Hash = BuildHasherDefault<FnvHasher>;
 
 struct PeerList {
     timeout: Duration,
-    peers: HashMap<SocketAddr, Time, Hash>
+    peers: HashMap<SocketAddr, (Time, NodeId, Vec<SocketAddr>), Hash>,
+    nodes: HashMap<NodeId, SocketAddr, Hash>,
+    addresses: HashSet<SocketAddr, Hash>
 }
 
 impl PeerList {
     fn new(timeout: Duration) -> PeerList {
-        PeerList{peers: HashMap::default(), timeout: timeout}
+        PeerList{
+            peers: HashMap::default(),
+            timeout: timeout,
+            nodes: HashMap::default(),
+            addresses: HashSet::default()
+        }
     }
 
     fn timeout(&mut self) -> Vec<SocketAddr> {
         let now = now();
         let mut del: Vec<SocketAddr> = Vec::new();
-        for (&addr, &timeout) in &self.peers {
+        for (&addr, &(timeout, _nodeid, ref _alt_addrs)) in &self.peers {
             if timeout < now {
                 del.push(addr);
             }
         }
         for addr in &del {
             debug!("Forgot peer: {}", addr);
-            self.peers.remove(addr);
+            if let Some((_timeout, nodeid, alt_addrs)) = self.peers.remove(addr) {
+                self.nodes.remove(&nodeid);
+                self.addresses.remove(addr);
+                for addr in &alt_addrs {
+                    self.addresses.remove(addr);
+                }
+            }
         }
         del
     }
 
     #[inline(always)]
-    fn contains(&mut self, addr: &SocketAddr) -> bool {
-        self.peers.contains_key(addr)
+    fn contains_addr(&mut self, addr: &SocketAddr) -> bool {
+        self.addresses.contains(addr)
+    }
+
+    #[inline(always)]
+    fn contains_node(&mut self, node_id: &NodeId) -> bool {
+        self.nodes.contains_key(node_id)
+    }
+
+
+    #[inline]
+    fn add(&mut self, node_id: NodeId, addr: SocketAddr) {
+        if self.nodes.insert(node_id, addr).is_none() {
+            info!("New peer: {}", addr);
+            self.peers.insert(addr, (now()+self.timeout as Time, node_id, vec![]));
+        }
     }
 
     #[inline]
-    fn add(&mut self, addr: &SocketAddr) {
-        if self.peers.insert(*addr, now()+self.timeout as Time).is_none() {
-            info!("New peer: {}", addr);
+    fn add_alt_addr(&mut self, node_id: NodeId, addr: SocketAddr) {
+        if let Some(main_addr) = self.nodes.get(&node_id) {
+            if let Some(&mut (_timeout, _node_id, ref mut alt_addrs)) = self.peers.get_mut(main_addr) {
+                alt_addrs.push(addr);
+            } else {
+                error!("Main address for node is not connected");
+            }
+        } else {
+            error!("Node not connected");
         }
     }
 
     #[inline]
     fn as_vec(&self) -> Vec<SocketAddr> {
-        self.peers.keys().map(|addr| *addr).collect()
+        self.addresses.iter().map(|addr| *addr).collect()
     }
 
     #[inline(always)]
@@ -83,8 +116,13 @@ impl PeerList {
 
     #[inline]
     fn remove(&mut self, addr: &SocketAddr) {
-        if self.peers.remove(&addr).is_some() {
+        if let Some((_timeout, node_id, alt_addrs)) = self.peers.remove(&addr) {
             info!("Removed peer: {}", addr);
+            self.nodes.remove(&node_id);
+            self.addresses.remove(addr);
+            for addr in alt_addrs {
+                self.addresses.remove(&addr);
+            }
         }
     }
 }
@@ -207,7 +245,7 @@ impl<P: Protocol> GenericCloud<P> {
     pub fn connect<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr, reconnect: bool) -> Result<(), Error> {
         if let Ok(mut addrs) = addr.to_socket_addrs() {
             while let Some(a) = addrs.next() {
-                if self.peers.contains(&a) || self.blacklist_peers.contains(&a) {
+                if self.peers.contains_addr(&a) || self.blacklist_peers.contains(&a) {
                     return Ok(());
                 }
             }
@@ -264,7 +302,7 @@ impl<P: Protocol> GenericCloud<P> {
         match self.table.lookup(&dst) {
             Some(addr) => {
                 debug!("Found destination for {} => {}", dst, addr);
-                if self.peers.contains(&addr) {
+                if self.peers.contains_addr(&addr) {
                     try!(self.send_msg(addr, &mut Message::Data(payload, start, end)))
                 } else {
                     warn!("Destination for {} not found in peers: {}", dst, addr);
@@ -309,7 +347,7 @@ impl<P: Protocol> GenericCloud<P> {
             },
             Message::Peers(peers) => {
                 for p in &peers {
-                    if ! self.peers.contains(p) && ! self.blacklist_peers.contains(p) {
+                    if ! self.peers.contains_addr(p) && ! self.blacklist_peers.contains(p) {
                         try!(self.connect(p, false));
                     }
                 }
@@ -319,9 +357,13 @@ impl<P: Protocol> GenericCloud<P> {
                     self.blacklist_peers.push(peer);
                     return Ok(())
                 }
-                self.peers.add(&peer);
-                for range in ranges {
-                    self.table.learn(range.base, Some(range.prefix_len), peer.clone());
+                if self.peers.contains_node(&node_id) {
+                    self.peers.add_alt_addr(node_id, peer);
+                } else {
+                    self.peers.add(node_id, peer);
+                    for range in ranges {
+                        self.table.learn(range.base, Some(range.prefix_len), peer.clone());
+                    }
                 }
                 if stage == 0 {
                     let peers = self.peers.as_vec();
