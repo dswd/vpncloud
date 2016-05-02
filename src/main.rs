@@ -14,6 +14,7 @@ extern crate libc;
 extern crate aligned_alloc;
 extern crate rand;
 extern crate fnv;
+extern crate net2;
 #[cfg(feature = "bench")] extern crate test;
 
 #[macro_use] mod util;
@@ -69,7 +70,7 @@ struct Args {
     flag_crypto: CryptoMethod,
     flag_subnet: Vec<String>,
     flag_device: String,
-    flag_listen: String,
+    flag_listen: u16,
     flag_network_id: Option<String>,
     flag_connect: Vec<String>,
     flag_peer_timeout: Duration,
@@ -123,7 +124,7 @@ fn run<T: Protocol> (args: Args) {
         Some(key) => Crypto::from_shared_key(args.flag_crypto, &key),
         None => Crypto::None
     };
-    let mut cloud = GenericCloud::<T>::new(device, &args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges, crypto);
+    let mut cloud = GenericCloud::<T>::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges, crypto);
     if let Some(script) = args.flag_ifup {
         run_script(script, cloud.ifname());
     }

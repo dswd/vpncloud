@@ -2,8 +2,8 @@
 // Copyright (C) 2015-2016  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use std::net::{SocketAddr, ToSocketAddrs};
-use std::collections::HashMap;
+use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6, ToSocketAddrs};
+use std::collections::{HashSet, HashMap};
 use std::hash::Hasher;
 use std::net::UdpSocket;
 use std::io::Read;
@@ -19,6 +19,7 @@ use nix::sys::signal::{SIGTERM, SIGQUIT, SIGINT};
 use signal::trap::Trap;
 use time::SteadyTime;
 use rand::{random, sample, thread_rng};
+use net2::UdpBuilder;
 
 use super::types::{Table, Protocol, Range, Error, NetworkId, NodeId};
 use super::device::Device;
@@ -98,7 +99,8 @@ pub struct GenericCloud<P: Protocol> {
     reconnect_peers: Vec<SocketAddr>,
     blacklist_peers: Vec<SocketAddr>,
     table: Box<Table>,
-    socket: UdpSocket,
+    socket4: UdpSocket,
+    socket6: UdpSocket,
     device: Device,
     options: Options,
     crypto: Crypto,
@@ -110,12 +112,19 @@ pub struct GenericCloud<P: Protocol> {
 }
 
 impl<P: Protocol> GenericCloud<P> {
-    pub fn new(device: Device, listen: &str, network_id: Option<NetworkId>, table: Box<Table>,
+    pub fn new(device: Device, listen: u16, network_id: Option<NetworkId>, table: Box<Table>,
         peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>,
         crypto: Crypto) -> Self {
-        let socket = match UdpSocket::bind(listen) {
+        let socket4 = match UdpBuilder::new_v4().expect("Failed to obtain ipv4 socket builder")
+            .reuse_address(true).expect("Failed to set so_reuseaddr").bind(("0.0.0.0", listen)) {
             Ok(socket) => socket,
-            _ => fail!("Failed to open socket {}", listen)
+            Err(err) => fail!("Failed to open ipv4 address 0.0.0.0:{}: {}", listen, err)
+        };
+        let socket6 = match UdpBuilder::new_v6().expect("Failed to obtain ipv6 socket builder")
+            .only_v6(true).expect("Failed to set only_v6")
+            .reuse_address(true).expect("Failed to set so_reuseaddr").bind(("::", listen)) {
+            Ok(socket) => socket,
+            Err(err) => fail!("Failed to open ipv6 address ::{}: {}", listen, err)
         };
         let mut options = Options::default();
         options.network_id = network_id;
@@ -128,7 +137,8 @@ impl<P: Protocol> GenericCloud<P> {
             reconnect_peers: Vec::new(),
             blacklist_peers: Vec::new(),
             table: table,
-            socket: socket,
+            socket4: socket4,
+            socket6: socket6,
             device: device,
             options: options,
             crypto: crypto,
@@ -150,7 +160,11 @@ impl<P: Protocol> GenericCloud<P> {
         debug!("Broadcasting {:?}", msg);
         let msg_data = encode(&mut self.options, msg, &mut self.buffer_out, &mut self.crypto);
         for addr in &self.peers.as_vec() {
-            try!(match self.socket.send_to(msg_data, addr) {
+            let socket = match addr {
+                &SocketAddr::V4(_) => &self.socket4,
+                &SocketAddr::V6(_) => &self.socket6
+            };
+            try!(match socket.send_to(msg_data, addr) {
                 Ok(written) if written == msg_data.len() => Ok(()),
                 Ok(_) => Err(Error::SocketError("Sent out truncated packet")),
                 Err(e) => {
@@ -166,7 +180,11 @@ impl<P: Protocol> GenericCloud<P> {
     fn send_msg(&mut self, addr: SocketAddr, msg: &mut Message) -> Result<(), Error> {
         debug!("Sending {:?} to {}", msg, addr);
         let msg_data = encode(&mut self.options, msg, &mut self.buffer_out, &mut self.crypto);
-        match self.socket.send_to(msg_data, addr) {
+        let socket = match &addr {
+            &SocketAddr::V4(_) => &self.socket4,
+            &SocketAddr::V6(_) => &self.socket6
+        };
+        match socket.send_to(msg_data, addr) {
             Ok(written) if written == msg_data.len() => Ok(()),
             Ok(_) => Err(Error::SocketError("Sent out truncated packet")),
             Err(e) => {
@@ -177,8 +195,8 @@ impl<P: Protocol> GenericCloud<P> {
     }
 
     #[allow(dead_code)]
-    pub fn address(&self) -> IoResult<SocketAddr> {
-        self.socket.local_addr()
+    pub fn address(&self) -> IoResult<(SocketAddr, SocketAddr)> {
+        Ok((try!(self.socket4.local_addr()), try!(self.socket6.local_addr())))
     }
 
     #[allow(dead_code)]
@@ -325,11 +343,14 @@ impl<P: Protocol> GenericCloud<P> {
         let dummy_time = SteadyTime::now();
         let trap = Trap::trap(&[SIGINT, SIGTERM, SIGQUIT]);
         let epoll_handle = try_fail!(epoll::create1(0), "Failed to create epoll handle: {}");
-        let socket_fd = self.socket.as_raw_fd();
+        let socket4_fd = self.socket4.as_raw_fd();
+        let socket6_fd = self.socket6.as_raw_fd();
         let device_fd = self.device.as_raw_fd();
-        let mut socket_event = epoll::EpollEvent{events: epoll::util::event_type::EPOLLIN, data: 0};
-        let mut device_event = epoll::EpollEvent{events: epoll::util::event_type::EPOLLIN, data: 1};
-        try_fail!(epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, socket_fd, &mut socket_event), "Failed to add socket to epoll handle: {}");
+        let mut socket4_event = epoll::EpollEvent{events: epoll::util::event_type::EPOLLIN, data: 0};
+        let mut socket6_event = epoll::EpollEvent{events: epoll::util::event_type::EPOLLIN, data: 1};
+        let mut device_event = epoll::EpollEvent{events: epoll::util::event_type::EPOLLIN, data: 2};
+        try_fail!(epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, socket4_fd, &mut socket4_event), "Failed to add ipv4 socket to epoll handle: {}");
+        try_fail!(epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, socket6_fd, &mut socket6_event), "Failed to add ipv6 socket to epoll handle: {}");
         try_fail!(epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, device_fd, &mut device_event), "Failed to add device to epoll handle: {}");
         let mut events = [epoll::EpollEvent{events: 0, data: 0}; 2];
         let mut buffer = [0; 64*1024];
@@ -339,13 +360,20 @@ impl<P: Protocol> GenericCloud<P> {
             for i in 0..count {
                 match &events[i].data {
                     &0 => {
-                        let (size, src) = try_fail!(self.socket.recv_from(&mut buffer), "Failed to read from network socket: {}");
+                        let (size, src) = try_fail!(self.socket4.recv_from(&mut buffer), "Failed to read from ipv4 network socket: {}");
                         match decode(&mut buffer[..size], &mut self.crypto).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
                             Ok(_) => (),
                             Err(e) => error!("Error: {}, from: {}", e, src)
                         }
                     },
                     &1 => {
+                        let (size, src) = try_fail!(self.socket6.recv_from(&mut buffer), "Failed to read from ipv6 network socket: {}");
+                        match decode(&mut buffer[..size], &mut self.crypto).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
+                            Ok(_) => (),
+                            Err(e) => error!("Error: {}, from: {}", e, src)
+                        }
+                    },
+                    &2 => {
                         let start = 64;
                         let size = try_fail!(self.device.read(&mut buffer[start..]), "Failed to read from tap device: {}");
                         match self.handle_interface_data(&mut buffer, start, start+size) {

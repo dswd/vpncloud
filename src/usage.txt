@@ -8,8 +8,8 @@ Options:
                                     [default: vpncloud%d]
     -m <mode>, --mode <mode>        The mode of the VPN ("hub", "switch",
                                     "router", or "normal"). [default: normal]
-    -l <addr>, --listen <addr>      The address to listen for data.
-                                    [default: 0.0.0.0:3210]
+    -l <port>, --listen <port>      The port number on which to listen for data.
+                                    [default: 3210]
     -c <addr>, --connect <addr>     Address of a peer to connect to.
     --subnet <subnet>               The local subnets to use.
     --network-id <id>               Optional token that identifies the network.

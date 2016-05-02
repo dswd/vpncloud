@@ -27,9 +27,9 @@ vpncloud(1) -- Peer-to-peer VPN
     peers and ignore them otherwise. The **normal** mode is switch for tap
     devices and router for tun devices. [default: `normal`]
 
-  * `-l <addr>`, `--listen <addr>`:
+  * `-l <port>`, `--listen <port>`:
 
-    The address to listen for data. [default: `0.0.0.0:3210`]
+    The port number on which to listen for data. [default: `3210`]
 
   * `-c <addr>`, `--connect <addr>`:
 

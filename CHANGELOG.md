@@ -4,7 +4,9 @@ This project follows [semantic versioning](http://semver.org).
 
 ### Unreleased
 
+- [changed] Using SO_REUSEADDR to allow frequent rebinding
 - [changed] Building and using local libsodium library automatically
+- [changed] Updated dependencies
 
 ### v0.5.0 (2016-04-05)
 

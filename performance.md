@@ -20,15 +20,13 @@ VpnCloud version: `VpnCloud v0.5.0, protocol version 1, libsodium 1.0.10 (AES256
 The sender runs the following command:
 
 ```
-$> ./vpncloud -t tap -l SENDER:3210 -c RECEIVER:3210 \
-   --ifup 'ifconfig $IFNAME 10.2.1.1/24 mtu 1400 up' &
+$> ./vpncloud -t tap -l 3210 -c RECEIVER:3210 --ifup 'ifconfig $IFNAME 10.0.0.1/24 mtu 1400 up' &
 ```
 
 and the receiver runs:
 
 ```
-$> ./vpncloud -t tap -l RECEIVER:3210 -c SENDER:3210 \
-   --ifup 'ifconfig $IFNAME 10.2.1.2/24 mtu 1400 up' &
+$> ./vpncloud -t tap -l 3210 -c SENDER:3210 --ifup 'ifconfig $IFNAME 10.0.0.2/24 mtu 1400 up' &
 $> iperf -s &
 $> top
 ```
