@@ -68,12 +68,12 @@ impl PeerList {
     }
 
     #[inline(always)]
-    fn contains_addr(&mut self, addr: &SocketAddr) -> bool {
+    fn contains_addr(&self, addr: &SocketAddr) -> bool {
         self.addresses.contains(addr)
     }
 
     #[inline(always)]
-    fn contains_node(&mut self, node_id: &NodeId) -> bool {
+    fn contains_node(&self, node_id: &NodeId) -> bool {
         self.nodes.contains_key(node_id)
     }
 
@@ -134,7 +134,7 @@ pub struct GenericCloud<P: Protocol> {
     addresses: Vec<Range>,
     learning: bool,
     broadcast: bool,
-    reconnect_peers: Vec<SocketAddr>,
+    reconnect_peers: Vec<String>,
     blacklist_peers: Vec<SocketAddr>,
     table: Box<Table>,
     socket4: UdpSocket,
@@ -242,7 +242,11 @@ impl<P: Protocol> GenericCloud<P> {
         self.peers.len()
     }
 
-    pub fn connect<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr, reconnect: bool) -> Result<(), Error> {
+    pub fn add_reconnect_peer(&mut self, add: String) {
+        self.reconnect_peers.push(add)
+    }
+
+    pub fn connect<Addr: ToSocketAddrs+fmt::Display>(&mut self, addr: Addr) -> Result<(), Error> {
         if let Ok(mut addrs) = addr.to_socket_addrs() {
             while let Some(a) = addrs.next() {
                 if self.peers.contains_addr(&a) || self.blacklist_peers.contains(&a) {
@@ -251,13 +255,6 @@ impl<P: Protocol> GenericCloud<P> {
             }
         }
         debug!("Connecting to {}", addr);
-        if reconnect {
-            if let Ok(mut addrs) = addr.to_socket_addrs() {
-                while let Some(a) = addrs.next() {
-                    self.reconnect_peers.push(a);
-                }
-            }
-        }
         let subnets = self.addresses.clone();
         let node_id = self.node_id.clone();
         let mut msg = Message::Init(0, node_id, subnets);
@@ -291,7 +288,7 @@ impl<P: Protocol> GenericCloud<P> {
             self.next_peerlist = now() + self.update_freq as Time;
         }
         for addr in self.reconnect_peers.clone() {
-            try!(self.connect(addr, false));
+            try!(self.connect(&addr as &str));
         }
         Ok(())
     }
@@ -348,7 +345,7 @@ impl<P: Protocol> GenericCloud<P> {
             Message::Peers(peers) => {
                 for p in &peers {
                     if ! self.peers.contains_addr(p) && ! self.blacklist_peers.contains(p) {
-                        try!(self.connect(p, false));
+                        try!(self.connect(p));
                     }
                 }
             },

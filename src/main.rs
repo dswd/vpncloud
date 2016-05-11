@@ -128,8 +128,9 @@ fn run<T: Protocol> (args: Args) {
     if let Some(script) = args.flag_ifup {
         run_script(script, cloud.ifname());
     }
-    for addr in &args.flag_connect {
-        try_fail!(cloud.connect(&addr as &str, true), "Failed to send message to {}: {}", &addr);
+    for addr in args.flag_connect {
+        try_fail!(cloud.connect(&addr as &str), "Failed to send message to {}: {}", &addr);
+        cloud.add_reconnect_peer(addr);
     }
     cloud.run();
     if let Some(script) = args.flag_ifdown {
