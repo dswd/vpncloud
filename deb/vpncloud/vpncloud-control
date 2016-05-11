@@ -1,0 +1,93 @@
+#!/bin/bash
+
+NAME=vpncloud
+NETCONFIGS=/etc/vpncloud
+
+# default settings
+USER=root
+GROUP=root
+UMASK=022
+
+NETWORKS=$(for net in $(ls $NETCONFIGS); do basename $net .net; done);
+
+DAEMON=$(which $NAME)
+
+# Exit if the package is not installed
+[ -x $DAEMON ] || exit 0
+
+# Read configuration variable file if it is present
+[ -r /etc/default/$NAME ] && . /etc/default/$NAME
+
+status() {
+  echo "Network status"
+  for net in $NETWORKS; do
+    echo -en "\t$net: "
+    if start-stop-daemon --status --pidfile /run/$NAME-$net.pid --name $NAME; then
+      echo "running"
+    else
+      echo "not running"
+    fi
+  done
+}
+
+start() {
+  # Return
+  #   0 if daemon has been started
+  #   1 if daemon was already running
+  #   2 if daemon could not be started
+  for net in $NETWORKS; do
+    ENABLED=0
+    unset DEVICE LISTEN TYPE MODE SHARED_KEY CRYPTO IFUP IFDOWN NETWORK_ID PEER_TIMEOUT DST_TIMEOUT PEERS SUBNETS
+    [ -f "$NETCONFIGS/$net.net" ] && . $NETCONFIGS/$net.net
+    if [ $ENABLED -eq 1 ]; then
+      PARAMS=""
+      [ -z "$DEVICE" ] || PARAMS="$PARAMS --device $DEVICE"
+      [ -z "$LISTEN" ] || PARAMS="$PARAMS --listen $LISTEN"
+      [ -z "$TYPE" ] || PARAMS="$PARAMS --type $TYPE"
+      [ -z "$MODE" ] || PARAMS="$PARAMS --mode $MODE"
+      [ -z "$SHARED_KEY" ] || PARAMS="$PARAMS --shared-key '$SHARED_KEY'"
+      [ -z "$CRYPTO" ] || PARAMS="$PARAMS --crypto $CRYPTO"
+      [ -z "$IFUP" ] || PARAMS="$PARAMS --ifup '$IFUP'"
+      [ -z "$IFDOWN" ] || PARAMS="$PARAMS --ifdown '$IFDOWN'"
+      [ -z "$NETWORK_ID" ] || PARAMS="$PARAMS --network-id $NETWORK_ID"
+      [ -z "$PEER_TIMEOUT" ] || PARAMS="$PARAMS --peer-timeout $PEER_TIMEOUT"
+      [ -z "$DST_TIMEOUT" ] || PARAMS="$PARAMS --peer-timeout $DST_TIMEOUT"
+      for peer in $PEERS; do
+        PARAMS="$PARAMS --connect $peer"
+      done
+      for subnet in $SUBNETS; do
+        PARAMS="$PARAMS --subnet $subnet"
+      done
+      start-stop-daemon --start --pidfile /run/$NAME-$net.pid --make-pidfile --name $NAME --background --startas /bin/sh -- -c "exec $DAEMON $PARAMS >/var/log/vpncloud-$net.log 2>&1"
+    fi
+  done
+  return 0
+}
+
+stop() {
+  # Return
+  #   0 if daemon has been stopped
+  #   1 if daemon was already stopped
+  #   2 if daemon could not be stopped
+  #   other if a failure occurred
+  for net in $NETWORKS; do
+    start-stop-daemon --stop --quiet --pidfile /run/$NAME-$net.pid --name $NAME --retry 60
+  done
+  return 0
+}
+
+case "$1" in
+  start)
+    start
+    ;;
+  stop)
+    stop
+    ;;
+  status)
+    status
+    ;;
+  *)
+    echo "Unsupported action: '$1'" >&2
+    exit 3
+    ;;
+esac

@@ -1,0 +1,11 @@
+[Unit]
+Description=VpnCloud networks
+
+[Service]
+Type=forking
+ExecStart=/usr/bin/vpncloud-control start
+ExecStop=/usr/bin/vpncloud-control stop
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

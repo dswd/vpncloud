@@ -26,12 +26,10 @@ USER=root
 GROUP=root
 UMASK=022
 
-NETWORKS=$(for net in $(ls $NETCONFIGS); do basename $net .net; done);
-
-DAEMON=$(which $NAME)
+CONTROL=$(which $NAME-control)
 
 # Exit if the package is not installed
-[ -x $DAEMON ] || exit 0
+[ -x $CONTROL ] || exit 0
 
 # Read configuration variable file if it is present
 [ -r /etc/default/$NAME ] && . /etc/default/$NAME
@@ -43,108 +41,32 @@ DAEMON=$(which $NAME)
 # Depend on lsb-base (>= 3.0-6) to ensure that this file is present.
 . /lib/lsb/init-functions
 
-do_status() {
-  for net in $NETWORKS; do
-    if start-stop-daemon --status --pidfile /run/$NAME-$net.pid --name $NAME; then
-      echo -e "\t$net"
-    fi
-  done
-}
-
-do_start() {
-  # Return
-  #   0 if daemon has been started
-  #   1 if daemon was already running
-  #   2 if daemon could not be started
-  for net in $NETWORKS; do
-    ENABLED=0
-    unset DEVICE LISTEN TYPE MODE SHARED_KEY CRYPTO IFUP IFDOWN NETWORK_ID PEER_TIMEOUT DST_TIMEOUT PEERS SUBNETS
-    [ -f "$NETCONFIGS/$net.net" ] && . $NETCONFIGS/$net.net
-    if [ $ENABLED -eq 1 ]; then
-      PARAMS=""
-      [ -z "$DEVICE" ] || PARAMS="$PARAMS --device $DEVICE"
-      [ -z "$LISTEN" ] || PARAMS="$PARAMS --listen $LISTEN"
-      [ -z "$TYPE" ] || PARAMS="$PARAMS --type $TYPE"
-      [ -z "$MODE" ] || PARAMS="$PARAMS --mode $MODE"
-      [ -z "$SHARED_KEY" ] || PARAMS="$PARAMS --shared-key '$SHARED_KEY'"
-      [ -z "$CRYPTO" ] || PARAMS="$PARAMS --crypto $CRYPTO"
-      [ -z "$IFUP" ] || PARAMS="$PARAMS --ifup '$IFUP'"
-      [ -z "$IFDOWN" ] || PARAMS="$PARAMS --ifdown '$IFDOWN'"
-      [ -z "$NETWORK_ID" ] || PARAMS="$PARAMS --network-id $NETWORK_ID"
-      [ -z "$PEER_TIMEOUT" ] || PARAMS="$PARAMS --peer-timeout $PEER_TIMEOUT"
-      [ -z "$DST_TIMEOUT" ] || PARAMS="$PARAMS --peer-timeout $DST_TIMEOUT"
-      for peer in $PEERS; do
-        PARAMS="$PARAMS --connect $peer"
-      done
-      for subnet in $SUBNETS; do
-        PARAMS="$PARAMS --subnet $subnet"
-      done
-      start-stop-daemon --start --pidfile /run/$NAME-$net.pid --make-pidfile --name $NAME --background --startas /bin/sh -- -c "exec $DAEMON $PARAMS >/var/log/vpncloud-$net.log 2>&1"
-    fi
-  done
-  return 0
-}
-
-do_stop() {
-  # Return
-  #   0 if daemon has been stopped
-  #   1 if daemon was already stopped
-  #   2 if daemon could not be stopped
-  #   other if a failure occurred
-  for net in $NETWORKS; do
-    start-stop-daemon --stop --quiet --pidfile /run/$NAME-$net.pid --name $NAME --retry 60
-  done
-  return 0
-}
-
-do_reload() {
-  #
-  # If the daemon can reload its configuration without
-  # restarting (for example, when it is sent a SIGHUP),
-  # then implement that here.
-  #
-  return 0
-}
-
 case "$1" in
   start)
     log_begin_msg "Starting $DESC" "$NAME"
-    do_start
+    $CONTROL start
     case "$?" in
       0|1) log_end_msg 0 ;;
       2) log_end_msg 1 ;;
     esac
-  ;;
+    ;;
   stop)
     log_begin_msg "Stopping $DESC" "$NAME"
-    do_stop
+    $CONTROL stop
     case "$?" in
       0|1) log_end_msg 0; exit 0 ;;
       2) log_end_msg 1; exit 2 ;;
     esac
     ;;
   status)
-   do_status
-   ;;
-  #reload|force-reload)
-    #
-    # If do_reload() is not implemented then leave this commented out
-    # and leave 'force-reload' as an alias for 'restart'.
-    #
-    #log_daemon_msg "Reloading $DESC" "$NAME"
-    #do_reload
-    #log_end_msg $?
-    #;;
+    $CONTROL status
+    ;;
   restart|force-reload)
-    #
-    # If the "reload" option is implemented then remove the
-    # 'force-reload' alias
-    #
     log_begin_msg "Restarting $DESC" "$NAME"
-    do_stop
+    $CONTROL stop
     case "$?" in
       0|1)
-        do_start
+        $CONTROL start
         case "$?" in
           0) log_end_msg 0 ;;
           1) log_end_msg 1 ;; # Old process is still running
