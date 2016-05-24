@@ -4,6 +4,7 @@ This project follows [semantic versioning](http://semver.org).
 
 ### Unreleased
 
+- [added] Exponential backoff for reconnect timeouts
 - [added] Systemd compatible startup scripts
 - [changed] Repeatedly resolving connect addresses to allow DynDNS
 - [changed] Listening on IPv4 and IPv6
