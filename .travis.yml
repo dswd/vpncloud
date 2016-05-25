@@ -38,7 +38,7 @@ after_success:
   rm -rf target/kcov ;
   rm target/debug/vpncloud-* ;
   cargo test ;
-  kcov/build/src/kcov --exclude-pattern=/libsodium/,/x86_64-linux-gnu/,/.cargo --coveralls-id=$TRAVIS_JOB_ID target/kcov target/debug/vpncloud-* ;
+  kcov/build/src/kcov --exclude-pattern=/libsodium/,/x86_64-linux-gnu/,/.cargo --coveralls-id=$TRAVIS_JOB_ID target/kcov target/debug/vpncloud-* || true ;
 '
 notifications:
   email:
