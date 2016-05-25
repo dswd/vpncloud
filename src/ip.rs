@@ -4,7 +4,6 @@
 
 use std::net::SocketAddr;
 use std::collections::{hash_map, HashMap};
-use std::io::Read;
 use std::hash::BuildHasherDefault;
 
 use fnv::FnvHasher;

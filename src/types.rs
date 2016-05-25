@@ -3,7 +3,6 @@
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 use std::net::{SocketAddr, Ipv4Addr, Ipv6Addr};
-use std::hash::Hasher;
 use std::fmt;
 use std::str::FromStr;
 

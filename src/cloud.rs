@@ -4,9 +4,7 @@
 
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::collections::{HashMap, HashSet};
-use std::hash::Hasher;
 use std::net::UdpSocket;
-use std::io::Read;
 use std::io::Result as IoResult;
 use std::fmt;
 use std::os::unix::io::AsRawFd;
