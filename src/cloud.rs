@@ -92,6 +92,7 @@ impl PeerList {
         if self.nodes.insert(node_id, addr).is_none() {
             info!("New peer: {}", addr);
             self.peers.insert(addr, (now()+self.timeout as Time, node_id, vec![]));
+            self.addresses.insert(addr);
         }
     }
 
@@ -100,6 +101,7 @@ impl PeerList {
         if let Some(main_addr) = self.nodes.get(&node_id) {
             if let Some(&mut (_timeout, _node_id, ref mut alt_addrs)) = self.peers.get_mut(main_addr) {
                 alt_addrs.push(addr);
+                self.addresses.insert(addr);
             } else {
                 error!("Main address for node is not connected");
             }
@@ -285,8 +287,10 @@ impl<P: Protocol> GenericCloud<P> {
         let subnets = self.addresses.clone();
         let node_id = self.node_id.clone();
         let mut msg = Message::Init(0, node_id, subnets);
-        if let Ok(mut addrs) = addr.to_socket_addrs() {
-            while let Some(a) = addrs.next() {
+        if let Ok(addrs) = addr.to_socket_addrs() {
+            let mut addrs = addrs.collect::<Vec<_>>();
+            addrs.dedup();
+            for a in addrs {
                 //Ignore error this time
                 self.send_msg(a, &mut msg).ok();
             }
