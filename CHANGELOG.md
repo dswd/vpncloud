@@ -77,7 +77,7 @@ This project follows [semantic versioning](http://semver.org).
 - [changed] Increased ChaCha20Poly1305 nonce from 8 to 12 bytes (**incompatible**)
 - [changed] Updated dependency versions
 - [changed] More tests
-- [changed] Removed more "unsafe" blocks
+- [changed] Removed more "unsafe" blocks (**fixes security issue**)
 - [fixed] Forgot to call `sodium_init`, huge performance increase
 
 ### v0.2.0 (2015-11-26)
@@ -89,7 +89,7 @@ This project follows [semantic versioning](http://semver.org).
 - [changed] Complete rewrite of encryption code (**incompatible**)
 - [changed] Removed unused code
 - [changed] Some speed improvements
-- [changed] Removed lots of "unsafe" blocks
+- [changed] Removed lots of "unsafe" blocks (**fixes security issue**)
 - [changed] Added benchmarks
 - [changed] Two step handshake in order to fix problems with inconsistent state
 - [fixed] Pretty error messages instead of panics with traces
