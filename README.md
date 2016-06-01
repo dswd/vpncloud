@@ -15,8 +15,7 @@ between two nodes can be as easy as:
 vpncloud -c REMOTE_HOST:PORT --ifup 'ifconfig $IFNAME 10.0.0.1/24 mtu 1400 up'
 ```
 
-More details can be found in [the manpage](vpncloud.md).
-Some performance measurements can be found [here](performance.md).
+For more information, please see the [Wiki](wiki).
 
 
 ### Project Status
@@ -25,21 +24,30 @@ This project is still [under development](CHANGELOG.md) but has reached a
 somewhat stable state. VpnCloud features the following functionality:
 
 * Setting up tunnels between two networks via Ethernet (TAP) and IP (TUN)
-* Connecting multiple networks with multiple forwarding behaviors (Hub, Switch, Router)
+* Connecting multiple networks with multiple forwarding behaviors (Hub, Switch,
+  Router)
 * Encrypted connections using [libsodium](https://github.com/jedisct1/libsodium)
 * Automatic peer-to-peer meshing, no central servers
 * NAT and (limited) firewall traversal using hole punching
 * Automatic reconnecting when connections are lost
-* Non-native forwarding modes, e.g. IP based learning switch and prefix routed Ethernet networks.
-* High throughput and low additional latency (see [performance page](performance.md))
+* Non-native forwarding modes, e.g. IP based learning switch and prefix routed
+  Ethernet networks.
+* High throughput and low additional latency (see [performance page](wiki/Performance-Measurements))
 * Support for tunneled VLans (TAP device)
 
-However there are some open issues:
 
-* Encryption has not been formally reviewed, use with care.
-* The tests might be missing some corner cases and more field tests would be nice.
+### Contributions welcome
 
-Please feel free to help and contribute code.
+There are several areas in which still some work has to be done and where
+contributions are very welcome:
+
+* **Linux packages**: VpnCloud is stable enough to be packaged for Linux
+  distributions.
+* **Security review**: The security has been implemented with strong security
+  primitives but it would great if a cryptography expert could verify the
+  system.
+* **Feedback on use cases**: Some feedback on how VpnCloud is being used and
+  maybe some tutorials covering common use cases would be nice.
 
 
 ### Semantic Versioning
