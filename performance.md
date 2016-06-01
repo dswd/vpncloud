@@ -45,8 +45,8 @@ $> iperf -c DST -t 30
 
 The test is run in 3 steps:
 * Native throughput without VpnCloud (`DST` is the native address of the receiver)
-* Throughput via VpnCloud (`DST` is `10.2.1.2`)
-* Encrypted throughput via VpnCloud (`DST` is `10.2.1.2`)
+* Throughput via VpnCloud (`DST` is `10.0.0.2`)
+* Encrypted throughput via VpnCloud (`DST` is `10.0.0.2`)
 
 
 | Throughput test                         | Bandwidth     | CPU usage (one core) |
@@ -66,8 +66,8 @@ The latency is measured with the following command:
 $> ping DST -c 30000 -i 0.001 -s SIZE -U -q
 ```
 
-For all the test, the best average RTT out of 3 runs is selected. The latency is
-assumed to be half of the RTT.
+For all the test, the second best average RTT out of 5 runs is selected.
+The latency is assumed to be half of the RTT.
 
 
 | Payload size                  | 100 bytes       | 500 bytes       | 1000 bytes      |
