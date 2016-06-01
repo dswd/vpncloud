@@ -15,7 +15,7 @@ between two nodes can be as easy as:
 vpncloud -c REMOTE_HOST:PORT --ifup 'ifconfig $IFNAME 10.0.0.1/24 mtu 1400 up'
 ```
 
-For more information, please see the [Wiki](wiki).
+For more information, please see the [Wiki](https://github.com/dswd/vpncloud.rs/wiki).
 
 
 ### Project Status
@@ -32,7 +32,7 @@ somewhat stable state. VpnCloud features the following functionality:
 * Automatic reconnecting when connections are lost
 * Non-native forwarding modes, e.g. IP based learning switch and prefix routed
   Ethernet networks.
-* High throughput and low additional latency (see [performance page](wiki/Performance-Measurements))
+* High throughput and low additional latency (see [performance page](https://github.com/dswd/vpncloud.rs/wiki/Performance-Measurements))
 * Support for tunneled VLans (TAP device)
 
 
