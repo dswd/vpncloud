@@ -1,3 +1,15 @@
+vpncloud (0.6.0) stable; urgency=medium
+
+  * [added] Exponential backoff for reconnect timeouts
+  * [added] Systemd compatible startup scripts
+  * [changed] Repeatedly resolving connect addresses to allow DynDNS
+  * [changed] Listening on IPv4 and IPv6
+  * [changed] Using SO_REUSEADDR to allow frequent rebinding
+  * [changed] Building and using local libsodium library automatically
+  * [changed] Updated dependencies
+
+ -- Dennis Schwerdel <schwerdel@informatik.uni-kl.de>  Thu, 02 Jun 2016 09:33:01 +0200
+
 vpncloud (0.5.0) stable; urgency=medium
 
   * [added] Added license and copyright information

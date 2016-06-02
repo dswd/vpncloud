@@ -2,7 +2,7 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### Unreleased
+### v0.6.0 (2016-06-02)
 
 - [added] Exponential backoff for reconnect timeouts
 - [added] Systemd compatible startup scripts
