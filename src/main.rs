@@ -47,12 +47,12 @@ use util::Duration;
 struct SimpleLogger;
 
 impl log::Log for SimpleLogger {
-    #[inline(always)]
+    #[inline]
     fn enabled(&self, _metadata: &log::LogMetadata) -> bool {
         true
     }
 
-    #[inline(always)]
+    #[inline]
     fn log(&self, record: &log::LogRecord) {
         if self.enabled(record.metadata()) {
             println!("{} - {}", record.level(), record.args());
@@ -87,9 +87,10 @@ fn run_script(script: String, ifname: &str) {
     cmd.arg("-c").arg(&script).env("IFNAME", ifname);
     debug!("Running script: {:?}", cmd);
     match cmd.status() {
-        Ok(status) => match status.success() {
-            true => (),
-            false => error!("Script returned with error: {:?}", status.code())
+        Ok(status) => if status.success() {
+            ()
+        } else {
+            error!("Script returned with error: {:?}", status.code())
         },
         Err(e) => error!("Failed to execute script {:?}: {}", script, e)
     }

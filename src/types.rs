@@ -5,6 +5,7 @@
 use std::net::{SocketAddr, Ipv4Addr, Ipv6Addr};
 use std::fmt;
 use std::str::FromStr;
+use std::hash::{Hash, Hasher};
 
 use super::util::{bytes_to_hex, Encoder};
 
@@ -14,7 +15,7 @@ pub type NetworkId = u64;
 pub type NodeId = [u8; NODE_ID_BYTES];
 
 
-#[derive(PartialOrd, Eq, Ord, Clone, Hash, Copy)]
+#[derive(PartialOrd, Eq, Ord, Clone, Copy)]
 pub struct Address {
     pub data: [u8; 16],
     pub len: u8
@@ -70,6 +71,15 @@ impl PartialEq for Address {
     }
 }
 
+
+impl Hash for Address {
+    #[inline]
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        hasher.write(&self.data[0..self.len as usize])
+    }
+}
+
+
 impl fmt::Display for Address {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         let d = &self.data;
@@ -121,7 +131,7 @@ impl FromStr for Address {
             }
             return Ok(Address{data: bytes, len: 6});
         }
-        return Err(Error::ParseError("Failed to parse address"))
+        Err(Error::ParseError("Failed to parse address"))
     }
 }
 
@@ -156,7 +166,7 @@ impl FromStr for Range {
     type Err=Error;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
-        let pos = match text.find("/") {
+        let pos = match text.find('/') {
             Some(pos) => pos,
             None => return Err(Error::ParseError("Invalid range format"))
         };
@@ -186,9 +196,9 @@ pub enum Type {
 }
 impl fmt::Display for Type {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match self {
-            &Type::Tun => write!(formatter, "tun"),
-            &Type::Tap => write!(formatter, "tap"),
+        match *self {
+            Type::Tun => write!(formatter, "tun"),
+            Type::Tap => write!(formatter, "tap"),
         }
     }
 }
@@ -200,11 +210,11 @@ pub enum Mode {
 }
 impl fmt::Display for Mode {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match self {
-            &Mode::Normal => write!(formatter, "normal"),
-            &Mode::Hub => write!(formatter, "hub"),
-            &Mode::Switch => write!(formatter, "switch"),
-            &Mode::Router => write!(formatter, "router"),
+        match *self {
+            Mode::Normal => write!(formatter, "normal"),
+            Mode::Hub => write!(formatter, "hub"),
+            Mode::Switch => write!(formatter, "switch"),
+            Mode::Router => write!(formatter, "router"),
         }
     }
 }
@@ -231,13 +241,13 @@ pub enum Error {
 }
 impl fmt::Display for Error {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match self {
-            &Error::ParseError(ref msg) => write!(formatter, "{}", msg),
-            &Error::SocketError(ref msg) => write!(formatter, "{}", msg),
-            &Error::TunTapDevError(ref msg) => write!(formatter, "{}", msg),
-            &Error::CryptoError(ref msg) => write!(formatter, "{}", msg),
-            &Error::WrongNetwork(Some(net)) => write!(formatter, "wrong network id: {}", net),
-            &Error::WrongNetwork(None) => write!(formatter, "wrong network id: none"),
+        match *self {
+            Error::ParseError(ref msg) => write!(formatter, "{}", msg),
+            Error::SocketError(ref msg) => write!(formatter, "{}", msg),
+            Error::TunTapDevError(ref msg) => write!(formatter, "{}", msg),
+            Error::CryptoError(ref msg) => write!(formatter, "{}", msg),
+            Error::WrongNetwork(Some(net)) => write!(formatter, "wrong network id: {}", net),
+            Error::WrongNetwork(None) => write!(formatter, "wrong network id: none"),
         }
     }
 }

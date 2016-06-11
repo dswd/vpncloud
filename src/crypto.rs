@@ -170,31 +170,31 @@ impl Crypto {
     }
 
     pub fn method(&self) -> u8 {
-        match self {
-            &Crypto::None => 0,
-            &Crypto::ChaCha20Poly1305{key: _, nonce: _} => 1,
-            &Crypto::AES256GCM{state: _, nonce: _} => 2
+        match *self {
+            Crypto::None => 0,
+            Crypto::ChaCha20Poly1305{..} => 1,
+            Crypto::AES256GCM{..} => 2
         }
     }
 
     pub fn nonce_bytes(&self) -> usize {
-        match self {
-            &Crypto::None => 0,
-            &Crypto::ChaCha20Poly1305{key: _, ref nonce} => nonce.len(),
-            &Crypto::AES256GCM{state: _, ref nonce} => nonce.len()
+        match *self {
+            Crypto::None => 0,
+            Crypto::ChaCha20Poly1305{ref nonce, ..} => nonce.len(),
+            Crypto::AES256GCM{ref nonce, ..} => nonce.len()
         }
     }
 
     pub fn additional_bytes(&self) -> usize {
-        match self {
-            &Crypto::None => 0,
-            &Crypto::ChaCha20Poly1305{key: _, nonce: _} => crypto_aead_chacha20poly1305_ietf_ABYTES,
-            &Crypto::AES256GCM{state: _, nonce: _} => crypto_aead_aes256gcm_ABYTES
+        match *self {
+            Crypto::None => 0,
+            Crypto::ChaCha20Poly1305{..} => crypto_aead_chacha20poly1305_ietf_ABYTES,
+            Crypto::AES256GCM{..} => crypto_aead_aes256gcm_ABYTES
         }
     }
 
     pub fn from_shared_key(method: CryptoMethod, password: &str) -> Self {
-        let salt = "vpncloudVPNCLOUDvpncl0udVpnCloud".as_bytes();
+        let salt = b"vpncloudVPNCLOUDvpncl0udVpnCloud";
         assert_eq!(salt.len(), crypto_pwhash_scryptsalsa208sha256_SALTBYTES);
         let mut key = [0; crypto_pwhash_scryptsalsa208sha256_STRBYTES];
         let res = unsafe { crypto_pwhash_scryptsalsa208sha256(
@@ -235,9 +235,9 @@ impl Crypto {
     }
 
     pub fn decrypt(&self, mut buf: &mut [u8], nonce: &[u8], header: &[u8]) -> Result<usize, Error> {
-        match self {
-            &Crypto::None => Ok(buf.len()),
-            &Crypto::ChaCha20Poly1305{ref key, nonce: _} => {
+        match *self {
+            Crypto::None => Ok(buf.len()),
+            Crypto::ChaCha20Poly1305{ref key, ..} => {
                 let mut mlen: u64 = buf.len() as u64;
                 let res = unsafe { crypto_aead_chacha20poly1305_ietf_decrypt(
                     buf.as_mut_ptr(), // Base pointer to buffer
@@ -255,7 +255,7 @@ impl Crypto {
                     _ => Err(Error::CryptoError("Failed to decrypt"))
                 }
             },
-            &Crypto::AES256GCM{ref state, nonce: _} => {
+            Crypto::AES256GCM{ref state, ..} => {
                 let mut mlen: u64 = buf.len() as u64;
                 let res = unsafe { crypto_aead_aes256gcm_decrypt_afternm(
                     buf.as_mut_ptr(), // Base pointer to buffer
@@ -277,9 +277,9 @@ impl Crypto {
     }
 
     pub fn encrypt(&mut self, mut buf: &mut [u8], mlen: usize, nonce_bytes: &mut [u8], header: &[u8]) -> usize {
-        match self {
-            &mut Crypto::None => mlen,
-            &mut Crypto::ChaCha20Poly1305{ref key, ref mut nonce} => {
+        match *self {
+            Crypto::None => mlen,
+            Crypto::ChaCha20Poly1305{ref key, ref mut nonce} => {
                 inc_nonce_12(nonce);
                 let mut clen: u64 = buf.len() as u64;
                 assert!(nonce_bytes.len() ==  nonce.len());
@@ -301,7 +301,7 @@ impl Crypto {
                 }
                 clen as usize
             },
-            &mut Crypto::AES256GCM{ref state, ref mut nonce} => {
+            Crypto::AES256GCM{ref state, ref mut nonce} => {
                 inc_nonce_12(nonce);
                 let mut clen: u64 = buf.len() as u64;
                 assert!(nonce_bytes.len() ==  nonce.len());

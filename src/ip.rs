@@ -140,7 +140,7 @@ impl Table for RoutingTable {
     }
 
     fn remove_all(&mut self, addr: &SocketAddr) {
-        for (_key, entry) in self.0.iter_mut() {
+        for (_key, entry) in &mut self.0 {
             entry.retain(|entr| &entr.address != addr);
         }
     }

@@ -42,18 +42,18 @@ pub fn bytes_to_hex(bytes: &[u8]) -> String {
 pub struct Encoder;
 
 impl Encoder {
-    #[inline(always)]
+    #[inline]
     pub fn read_u16(data: &[u8]) -> u16 {
         ((data[0] as u16) << 8) | data[1] as u16
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn write_u16(val: u16, data: &mut [u8]) {
         data[0] = ((val >> 8) & 0xff) as u8;
         data[1] = (val & 0xff) as u8;
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn read_u64(data: &[u8]) -> u64 {
         ((data[0] as u64) << 56) | ((data[1] as u64) << 48) |
         ((data[2] as u64) << 40) | ((data[3] as u64) << 32) |
@@ -61,7 +61,7 @@ impl Encoder {
         ((data[6] as u64) << 8) | data[7] as u64
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn write_u64(val: u64, data: &mut [u8]) {
         data[0] = ((val >> 56) & 0xff) as u8;
         data[1] = ((val >> 48) & 0xff) as u8;

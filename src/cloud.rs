@@ -65,23 +65,23 @@ impl PeerList {
         del
     }
 
-    #[inline(always)]
+    #[inline]
     fn contains_addr(&self, addr: &SocketAddr) -> bool {
         self.addresses.contains(addr)
     }
 
     #[inline]
     fn is_connected<Addr: ToSocketAddrs+fmt::Display>(&self, addr: Addr) -> Result<bool, Error> {
-        let mut addrs = try!(addr.to_socket_addrs().map_err(|_| Error::SocketError("Error looking up name")));
-        while let Some(a) = addrs.next() {
-            if self.contains_addr(&a) {
+        let addrs = try!(addr.to_socket_addrs().map_err(|_| Error::SocketError("Error looking up name")));
+        for addr in addrs {
+            if self.contains_addr(&addr) {
                 return Ok(true);
             }
         }
         Ok(false)
     }
 
-    #[inline(always)]
+    #[inline]
     fn contains_node(&self, node_id: &NodeId) -> bool {
         self.nodes.contains_key(node_id)
     }
@@ -112,12 +112,18 @@ impl PeerList {
 
     #[inline]
     fn as_vec(&self) -> Vec<SocketAddr> {
-        self.addresses.iter().map(|addr| *addr).collect()
+        self.addresses.iter().cloned().collect()
     }
 
-    #[inline(always)]
+    #[inline]
     fn len(&self) -> usize {
         self.peers.len()
+    }
+
+    #[inline]
+    #[allow(dead_code)]
+    fn is_empty(&self) -> bool {
+        self.peers.is_empty()
     }
 
     #[inline]
@@ -127,7 +133,7 @@ impl PeerList {
 
     #[inline]
     fn remove(&mut self, addr: &SocketAddr) {
-        if let Some((_timeout, node_id, alt_addrs)) = self.peers.remove(&addr) {
+        if let Some((_timeout, node_id, alt_addrs)) = self.peers.remove(addr) {
             info!("Removed peer: {}", addr);
             self.nodes.remove(&node_id);
             self.addresses.remove(addr);
@@ -214,11 +220,11 @@ impl<P: Protocol> GenericCloud<P> {
     #[inline]
     fn broadcast_msg(&mut self, msg: &mut Message) -> Result<(), Error> {
         debug!("Broadcasting {:?}", msg);
-        let msg_data = encode(&mut self.options, msg, &mut self.buffer_out, &mut self.crypto);
-        for addr in &self.peers.as_vec() {
+        let msg_data = encode(&self.options, msg, &mut self.buffer_out, &mut self.crypto);
+        for addr in self.peers.as_vec() {
             let socket = match addr {
-                &SocketAddr::V4(_) => &self.socket4,
-                &SocketAddr::V6(_) => &self.socket6
+                SocketAddr::V4(_) => &self.socket4,
+                SocketAddr::V6(_) => &self.socket6
             };
             try!(match socket.send_to(msg_data, addr) {
                 Ok(written) if written == msg_data.len() => Ok(()),
@@ -235,10 +241,10 @@ impl<P: Protocol> GenericCloud<P> {
     #[inline]
     fn send_msg(&mut self, addr: SocketAddr, msg: &mut Message) -> Result<(), Error> {
         debug!("Sending {:?} to {}", msg, addr);
-        let msg_data = encode(&mut self.options, msg, &mut self.buffer_out, &mut self.crypto);
-        let socket = match &addr {
-            &SocketAddr::V4(_) => &self.socket4,
-            &SocketAddr::V6(_) => &self.socket6
+        let msg_data = encode(&self.options, msg, &mut self.buffer_out, &mut self.crypto);
+        let socket = match addr {
+            SocketAddr::V4(_) => &self.socket4,
+            SocketAddr::V6(_) => &self.socket6
         };
         match socket.send_to(msg_data, addr) {
             Ok(written) if written == msg_data.len() => Ok(()),
@@ -270,9 +276,9 @@ impl<P: Protocol> GenericCloud<P> {
     }
 
     fn is_blacklisted<Addr: ToSocketAddrs+fmt::Display>(&self, addr: Addr) -> Result<bool, Error> {
-        let mut addrs = try!(addr.to_socket_addrs().map_err(|_| Error::SocketError("Error looking up name")));
-        while let Some(a) = addrs.next() {
-            if self.blacklist_peers.contains(&a) {
+        let addrs = try!(addr.to_socket_addrs().map_err(|_| Error::SocketError("Error looking up name")));
+        for addr in addrs {
+            if self.blacklist_peers.contains(&addr) {
                 return Ok(true);
             }
         }
@@ -285,7 +291,7 @@ impl<P: Protocol> GenericCloud<P> {
         }
         debug!("Connecting to {}", addr);
         let subnets = self.addresses.clone();
-        let node_id = self.node_id.clone();
+        let node_id = self.node_id;
         let mut msg = Message::Init(0, node_id, subnets);
         if let Ok(addrs) = addr.to_socket_addrs() {
             let mut addrs = addrs.collect::<Vec<_>>();
@@ -414,13 +420,13 @@ impl<P: Protocol> GenericCloud<P> {
                 } else {
                     self.peers.add(node_id, peer);
                     for range in ranges {
-                        self.table.learn(range.base, Some(range.prefix_len), peer.clone());
+                        self.table.learn(range.base, Some(range.prefix_len), peer);
                     }
                 }
                 if stage == 0 {
                     let peers = self.peers.as_vec();
                     let own_addrs = self.addresses.clone();
-                    let own_node_id = self.node_id.clone();
+                    let own_node_id = self.node_id;
                     try!(self.send_msg(peer, &mut Message::Init(stage+1, own_node_id, own_addrs)));
                     try!(self.send_msg(peer, &mut Message::Peers(peers)));
                 }
@@ -451,23 +457,23 @@ impl<P: Protocol> GenericCloud<P> {
         loop {
             let count = try_fail!(epoll::wait(epoll_handle, &mut events, 1000), "Epoll wait failed: {}") as usize;
             // Process events
-            for i in 0..count {
-                match &events[i].data {
-                    &0 => {
+            for evt in events.iter().take(count) {
+                match evt.data {
+                    0 => {
                         let (size, src) = try_fail!(self.socket4.recv_from(&mut buffer), "Failed to read from ipv4 network socket: {}");
                         match decode(&mut buffer[..size], &mut self.crypto).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
                             Ok(_) => (),
                             Err(e) => error!("Error: {}, from: {}", e, src)
                         }
                     },
-                    &1 => {
+                    1 => {
                         let (size, src) = try_fail!(self.socket6.recv_from(&mut buffer), "Failed to read from ipv6 network socket: {}");
                         match decode(&mut buffer[..size], &mut self.crypto).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
                             Ok(_) => (),
                             Err(e) => error!("Error: {}, from: {}", e, src)
                         }
                     },
-                    &2 => {
+                    2 => {
                         let start = 64;
                         let size = try_fail!(self.device.read(&mut buffer[start..]), "Failed to read from tap device: {}");
                         match self.handle_interface_data(&mut buffer, start, start+size) {

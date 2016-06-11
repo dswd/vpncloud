@@ -47,7 +47,7 @@ impl Device {
         Ok(Device{fd: try!(fs::OpenOptions::new().create(true).read(true).write(true).open(path)), ifname: ifname.to_string()})
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn ifname(&self) -> &str {
         &self.ifname
     }
@@ -59,7 +59,7 @@ impl Device {
 
     #[inline]
     pub fn write(&mut self, data: &[u8]) -> Result<(), Error> {
-        match self.fd.write_all(&data) {
+        match self.fd.write_all(data) {
             Ok(_) => self.fd.flush().map_err(|_| Error::TunTapDevError("Flush error")),
             Err(_) => Err(Error::TunTapDevError("Write error"))
         }
@@ -67,7 +67,7 @@ impl Device {
 }
 
 impl AsRawFd for Device {
-    #[inline(always)]
+    #[inline]
     fn as_raw_fd(&self) -> RawFd {
         self.fd.as_raw_fd()
     }
