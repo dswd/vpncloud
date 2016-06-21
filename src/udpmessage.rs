@@ -94,6 +94,7 @@ impl<'a> fmt::Debug for Message<'a> {
     }
 }
 
+#[allow(needless_range_loop)]
 pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, Message<'a>), Error> {
     let mut end = data.len();
     let (header, mut pos) = try!(TopHeader::read_from(&data[..end]));
@@ -193,6 +194,7 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
     Ok((options, msg))
 }
 
+#[allow(needless_range_loop)]
 pub fn encode<'a>(options: &Options, msg: &'a mut Message, mut buf: &'a mut [u8], crypto: &mut Crypto) -> &'a mut [u8] {
     let mut start = 64;
     let mut end = 64;

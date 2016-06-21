@@ -108,6 +108,7 @@ impl fmt::Debug for Address {
 impl FromStr for Address {
     type Err=Error;
 
+    #[allow(needless_range_loop)]
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         if let Ok(addr) = Ipv4Addr::from_str(text) {
             let ip = addr.octets();

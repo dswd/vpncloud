@@ -180,11 +180,11 @@ impl Crypto {
     pub fn nonce_bytes(&self) -> usize {
         match *self {
             Crypto::None => 0,
-            Crypto::ChaCha20Poly1305{ref nonce, ..} => nonce.len(),
-            Crypto::AES256GCM{ref nonce, ..} => nonce.len()
+            Crypto::ChaCha20Poly1305{ref nonce, ..} | Crypto::AES256GCM{ref nonce, ..} => nonce.len(),
         }
     }
 
+    #[allow(match_same_arms)]
     pub fn additional_bytes(&self) -> usize {
         match *self {
             Crypto::None => 0,

@@ -2,6 +2,12 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### UNRELEASED
+
+- [changed] Updated dependencies
+- [changed] Turned some clippy warnings off
+- [changed] Cross-compiling for ARMv7
+
 ### v0.6.0 (2016-06-02)
 
 - [added] Exponential backoff for reconnect timeouts

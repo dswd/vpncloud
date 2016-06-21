@@ -10,12 +10,12 @@ use std::fmt;
 use std::os::unix::io::AsRawFd;
 use std::marker::PhantomData;
 use std::hash::BuildHasherDefault;
+use std::time::Instant;
 
 use fnv::FnvHasher;
 use epoll;
 use nix::sys::signal::{SIGTERM, SIGQUIT, SIGINT};
 use signal::trap::Trap;
-use time::SteadyTime;
 use rand::{random, sample, thread_rng};
 use net2::UdpBuilder;
 
@@ -174,6 +174,7 @@ pub struct GenericCloud<P: Protocol> {
 }
 
 impl<P: Protocol> GenericCloud<P> {
+    #[allow(too_many_arguments)]
     pub fn new(device: Device, listen: u16, network_id: Option<NetworkId>, table: Box<Table>,
         peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>,
         crypto: Crypto) -> Self {
@@ -439,8 +440,9 @@ impl<P: Protocol> GenericCloud<P> {
         Ok(())
     }
 
+    #[allow(cyclomatic_complexity)]
     pub fn run(&mut self) {
-        let dummy_time = SteadyTime::now();
+        let dummy_time = Instant::now();
         let trap = Trap::trap(&[SIGINT, SIGTERM, SIGQUIT]);
         let epoll_handle = try_fail!(epoll::create1(0), "Failed to create epoll handle: {}");
         let socket4_fd = self.socket4.as_raw_fd();
