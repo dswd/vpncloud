@@ -184,6 +184,7 @@ impl Crypto {
         }
     }
 
+    #[allow(unknown_lints)]
     #[allow(match_same_arms)]
     pub fn additional_bytes(&self) -> usize {
         match *self {

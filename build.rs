@@ -23,7 +23,7 @@ fn main() {
         if target.ends_with("-musl") {
             args.extend(vec!["CC=musl-gcc"]);
         }
-        if target == "armv7-unknown-linux-gnueabihf" {
+        if target == "arm-unknown-linux-gnueabihf" || target == "armv7-unknown-linux-gnueabihf" {
             args.extend(vec!["CC=arm-linux-gnueabihf-gcc"]);
         }
         Command::new("sh").args(&args).current_dir(&libsodium_dir).status().unwrap();

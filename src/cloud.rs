@@ -174,6 +174,7 @@ pub struct GenericCloud<P: Protocol> {
 }
 
 impl<P: Protocol> GenericCloud<P> {
+    #[allow(unknown_lints)]
     #[allow(too_many_arguments)]
     pub fn new(device: Device, listen: u16, network_id: Option<NetworkId>, table: Box<Table>,
         peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>,
@@ -440,6 +441,7 @@ impl<P: Protocol> GenericCloud<P> {
         Ok(())
     }
 
+    #[allow(unknown_lints)]
     #[allow(cyclomatic_complexity)]
     pub fn run(&mut self) {
         let dummy_time = Instant::now();
