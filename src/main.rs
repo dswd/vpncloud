@@ -3,6 +3,7 @@
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 #![cfg_attr(feature = "bench", feature(test))]
+
 #[macro_use] extern crate log;
 extern crate time;
 extern crate docopt;
@@ -34,10 +35,10 @@ use std::hash::{Hash, SipHasher, Hasher};
 use std::str::FromStr;
 use std::process::Command;
 
-use device::Device;
+use device::{Device, Type};
 use ethernet::SwitchTable;
 use ip::RoutingTable;
-use types::{Mode, Type, Range, Table, Protocol};
+use types::{Mode, Range, Table, Protocol};
 use cloud::GenericCloud;
 use udpmessage::VERSION;
 use crypto::{Crypto, CryptoMethod};

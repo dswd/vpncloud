@@ -11,9 +11,19 @@ use fnv::FnvHasher;
 use super::types::{Error, Table, Protocol, Address};
 use super::util::{now, Time, Duration};
 
+/// An ethernet frame dissector
+///
+/// This dissector is able to extract the source and destination addresses of ethernet frames.
+///
+/// If the ethernet frame contains a VLAN tag, both addresses will be prefixed with that tag,
+/// resulting in 8-byte addresses. Additional nested tags will be ignored.
 pub struct Frame;
 
 impl Protocol for Frame {
+    /// Parses an ethernet frame and extracts the source and destination addresses
+    ///
+    /// # Errors
+    /// This method will fail when the given data is not a valid ethernet frame.
     fn parse(data: &[u8]) -> Result<(Address, Address), Error> {
         if data.len() < 14 {
             return Err(Error::ParseError("Frame is too short"));
@@ -51,19 +61,27 @@ struct SwitchTableValue {
 
 type Hash = BuildHasherDefault<FnvHasher>;
 
+
+/// A table used to implement a learning switch
+///
+/// This table is a simple hash map between an address and the destination peer. It learns
+/// addresses as they are seen and forgets them after some time.
 pub struct SwitchTable {
+    /// The table storing the actual mapping
     table: HashMap<Address, SwitchTableValue, Hash>,
-    cache: Option<(Address, SocketAddr)>,
+    /// Timeout period for forgetting learnt addresses
     timeout: Duration
 }
 
 impl SwitchTable {
+    /// Creates a new switch table
     pub fn new(timeout: Duration) -> Self {
-        SwitchTable{table: HashMap::default(), cache: None, timeout: timeout}
+        SwitchTable{table: HashMap::default(), timeout: timeout}
     }
 }
 
 impl Table for SwitchTable {
+    /// Forget addresses that have not been seen for the configured timeout
     fn housekeep(&mut self) {
         let now = now();
         let mut del: Vec<Address> = Vec::new();
@@ -76,9 +94,9 @@ impl Table for SwitchTable {
             info!("Forgot address {}", key);
             self.table.remove(&key);
         }
-        self.cache = None;
     }
 
+    /// Learns the given address, inserting it in the hash map
     #[inline]
     fn learn(&mut self, key: Address, _prefix_len: Option<u8>, addr: SocketAddr) {
         let value = SwitchTableValue{address: addr, timeout: now()+self.timeout as Time};
@@ -87,6 +105,7 @@ impl Table for SwitchTable {
         }
     }
 
+    /// Retrieves a peer for an address if it is inside the hash map
     #[inline]
     fn lookup(&mut self, key: &Address) -> Option<SocketAddr> {
         match self.table.get(key) {
@@ -95,11 +114,13 @@ impl Table for SwitchTable {
         }
     }
 
+    /// Removes an address from the map and returns whether something has been removed
     #[inline]
     fn remove(&mut self, key: &Address) -> bool {
         self.table.remove(key).is_some()
     }
 
+    /// Removed all addresses associated with a certain peer
     fn remove_all(&mut self, addr: &SocketAddr) {
         let mut remove = Vec::new();
         for (key, val) in &self.table {

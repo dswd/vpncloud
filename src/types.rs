@@ -193,20 +193,6 @@ impl fmt::Debug for Range {
 
 
 #[derive(RustcDecodable, Debug, Clone, Copy)]
-pub enum Type {
-    Tun, Tap
-}
-impl fmt::Display for Type {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match *self {
-            Type::Tun => write!(formatter, "tun"),
-            Type::Tap => write!(formatter, "tap"),
-        }
-    }
-}
-
-
-#[derive(RustcDecodable, Debug, Clone, Copy)]
 pub enum Mode {
     Normal, Hub, Switch, Router
 }
