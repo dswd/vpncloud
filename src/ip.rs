@@ -139,34 +139,9 @@ impl Table for RoutingTable {
 
     /// Removes an address from the map and returns whether something has been removed
     #[inline]
-    fn remove(&mut self, addr: &Address) -> bool {
-        let len = addr.len as usize;
-        let mut found = false;
-        let mut found_len: isize = -1;
-        for i in 0..len+1 {
-            if let Some(group) = self.0.get(&addr.data[0..len-i]) {
-                for entry in group {
-                    let mut match_len = 0;
-                    for j in 0..addr.len as usize {
-                        let b = addr.data[j] ^ entry.bytes[j];
-                        if b == 0 {
-                            match_len += 8;
-                        } else {
-                            match_len += b.leading_zeros();
-                            break;
-                        }
-                    }
-                    if match_len as u8 >= entry.prefix_len && match_len as isize > found_len {
-                        found = true;
-                        found_len = match_len as isize;
-                    }
-                }
-            }
-        }
-        if found {
-            self.0.remove(&addr.data[0..found_len as usize]);
-        }
-        found
+    fn remove(&mut self, _addr: &Address) -> bool {
+        // Do nothing, removing single address from prefix-based routing tables does not make sense
+        false
     }
 
     /// Removed all addresses associated with a certain peer
