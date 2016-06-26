@@ -6,7 +6,10 @@ This project follows [semantic versioning](http://semver.org).
 
 - [changed] Updated dependencies
 - [changed] Turned some clippy warnings off
-- [changed] Cross-compiling for ARMv7
+- [changed] Cross-compiling for ARM
+- [removed] Removed Address remove code for prefix table
+- [fixed] Reconnecting to lost peers when receiving from them or sending to them
+- [fixed] Sending peer list more often to prevent timeouts
 
 ### v0.6.0 (2016-06-02)
 

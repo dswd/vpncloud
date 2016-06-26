@@ -362,11 +362,11 @@ impl<P: Protocol> GenericCloud<P> {
         match self.table.lookup(&dst) {
             Some(addr) => {
                 debug!("Found destination for {} => {}", dst, addr);
-                if self.peers.contains_addr(&addr) {
-                    try!(self.send_msg(addr, &mut Message::Data(payload, start, end)))
-                } else {
+                try!(self.send_msg(addr, &mut Message::Data(payload, start, end)));
+                if !self.peers.contains_addr(&addr) {
                     warn!("Destination for {} not found in peers: {}", dst, addr);
                     self.table.remove(&dst);
+                    try!(self.connect(&addr));
                 }
             },
             None => {
@@ -406,6 +406,9 @@ impl<P: Protocol> GenericCloud<P> {
                 }
             },
             Message::Peers(peers) => {
+                if !self.peers.contains_addr(&peer) {
+                    try!(self.connect(&peer));
+                }
                 for p in &peers {
                     if ! self.peers.contains_addr(p) && ! self.blacklist_peers.contains(p) {
                         try!(self.connect(p));
