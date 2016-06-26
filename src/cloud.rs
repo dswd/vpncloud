@@ -207,7 +207,7 @@ impl<P: Protocol> GenericCloud<P> {
             options: options,
             crypto: crypto,
             next_peerlist: now(),
-            update_freq: peer_timeout/2,
+            update_freq: peer_timeout/2-60,
             buffer_out: [0; 64*1024],
             next_housekeep: now(),
             _dummy_p: PhantomData,
