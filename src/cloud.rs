@@ -11,6 +11,7 @@ use std::os::unix::io::AsRawFd;
 use std::marker::PhantomData;
 use std::hash::BuildHasherDefault;
 use std::time::Instant;
+use std::cmp::{min, max};
 
 use fnv::FnvHasher;
 use epoll;
@@ -23,7 +24,7 @@ use super::types::{Table, Protocol, Range, Error, NetworkId, NodeId};
 use super::device::Device;
 use super::udpmessage::{encode, decode, Options, Message};
 use super::crypto::Crypto;
-use super::util::{now, Time, Duration};
+use super::util::{now, Time, Duration, resolve};
 
 type Hash = BuildHasherDefault<FnvHasher>;
 
@@ -72,8 +73,7 @@ impl PeerList {
 
     #[inline]
     fn is_connected<Addr: ToSocketAddrs+fmt::Display>(&self, addr: Addr) -> Result<bool, Error> {
-        let addrs = try!(addr.to_socket_addrs().map_err(|_| Error::SocketError("Error looking up name")));
-        for addr in addrs {
+        for addr in try!(resolve(addr)) {
             if self.contains_addr(&addr) {
                 return Ok(true);
             }
@@ -219,9 +219,16 @@ impl<P: Protocol> GenericCloud<P> {
         self.device.ifname()
     }
 
+    /// Sends the message to all peers
+    ///
+    /// # Errors
+    /// Returns an `Error::SocketError` when the underlying system call fails or only part of the
+    /// message could be sent (can this even happen?).
+    /// Some messages could have been sent.
     #[inline]
     fn broadcast_msg(&mut self, msg: &mut Message) -> Result<(), Error> {
         debug!("Broadcasting {:?}", msg);
+        // Encrypt and encode once and send several times
         let msg_data = encode(&self.options, msg, &mut self.buffer_out, &mut self.crypto);
         for addr in self.peers.as_vec() {
             let socket = match addr {
@@ -240,9 +247,15 @@ impl<P: Protocol> GenericCloud<P> {
         Ok(())
     }
 
+    /// Sends a message to one peer
+    ///
+    /// # Errors
+    /// Returns an `Error::SocketError` when the underlying system call fails or only part of the
+    /// message could be sent (can this even happen?).
     #[inline]
     fn send_msg(&mut self, addr: SocketAddr, msg: &mut Message) -> Result<(), Error> {
         debug!("Sending {:?} to {}", msg, addr);
+        // Encrypt and encode
         let msg_data = encode(&self.options, msg, &mut self.buffer_out, &mut self.crypto);
         let socket = match addr {
             SocketAddr::V4(_) => &self.socket4,
@@ -258,16 +271,28 @@ impl<P: Protocol> GenericCloud<P> {
         }
     }
 
+    /// Returns the self-perceived addresses (IPv4 and IPv6) of this node
+    ///
+    /// Note that those addresses could be private addresses that are not reachable by other nodes,
+    /// or only some other nodes inside the same network.
+    ///
+    /// # Errors
+    /// Returns an IOError if the underlying system call fails
     #[allow(dead_code)]
     pub fn address(&self) -> IoResult<(SocketAddr, SocketAddr)> {
         Ok((try!(self.socket4.local_addr()), try!(self.socket6.local_addr())))
     }
 
+    /// Returns the number of peers
     #[allow(dead_code)]
     pub fn peer_count(&self) -> usize {
         self.peers.len()
     }
 
+    /// Adds a peer to the reconnect list
+    ///
+    /// This method adds a peer to the list of nodes to reconnect to. A periodic task will try to
+    /// connect to the peer if it is not already connected.
     pub fn add_reconnect_peer(&mut self, add: String) {
         self.reconnect_peers.push(ReconnectEntry {
             address: add,
@@ -277,9 +302,13 @@ impl<P: Protocol> GenericCloud<P> {
         })
     }
 
+    /// Returns whether the address  is blacklisted
+    ///
+    /// # Errors
+    /// Returns an `Error::SocketError` if the given address is a name that failed to resolve to
+    /// actual addresses.
     fn is_blacklisted<Addr: ToSocketAddrs+fmt::Display>(&self, addr: Addr) -> Result<bool, Error> {
-        let addrs = try!(addr.to_socket_addrs().map_err(|_| Error::SocketError("Error looking up name")));
-        for addr in addrs {
+        for addr in try!(resolve(addr)) {
             if self.blacklist_peers.contains(&addr) {
                 return Ok(true);
             }
@@ -287,6 +316,14 @@ impl<P: Protocol> GenericCloud<P> {
         Ok(false)
     }
 
+    /// Connects to a node given by its address
+    ///
+    /// This method connects to node by sending a `Message::Init` to it. If `addr` is a name that
+    /// resolves to multiple addresses, one message is sent to each of them.
+    /// If the node is already a connected peer or the address is blacklisted, no message is sent.
+    ///
+    /// # Errors
+    /// This method returns `Error::NameError` if the address is a name that fails to resolve.
     pub fn connect<Addr: ToSocketAddrs+fmt::Display+Clone>(&mut self, addr: Addr) -> Result<(), Error> {
         if try!(self.peers.is_connected(addr.clone())) || try!(self.is_blacklisted(addr.clone())) {
             return Ok(())
@@ -294,39 +331,48 @@ impl<P: Protocol> GenericCloud<P> {
         debug!("Connecting to {}", addr);
         let subnets = self.addresses.clone();
         let node_id = self.node_id;
-        let mut msg = Message::Init(0, node_id, subnets);
-        if let Ok(addrs) = addr.to_socket_addrs() {
-            let mut addrs = addrs.collect::<Vec<_>>();
-            addrs.dedup();
-            for a in addrs {
-                //Ignore error this time
-                self.send_msg(a, &mut msg).ok();
-            }
+        // Send a message to each resolved address
+        for a in try!(resolve(addr)) {
+            // Ignore error this time
+            let mut msg = Message::Init(0, node_id, subnets.clone());
+            self.send_msg(a, &mut msg).ok();
         }
         Ok(())
     }
 
+    /// Run all periodic housekeeping tasks
+    ///
+    /// This method executes several tasks:
+    /// - Remove peers that have timed out
+    /// - Remove switch table entries that have timed out
+    /// - Periodically send the peers list to all peers
+    /// - Periodically reconnect to peers in the reconnect list
+    ///
+    /// # Errors
+    /// This method returns errors if sending a message fails or resolving an address fails.
     fn housekeep(&mut self) -> Result<(), Error> {
         self.peers.timeout();
         self.table.housekeep();
+        // Periodically send peer list to peers
         let now = now();
         if self.next_peerlist <= now {
             debug!("Send peer list to all peers");
             let mut peer_num = self.peers.len();
+            // If the number of peers is high, send only a fraction of the full peer list to
+            // reduce the management traffic. The number of peers to send is the square root of the
+            // total number of peers.
             if peer_num > 10 {
-                peer_num = (peer_num as f32).sqrt().ceil() as usize;
-                if peer_num < 10 {
-                    peer_num = 10;
-                }
-                if peer_num > 255 {
-                    peer_num = 255
-                }
+                peer_num = max(10, min(255, (peer_num as f32).sqrt().ceil() as usize));
             }
+            // Select that many peers...
             let peers = self.peers.subset(peer_num);
+            // ...and send them to all peers
             let mut msg = Message::Peers(peers);
             try!(self.broadcast_msg(&mut msg));
+            // Reschedule for next update
             self.next_peerlist = now + self.update_freq as Time;
         }
+        // Connect to those reconnect_peers that are due
         for entry in self.reconnect_peers.clone() {
             if entry.next > now {
                 continue
@@ -334,54 +380,114 @@ impl<P: Protocol> GenericCloud<P> {
             try!(self.connect(&entry.address as &str));
         }
         for entry in &mut self.reconnect_peers {
+            // Schedule for next second if node is connected
             if try!(self.peers.is_connected(&entry.address as &str)) {
                 entry.tries = 0;
                 entry.timeout = 1;
                 entry.next = now + 1;
                 continue
             }
+            // Ignore if next attempt is already in the future
             if entry.next > now {
                 continue
             }
+            // Exponential backoff: every 10 tries, the interval doubles
             entry.tries += 1;
             if entry.tries > 10 {
                 entry.tries = 0;
                 entry.timeout *= 2;
             }
+            // Maximum interval is one hour
             if entry.timeout > 3600 {
                 entry.timeout = 3600;
             }
+            // Schedule next connection attempt
             entry.next = now + entry.timeout as Time;
         }
         Ok(())
     }
 
+    /// Handles payload data coming in from the local network device
+    ///
+    /// This method takes payload data received from the local device and parses it to obtain the
+    /// destination address. Then it checks the lookup table to get the peer for that destination
+    /// address. If a peer is found, the message is sent to it, otherwise the message is either
+    /// broadcast to all peers or dropped (depending on mode).
+    ///
+    /// The parameter `payload` contains the payload data starting at position `start` and ending
+    /// at `end`. It is important that the buffer has enough space before the payload data to
+    /// prepend a header of max 64 bytes and enough space after the payload data to append a mac of
+    /// max 64 bytes.
+    ///
+    /// # Errors
+    /// This method fails
+    /// - with `Error::ParseError` if the payload data failed to parse
+    /// - with `Error::SocketError` if sending a message fails
     pub fn handle_interface_data(&mut self, payload: &mut [u8], start: usize, end: usize) -> Result<(), Error> {
         let (src, dst) = try!(P::parse(&payload[start..end]));
         debug!("Read data from interface: src: {}, dst: {}, {} bytes", src, dst, end-start);
         match self.table.lookup(&dst) {
-            Some(addr) => {
+            Some(addr) => { // Peer found for destination
                 debug!("Found destination for {} => {}", dst, addr);
                 try!(self.send_msg(addr, &mut Message::Data(payload, start, end)));
                 if !self.peers.contains_addr(&addr) {
+                    // If the peer is not actually conected, remove the entry in the table and try
+                    // to reconnect.
                     warn!("Destination for {} not found in peers: {}", dst, addr);
                     self.table.remove(&dst);
                     try!(self.connect(&addr));
                 }
             },
             None => {
-                if !self.broadcast {
+                if self.broadcast {
+                    debug!("No destination for {} found, broadcasting", dst);
+                    let mut msg = Message::Data(payload, start, end);
+                    try!(self.broadcast_msg(&mut msg));
+                } else {
                     debug!("No destination for {} found, dropping", dst);
-                    return Ok(());
                 }
-                debug!("No destination for {} found, broadcasting", dst);
-                let mut msg = Message::Data(payload, start, end);
-                try!(self.broadcast_msg(&mut msg));
             }
         }
         Ok(())
     }
 
+    /// Handles a message received from the network
+    ///
+    /// This method handles messages from the network, i.e. from peers. `peer` contains the sender
+    /// of the message. `options` contains the options from the message and `msg` contains the
+    /// message.
+    ///
+    /// If the `network_id` in the messages options differs from the `network_id` of this node,
+    /// the message is simply ignored.
+    ///
+    /// Then this method will check the message type and will handle each message type differently.
+    ///
+    /// # `Message::Data` messages
+    /// This message type contains payload data and therefore this path is optimized for speed.
+    ///
+    /// The payload of data messages is written to the local network device and if the node is in
+    /// a learning mode it will associate the sender peer with the source address.
+    ///
+    /// # `Message::Peers` messages
+    /// If this message is received, the local node will use all the node addresses in the message
+    /// as well as the senders address to connect to.
+    ///
+    /// # `Message::Init` messages
+    /// This message is used in the peer connection handshake.
+    ///
+    /// To make sure, the node does not connect to itself, it will compare the remote `node_id` to
+    /// the local one. If the id is the same, it will ignore the message and blacklist the address
+    /// so that it won't be used in the future.
+    ///
+    /// If the message is coming from a different node, the nodes address is added to the peer list
+    /// and its claimed addresses are associated with it.
+    ///
+    /// If the `stage` of the message is 1, a `Message::Init` message with `stage=1` is sent in
+    /// reply, together with a peer list.
+    ///
+    /// # `Message::Close` message
+    /// If this message is received, the sender is removed from the peer list and its claimed
+    /// addresses are removed from the table.
     pub fn handle_net_message(&mut self, peer: SocketAddr, options: Options, msg: Message) -> Result<(), Error> {
         if self.options.network_id != options.network_id {
             info!("Ignoring message from {} with wrong token {:?}", peer, options.network_id);
@@ -399,16 +505,18 @@ impl<P: Protocol> GenericCloud<P> {
                         return Err(Error::TunTapDevError("Failed to write to device"));
                     }
                 }
-                // not adding peer to increase performance
                 if self.learning {
-                    //learn single address
+                    // Learn single address
                     self.table.learn(src, None, peer);
                 }
+                // Not adding peer in this case to increase performance
             },
             Message::Peers(peers) => {
+                // Connect to sender if not connected
                 if !self.peers.contains_addr(&peer) {
                     try!(self.connect(&peer));
                 }
+                // Connect to all peers in the message
                 for p in &peers {
                     if ! self.peers.contains_addr(p) && ! self.blacklist_peers.contains(p) {
                         try!(self.connect(p));
@@ -416,10 +524,12 @@ impl<P: Protocol> GenericCloud<P> {
                 }
             },
             Message::Init(stage, node_id, ranges) => {
+                // Avoid connecting to self
                 if node_id == self.node_id {
                     self.blacklist_peers.push(peer);
                     return Ok(())
                 }
+                // Add sender as peer or as alternative address to existing peer
                 if self.peers.contains_node(&node_id) {
                     self.peers.add_alt_addr(node_id, peer);
                 } else {
@@ -428,6 +538,7 @@ impl<P: Protocol> GenericCloud<P> {
                         self.table.learn(range.base, Some(range.prefix_len), peer);
                     }
                 }
+                // Reply with stage=1 if stage is 0
                 if stage == 0 {
                     let peers = self.peers.as_vec();
                     let own_addrs = self.addresses.clone();
@@ -444,6 +555,13 @@ impl<P: Protocol> GenericCloud<P> {
         Ok(())
     }
 
+    /// The main method of the node
+    ///
+    /// This method will use epoll to wait in the sockets and the device at the same time.
+    /// It will read from the sockets, decode and decrypt the message and then call the
+    /// `handle_net_message` method. It will also read from the device and call
+    /// `handle_interface_data` for each packet read.
+    /// Also, this method will call `housekeep` every second.
     #[allow(unknown_lints)]
     #[allow(cyclomatic_complexity)]
     pub fn run(&mut self) {

@@ -64,6 +64,7 @@ type Hash = BuildHasherDefault<FnvHasher>;
 /// This table contains a mapping of prefixes associated with peer addresses.
 /// To speed up lookup, prefixes are grouped into full bytes and map to a list of prefixes with
 /// more fine grained prefixes.
+#[derive(Default)]
 pub struct RoutingTable(HashMap<Vec<u8>, Vec<RoutingEntry>, Hash>);
 
 impl RoutingTable {

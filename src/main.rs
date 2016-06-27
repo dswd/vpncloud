@@ -18,14 +18,14 @@ extern crate fnv;
 extern crate net2;
 #[cfg(feature = "bench")] extern crate test;
 
-#[macro_use] mod util;
-mod types;
-mod crypto;
-mod udpmessage;
-mod ethernet;
-mod ip;
-mod cloud;
-mod device;
+#[macro_use] pub mod util;
+pub mod types;
+pub mod crypto;
+pub mod udpmessage;
+pub mod ethernet;
+pub mod ip;
+pub mod cloud;
+pub mod device;
 #[cfg(test)] mod tests;
 #[cfg(feature = "bench")] mod benches;
 

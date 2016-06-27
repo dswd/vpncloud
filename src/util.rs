@@ -2,6 +2,11 @@
 // Copyright (C) 2015-2016  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
+use std::net::{SocketAddr, ToSocketAddrs};
+use std::fmt;
+
+use super::types::Error;
+
 #[cfg(target_os = "linux")]
 use libc;
 
@@ -101,4 +106,13 @@ macro_rules! try_fail {
             Err(err) => fail!($format, $( $arg ),+, err)
         }
     } );
+}
+
+
+pub fn resolve<Addr: ToSocketAddrs+fmt::Display>(addr: Addr) -> Result<Vec<SocketAddr>, Error> {
+    let addrs = try!(addr.to_socket_addrs().map_err(|_| Error::NameError(format!("{}", addr))));
+    // Remove duplicates in addrs (why are there duplicates???)
+    let mut addrs = addrs.collect::<Vec<_>>();
+    addrs.dedup();
+    Ok(addrs)
 }

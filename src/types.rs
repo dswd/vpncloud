@@ -224,6 +224,7 @@ pub enum Error {
     ParseError(&'static str),
     WrongNetwork(Option<NetworkId>),
     SocketError(&'static str),
+    NameError(String),
     TunTapDevError(&'static str),
     CryptoError(&'static str)
 }
@@ -234,6 +235,7 @@ impl fmt::Display for Error {
             Error::SocketError(ref msg) => write!(formatter, "{}", msg),
             Error::TunTapDevError(ref msg) => write!(formatter, "{}", msg),
             Error::CryptoError(ref msg) => write!(formatter, "{}", msg),
+            Error::NameError(ref name) => write!(formatter, "failed to resolve name '{}'", name),
             Error::WrongNetwork(Some(net)) => write!(formatter, "wrong network id: {}", net),
             Error::WrongNetwork(None) => write!(formatter, "wrong network id: none"),
         }

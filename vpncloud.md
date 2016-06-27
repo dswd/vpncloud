@@ -70,7 +70,7 @@ vpncloud(1) -- Peer-to-peer VPN
 
     Switch table entry timeout in seconds. This parameter is only used in switch
     mode. Addresses that have not been seen for the given period of time  will
-    be forgot. [default: `300`]
+    be forgotten. [default: `300`]
 
   * `--ifup <command>`:
 
@@ -109,7 +109,7 @@ in 3 different modes:
   * **Switch mode**: In this mode, the VPN will dynamically learn addresses
     as they are used as source addresses and use them to forward data to its
     destination. Addresses that have not been seen for some time
-    (option `dst_timeout`) will be forgot. Data for unknown addresses will be
+    (option `dst_timeout`) will be forgotten. Data for unknown addresses will be
     broadcast to all peers. This mode is the default mode for TAP devices that
     process Ethernet frames but it can also be used with TUN devices and IP
     packets.
