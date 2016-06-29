@@ -4,12 +4,15 @@ This project follows [semantic versioning](http://semver.org).
 
 ### UNRELEASED
 
+- [added] Added documentation
+- [changed] Code cleanup
 - [changed] Updated dependencies
 - [changed] Turned some clippy warnings off
 - [changed] Cross-compiling for ARM
 - [removed] Removed Address remove code for prefix table
 - [fixed] Reconnecting to lost peers when receiving from them or sending to them
 - [fixed] Sending peer list more often to prevent timeouts
+- [fixed] Removing learnt addresses of lost peers
 
 ### v0.6.0 (2016-06-02)
 

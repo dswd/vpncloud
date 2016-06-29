@@ -351,7 +351,9 @@ impl<P: Protocol> GenericCloud<P> {
     /// # Errors
     /// This method returns errors if sending a message fails or resolving an address fails.
     fn housekeep(&mut self) -> Result<(), Error> {
-        self.peers.timeout();
+        for peer in self.peers.timeout() {
+            self.table.remove_all(&peer);
+        }
         self.table.housekeep();
         // Periodically send peer list to peers
         let now = now();
