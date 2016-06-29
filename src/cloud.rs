@@ -577,33 +577,28 @@ impl<P: Protocol> GenericCloud<P> {
         try_fail!(epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, socket4_fd, &mut socket4_event), "Failed to add ipv4 socket to epoll handle: {}");
         try_fail!(epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, socket6_fd, &mut socket6_event), "Failed to add ipv6 socket to epoll handle: {}");
         try_fail!(epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, device_fd, &mut device_event), "Failed to add device to epoll handle: {}");
-        let mut events = [epoll::EpollEvent{events: 0, data: 0}; 2];
+        let mut events = [epoll::EpollEvent{events: 0, data: 0}; 3];
         let mut buffer = [0; 64*1024];
         loop {
             let count = try_fail!(epoll::wait(epoll_handle, &mut events, 1000), "Epoll wait failed: {}") as usize;
             // Process events
             for evt in events.iter().take(count) {
                 match evt.data {
-                    0 => {
-                        let (size, src) = try_fail!(self.socket4.recv_from(&mut buffer), "Failed to read from ipv4 network socket: {}");
-                        match decode(&mut buffer[..size], &mut self.crypto).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
-                            Ok(_) => (),
-                            Err(e) => error!("Error: {}, from: {}", e, src)
-                        }
-                    },
-                    1 => {
-                        let (size, src) = try_fail!(self.socket6.recv_from(&mut buffer), "Failed to read from ipv6 network socket: {}");
-                        match decode(&mut buffer[..size], &mut self.crypto).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
-                            Ok(_) => (),
-                            Err(e) => error!("Error: {}, from: {}", e, src)
+                    0 | 1 => {
+                        let (size, src) = match evt.data {
+                            0 => try_fail!(self.socket4.recv_from(&mut buffer), "Failed to read from ipv4 network socket: {}"),
+                            1 => try_fail!(self.socket6.recv_from(&mut buffer), "Failed to read from ipv6 network socket: {}"),
+                            _ => unreachable!()
+                        };
+                        if let Err(e) = decode(&mut buffer[..size], &mut self.crypto).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
+                            error!("Error: {}, from: {}", e, src);
                         }
                     },
                     2 => {
                         let start = 64;
                         let size = try_fail!(self.device.read(&mut buffer[start..]), "Failed to read from tap device: {}");
-                        match self.handle_interface_data(&mut buffer, start, start+size) {
-                            Ok(_) => (),
-                            Err(e) => error!("Error: {}", e)
+                        if let Err(e) = self.handle_interface_data(&mut buffer, start, start+size) {
+                            error!("Error: {}", e);
                         }
                     },
                     _ => unreachable!()
@@ -615,9 +610,8 @@ impl<P: Protocol> GenericCloud<P> {
                     break;
                 }
                 // Do the housekeeping
-                match self.housekeep() {
-                    Ok(_) => (),
-                    Err(e) => error!("Error: {}", e)
+                if let Err(e) = self.housekeep() {
+                    error!("Error: {}", e)
                 }
                 self.next_housekeep = now() + 1
             }

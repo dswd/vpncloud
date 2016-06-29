@@ -149,6 +149,7 @@ fn inc_nonce_12(nonce: &mut [u8; 12]) {
 
 
 impl Crypto {
+    #[inline]
     pub fn init() {
         CRYPTO_INIT.call_once(|| {
             if unsafe { sodium_init() } != 0 {
@@ -157,18 +158,21 @@ impl Crypto {
         });
     }
 
+    #[inline]
     pub fn sodium_version() -> String {
         unsafe {
             CStr::from_ptr(sodium_version_string()).to_string_lossy().to_string()
         }
     }
 
+    #[inline]
     pub fn aes256_available() -> bool {
         unsafe {
             crypto_aead_aes256gcm_is_available() == 1
         }
     }
 
+    #[inline]
     pub fn method(&self) -> u8 {
         match *self {
             Crypto::None => 0,
@@ -177,6 +181,7 @@ impl Crypto {
         }
     }
 
+    #[inline]
     pub fn nonce_bytes(&self) -> usize {
         match *self {
             Crypto::None => 0,
@@ -184,6 +189,7 @@ impl Crypto {
         }
     }
 
+    #[inline]
     #[allow(unknown_lints)]
     #[allow(match_same_arms)]
     pub fn additional_bytes(&self) -> usize {

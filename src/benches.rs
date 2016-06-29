@@ -185,8 +185,9 @@ fn handle_net_message(b: &mut Bencher) {
 fn udp_send(b: &mut Bencher) {
     let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
     let data = [0; 1400];
+    let addr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 1);
     b.iter(|| {
-        sock.send_to(&data, "127.0.0.1:1").unwrap()
+        sock.send_to(&data, &addr).unwrap()
     });
     b.bytes = 1400;
 }
