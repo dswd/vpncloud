@@ -4,6 +4,7 @@ This project follows [semantic versioning](http://semver.org).
 
 ### UNRELEASED
 
+- [added] Added pluggable polling system
 - [added] Added documentation
 - [changed] Code cleanup
 - [changed] Updated dependencies

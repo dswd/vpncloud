@@ -14,7 +14,6 @@ use std::time::Instant;
 use std::cmp::{min, max};
 
 use fnv::FnvHasher;
-use epoll;
 use nix::sys::signal::{SIGTERM, SIGQUIT, SIGINT};
 use signal::trap::Trap;
 use rand::{random, sample, thread_rng};
@@ -25,6 +24,7 @@ use super::device::Device;
 use super::udpmessage::{encode, decode, Options, Message};
 use super::crypto::Crypto;
 use super::util::{now, Time, Duration, resolve};
+use super::poll::{self, Poll};
 
 type Hash = BuildHasherDefault<FnvHasher>;
 
@@ -569,34 +569,28 @@ impl<P: Protocol> GenericCloud<P> {
     pub fn run(&mut self) {
         let dummy_time = Instant::now();
         let trap = Trap::trap(&[SIGINT, SIGTERM, SIGQUIT]);
-        let epoll_handle = try_fail!(epoll::create1(0), "Failed to create epoll handle: {}");
+        let mut poll_handle = try_fail!(Poll::new(3), "Failed to create poll handle: {}");
         let socket4_fd = self.socket4.as_raw_fd();
         let socket6_fd = self.socket6.as_raw_fd();
         let device_fd = self.device.as_raw_fd();
-        let mut socket4_event = epoll::EpollEvent{events: epoll::util::event_type::EPOLLIN, data: 0};
-        let mut socket6_event = epoll::EpollEvent{events: epoll::util::event_type::EPOLLIN, data: 1};
-        let mut device_event = epoll::EpollEvent{events: epoll::util::event_type::EPOLLIN, data: 2};
-        try_fail!(epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, socket4_fd, &mut socket4_event), "Failed to add ipv4 socket to epoll handle: {}");
-        try_fail!(epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, socket6_fd, &mut socket6_event), "Failed to add ipv6 socket to epoll handle: {}");
-        try_fail!(epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, device_fd, &mut device_event), "Failed to add device to epoll handle: {}");
-        let mut events = [epoll::EpollEvent{events: 0, data: 0}; 3];
+        try_fail!(poll_handle.register(socket4_fd, poll::READ), "Failed to add ipv4 socket to poll handle: {}");
+        try_fail!(poll_handle.register(socket6_fd, poll::READ), "Failed to add ipv4 socket to poll handle: {}");
+        try_fail!(poll_handle.register(device_fd, poll::READ), "Failed to add ipv4 socket to poll handle: {}");
         let mut buffer = [0; 64*1024];
         loop {
-            let count = try_fail!(epoll::wait(epoll_handle, &mut events, 1000), "Epoll wait failed: {}") as usize;
-            // Process events
-            for evt in events.iter().take(count) {
-                match evt.data {
-                    0 | 1 => {
-                        let (size, src) = match evt.data {
-                            0 => try_fail!(self.socket4.recv_from(&mut buffer), "Failed to read from ipv4 network socket: {}"),
-                            1 => try_fail!(self.socket6.recv_from(&mut buffer), "Failed to read from ipv6 network socket: {}"),
+            for evt in try_fail!(poll_handle.wait(1000), "Poll wait failed: {}") {
+                match evt.fd() {
+                    fd if (fd == socket4_fd || fd == socket6_fd) => {
+                        let (size, src) = match evt.fd() {
+                            fd if fd == socket4_fd => try_fail!(self.socket4.recv_from(&mut buffer), "Failed to read from ipv4 network socket: {}"),
+                            fd if fd == socket6_fd => try_fail!(self.socket6.recv_from(&mut buffer), "Failed to read from ipv6 network socket: {}"),
                             _ => unreachable!()
                         };
                         if let Err(e) = decode(&mut buffer[..size], &mut self.crypto).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
                             error!("Error: {}, from: {}", e, src);
                         }
                     },
-                    2 => {
+                    fd if (fd == device_fd) => {
                         let start = 64;
                         let size = try_fail!(self.device.read(&mut buffer[start..]), "Failed to read from tap device: {}");
                         if let Err(e) = self.handle_interface_data(&mut buffer, start, start+size) {

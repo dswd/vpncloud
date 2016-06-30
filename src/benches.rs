@@ -7,6 +7,7 @@ use test::Bencher;
 use std::str::FromStr;
 use std::net::{UdpSocket, ToSocketAddrs, Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::os::unix::io::AsRawFd;
+use std::mem;
 
 use super::cloud::GenericCloud;
 use super::device::{Device, Type};
@@ -16,8 +17,7 @@ use super::ethernet::{Frame, SwitchTable};
 use super::types::{Address, Table, Protocol};
 use super::ip::Packet;
 use super::util::now as util_now;
-
-use epoll;
+use super::poll::{self, Poll};
 
 #[bench]
 fn crypto_salsa20(b: &mut Bencher) {
@@ -141,13 +141,11 @@ fn now(b: &mut Bencher) {
 #[bench]
 fn epoll_wait(b: &mut Bencher) {
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let epoll_handle = epoll::create1(0).unwrap();
+    let mut poll_handle = Poll::new(1).unwrap();
     let fd = socket.as_raw_fd();
-    let mut event = epoll::EpollEvent{events: epoll::util::event_type::EPOLLOUT, data: 0};
-    epoll::ctl(epoll_handle, epoll::util::ctl_op::ADD, fd, &mut event).unwrap();
-    let mut events = [epoll::EpollEvent{events: 0, data: 0}; 1];
+    poll_handle.register(fd, poll::WRITE).unwrap();
     b.iter(|| {
-        epoll::wait(epoll_handle, &mut events, 1000).unwrap()
+        assert_eq!(poll_handle.wait(1000).unwrap().len(), 1)
     });
     b.bytes = 1400;
 }

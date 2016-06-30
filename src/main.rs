@@ -5,10 +5,10 @@
 #![cfg_attr(feature = "bench", feature(test))]
 
 #[macro_use] extern crate log;
+#[macro_use] extern crate bitflags;
 extern crate time;
 extern crate docopt;
 extern crate rustc_serialize;
-extern crate epoll;
 extern crate signal;
 extern crate nix;
 extern crate libc;
@@ -26,6 +26,7 @@ pub mod ethernet;
 pub mod ip;
 pub mod cloud;
 pub mod device;
+pub mod poll;
 #[cfg(test)] mod tests;
 #[cfg(feature = "bench")] mod benches;
 
