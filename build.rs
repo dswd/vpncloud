@@ -10,7 +10,7 @@ fn main() {
     let target = env::var("TARGET").unwrap();
     let dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let libsodium_dir = dir.join("libsodium");
-    let libsodium_target_dir = dir.join(".sodium-build").join(&target);
+    let libsodium_target_dir = dir.join("target/sodium-build").join(&target);
     let libsodium_target_file = libsodium_target_dir.join("libsodium.a");
     if ! libsodium_target_file.exists() {
         fs::create_dir_all(&libsodium_target_dir).unwrap();

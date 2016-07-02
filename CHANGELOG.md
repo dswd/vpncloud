@@ -90,7 +90,7 @@ This project follows [semantic versioning](http://semver.org).
 - [changed] Increased ChaCha20Poly1305 nonce from 8 to 12 bytes (**incompatible**)
 - [changed] Updated dependency versions
 - [changed] More tests
-- [changed] Removed more "unsafe" blocks (**fixes security issue**)
+- [changed] Removed more "unsafe" blocks
 - [fixed] Forgot to call `sodium_init`, huge performance increase
 
 ### v0.2.0 (2015-11-26)

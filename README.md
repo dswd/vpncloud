@@ -36,13 +36,33 @@ somewhat stable state. VpnCloud features the following functionality:
 * Support for tunneled VLans (TAP device)
 
 
+### Installing
+
+##### Compiling from source
+Prerequisites: Git, [Cargo](https://www.rust-lang.org/install.html),
+  Full C build environment including autotools (for building libsodium)
+
+The checked-out code can be compiled with ``make``.
+The binary could then be found in `target/release/vpncloud`.
+The tests can be run via ``cargo test``.
+
+
+##### Debian / Ubuntu
+Deb packages for each release can be found in the [releases](https://github.com/dswd/vpncloud.rs/releases) section.
+Currently only packages for amd64 are available (I am accepting help on building and packaging for other platforms).
+
+
+##### Arch Linux (AUR)
+There is a [VpnCloud package for Arch Linux](https://aur.archlinux.org/packages/vpncloud/) thanks to Oscar Rainford (fourbytes).
+
+
 ### Contributions welcome
 
 There are several areas in which still some work has to be done and where
 contributions are very welcome:
 
 * **Linux packages**: VpnCloud is stable enough to be packaged for Linux
-  distributions.
+  distributions. Maintainers who want to package VpnCloud are very welcome.
 * **Security review**: The security has been implemented with strong security
   primitives but it would great if a cryptography expert could verify the
   system.
