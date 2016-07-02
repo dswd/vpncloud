@@ -48,12 +48,15 @@ The tests can be run via ``cargo test``.
 
 
 ##### Debian / Ubuntu
-Deb packages for each release can be found in the [releases](https://github.com/dswd/vpncloud.rs/releases) section.
-Currently only packages for amd64 are available (I am accepting help on building and packaging for other platforms).
+Deb packages for each release can be found in the
+[releases](https://github.com/dswd/vpncloud.rs/releases) section. Currently only
+packages for amd64 are available (I am accepting help on building and packaging
+for other platforms).
 
 
 ##### Arch Linux (AUR)
-There is a [VpnCloud package for Arch Linux](https://aur.archlinux.org/packages/vpncloud/) thanks to Oscar Rainford (fourbytes).
+There is a [VpnCloud package for Arch Linux](https://aur.archlinux.org/packages/vpncloud/)
+thanks to Oscar Rainford (fourbytes).
 
 
 ### Contributions welcome

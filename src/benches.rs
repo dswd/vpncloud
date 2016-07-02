@@ -7,7 +7,6 @@ use test::Bencher;
 use std::str::FromStr;
 use std::net::{UdpSocket, ToSocketAddrs, Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::os::unix::io::AsRawFd;
-use std::mem;
 
 use super::cloud::GenericCloud;
 use super::device::{Device, Type};

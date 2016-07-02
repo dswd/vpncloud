@@ -126,29 +126,78 @@ impl Device {
     /// The `buffer` must be large enough to hold a packet/frame of maximum size, otherwise the
     /// packet/frame will be split.
     /// The method will block until a packet/frame is ready to be read.
-    /// On success, the method will return the amount of bytes read into the buffer (starting at
-    /// position 0).
+    /// On success, the method will return the starting position and the amount of bytes read into
+    /// the buffer.
     ///
     /// # Errors
     /// This method will return an error if the underlying read call fails.
     #[inline]
-    pub fn read(&mut self, mut buffer: &mut [u8]) -> Result<usize, Error> {
-        self.fd.read(&mut buffer).map_err(|_| Error::TunTapDevError("Read error"))
+    pub fn read(&mut self, mut buffer: &mut [u8]) -> Result<(usize, usize), Error> {
+        let read = try!(self.fd.read(&mut buffer).map_err(|_| Error::TunTapDevError("Read error")));
+        let (start, read) = self.correct_data_after_read(&mut buffer, 0, read);
+        Ok((start, read))
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[inline]
+    fn correct_data_after_read(&mut self, _buffer: &mut [u8], start: usize, read: usize) -> (usize, usize) {
+        (start, read)
+    }
+
+    #[cfg(any(target_os = "bitrig", target_os = "dragonfly",
+        target_os = "freebsd", target_os = "ios", target_os = "macos",
+        target_os = "netbsd", target_os = "openbsd"))]
+    #[inline]
+    fn correct_data_after_read(&mut self, buffer: &mut [u8], start: usize, read: usize) -> (usize, usize) {
+        if self.type_ == Type::Tun {
+            // BSD-based systems add a 4-byte header containing the Ethertype for TUN
+            assert!(read>=4);
+            (start+4, read-4)
+        } else {
+            (start, read)
+        }
     }
 
     /// Writes a packet/frame to the device
     ///
     /// This method writes one packet or frame (depending on the device type) from `data` to the
-    /// device.
+    /// device. The data starts at the position `start` in the buffer. The buffer should have at
+    /// least 4 bytes of space before the start of the packet.
     /// The method will block until the packet/frame has been written.
     ///
     /// # Errors
     /// This method will return an error if the underlying read call fails.
     #[inline]
-    pub fn write(&mut self, data: &[u8]) -> Result<(), Error> {
-        match self.fd.write_all(data) {
+    pub fn write(&mut self, mut data: &mut [u8], start: usize) -> Result<(), Error> {
+        let start = self.correct_data_before_write(&mut data, start);
+        match self.fd.write_all(&data[start..]) {
             Ok(_) => self.fd.flush().map_err(|_| Error::TunTapDevError("Flush error")),
             Err(_) => Err(Error::TunTapDevError("Write error"))
+        }
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[inline]
+    fn correct_data_before_write(&mut self, _buffer: &mut [u8], start: usize) -> usize {
+        start
+    }
+
+    #[cfg(any(target_os = "bitrig", target_os = "dragonfly",
+        target_os = "freebsd", target_os = "ios", target_os = "macos",
+        target_os = "netbsd", target_os = "openbsd"))]
+    #[inline]
+    fn correct_data_before_write(&mut self, buffer: &mut [u8], start: usize) -> usize {
+        if self.type_ == Type::Tun {
+            // BSD-based systems add a 4-byte header containing the Ethertype for TUN
+            assert!(start>=4);
+            match buffer[start] >> 4 { // IP version
+                4 => buffer[start-4..start].clone_from_slice(&[0x00, 0x00, 0x08, 0x00]),
+                6 => buffer[start-4..start].clone_from_slice(&[0x00, 0x00, 0x86, 0xdd]),
+                _ => unreachable!()
+            }
+            start-4
+        } else {
+            start
         }
     }
 }

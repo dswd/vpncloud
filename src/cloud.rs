@@ -500,7 +500,7 @@ impl<P: Protocol> GenericCloud<P> {
             Message::Data(payload, start, end) => {
                 let (src, _dst) = try!(P::parse(&payload[start..end]));
                 debug!("Writing data to device: {} bytes", end-start);
-                match self.device.write(&payload[start..end]) {
+                match self.device.write(&mut payload[..end], start) {
                     Ok(()) => (),
                     Err(e) => {
                         error!("Failed to send via device: {}", e);
@@ -592,7 +592,7 @@ impl<P: Protocol> GenericCloud<P> {
                     },
                     fd if (fd == device_fd) => {
                         let start = 64;
-                        let size = try_fail!(self.device.read(&mut buffer[start..]), "Failed to read from tap device: {}");
+                        let (start, size) = try_fail!(self.device.read(&mut buffer[start..]), "Failed to read from tap device: {}");
                         if let Err(e) = self.handle_interface_data(&mut buffer, start, start+size) {
                             error!("Error: {}", e);
                         }
