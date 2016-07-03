@@ -592,7 +592,8 @@ impl<P: Protocol> GenericCloud<P> {
                     },
                     fd if (fd == device_fd) => {
                         let start = 64;
-                        let (start, size) = try_fail!(self.device.read(&mut buffer[start..]), "Failed to read from tap device: {}");
+                        let (offset, size) = try_fail!(self.device.read(&mut buffer[start..]), "Failed to read from tap device: {}");
+                        start += offset;
                         if let Err(e) = self.handle_interface_data(&mut buffer, start, start+size) {
                             error!("Error: {}", e);
                         }
