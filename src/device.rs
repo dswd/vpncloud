@@ -133,7 +133,7 @@ impl Device {
     /// This method will return an error if the underlying read call fails.
     #[inline]
     pub fn read(&mut self, mut buffer: &mut [u8]) -> Result<(usize, usize), Error> {
-        let read = try!(self.fd.read(&mut buffer).map_err(|_| Error::TunTapDev("Read error")));
+        let read = try!(self.fd.read(&mut buffer).map_err(|e| Error::TunTapDev("Read error", e)));
         let (start, read) = self.correct_data_after_read(&mut buffer, 0, read);
         Ok((start, read))
     }
@@ -171,8 +171,8 @@ impl Device {
     pub fn write(&mut self, mut data: &mut [u8], start: usize) -> Result<(), Error> {
         let start = self.correct_data_before_write(&mut data, start);
         match self.fd.write_all(&data[start..]) {
-            Ok(_) => self.fd.flush().map_err(|_| Error::TunTapDev("Flush error")),
-            Err(_) => Err(Error::TunTapDev("Write error"))
+            Ok(_) => self.fd.flush().map_err(|e| Error::TunTapDev("Flush error", e)),
+            Err(e) => Err(Error::TunTapDev("Write error", e))
         }
     }
 

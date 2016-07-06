@@ -336,10 +336,10 @@ fn address_decode_encode() {
 
 #[test]
 fn address_eq() {
-    assert!(Address::read_from_fixed(&[1,2,3,4], 4) == Address::read_from_fixed(&[1,2,3,4], 4));
-    assert!(Address::read_from_fixed(&[1,2,3,4], 4) != Address::read_from_fixed(&[1,2,3,5], 4));
-    assert!(Address::read_from_fixed(&[1,2,3,4], 3) == Address::read_from_fixed(&[1,2,3,5], 3));
-    assert!(Address::read_from_fixed(&[1,2,3,4], 3) != Address::read_from_fixed(&[1,2,3,4], 4));
+    assert!(Address::read_from_fixed(&[1,2,3,4], 4).unwrap() == Address::read_from_fixed(&[1,2,3,4], 4).unwrap());
+    assert!(Address::read_from_fixed(&[1,2,3,4], 4).unwrap() != Address::read_from_fixed(&[1,2,3,5], 4).unwrap());
+    assert!(Address::read_from_fixed(&[1,2,3,4], 3).unwrap() == Address::read_from_fixed(&[1,2,3,5], 3).unwrap());
+    assert!(Address::read_from_fixed(&[1,2,3,4], 3).unwrap() != Address::read_from_fixed(&[1,2,3,4], 4).unwrap());
 }
 
 #[test]

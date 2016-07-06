@@ -237,10 +237,10 @@ impl<P: Protocol> GenericCloud<P> {
             };
             try!(match socket.send_to(msg_data, addr) {
                 Ok(written) if written == msg_data.len() => Ok(()),
-                Ok(_) => Err(Error::Socket("Sent out truncated packet")),
+                Ok(_) => Err(Error::Socket("Sent out truncated packet", io::Error::new(io::ErrorKind::Other, "truncated"))),
                 Err(e) => {
                     error!("Failed to send via network {:?}", e);
-                    Err(Error::Socket("IOError when sending"))
+                    Err(Error::Socket("IOError when sending", e))
                 }
             })
         }
@@ -263,10 +263,10 @@ impl<P: Protocol> GenericCloud<P> {
         };
         match socket.send_to(msg_data, addr) {
             Ok(written) if written == msg_data.len() => Ok(()),
-            Ok(_) => Err(Error::Socket("Sent out truncated packet")),
+            Ok(_) => Err(Error::Socket("Sent out truncated packet", io::Error::new(io::ErrorKind::Other, "truncated"))),
             Err(e) => {
                 error!("Failed to send via network {:?}", e);
-                Err(Error::Socket("IOError when sending"))
+                Err(Error::Socket("IOError when sending", e))
             }
         }
     }
@@ -500,12 +500,9 @@ impl<P: Protocol> GenericCloud<P> {
             Message::Data(payload, start, end) => {
                 let (src, _dst) = try!(P::parse(&payload[start..end]));
                 debug!("Writing data to device: {} bytes", end-start);
-                match self.device.write(&mut payload[..end], start) {
-                    Ok(()) => (),
-                    Err(e) => {
-                        error!("Failed to send via device: {}", e);
-                        return Err(Error::TunTapDev("Failed to write to device"));
-                    }
+                if let Err(e) = self.device.write(&mut payload[..end], start) {
+                    error!("Failed to send via device: {}", e);
+                    return Err(e);
                 }
                 if self.learning {
                     // Learn single address

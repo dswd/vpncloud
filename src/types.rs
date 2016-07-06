@@ -6,6 +6,7 @@ use std::net::{SocketAddr, Ipv4Addr, Ipv6Addr};
 use std::fmt;
 use std::str::FromStr;
 use std::hash::{Hash, Hasher};
+use std::io;
 
 use super::util::{bytes_to_hex, Encoder};
 
@@ -211,20 +212,22 @@ pub trait Protocol: Sized {
     fn parse(&[u8]) -> Result<(Address, Address), Error>;
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum Error {
     Parse(&'static str),
     WrongNetwork(Option<NetworkId>),
-    Socket(&'static str),
+    Socket(&'static str, io::Error),
     Name(String),
-    TunTapDev(&'static str),
+    TunTapDev(&'static str, io::Error),
     Crypto(&'static str)
 }
 impl fmt::Display for Error {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
-            Error::Parse(ref msg) | Error::Socket(ref msg) |
-            Error::TunTapDev(ref msg) | Error::Crypto(ref msg) => write!(formatter, "{}", msg),
+            Error::Parse(ref msg) => write!(formatter, "{}", msg),
+            Error::Socket(ref msg, ref err) => write!(formatter, "{}: {:?}", msg, err),
+            Error::TunTapDev(ref msg, ref err) => write!(formatter, "{}: {:?}", msg, err),
+            Error::Crypto(ref msg) => write!(formatter, "{}", msg),
             Error::Name(ref name) => write!(formatter, "failed to resolve name '{}'", name),
             Error::WrongNetwork(Some(net)) => write!(formatter, "wrong network id: {}", net),
             Error::WrongNetwork(None) => write!(formatter, "wrong network id: none"),
