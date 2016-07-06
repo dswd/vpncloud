@@ -15,7 +15,7 @@ pub type NetworkId = u64;
 pub type NodeId = [u8; NODE_ID_BYTES];
 
 
-#[derive(PartialOrd, Eq, Ord, Clone, Copy)]
+#[derive(Eq, Clone, Copy)]
 pub struct Address {
     pub data: [u8; 16],
     pub len: u8
@@ -130,7 +130,7 @@ impl FromStr for Address {
 }
 
 
-#[derive(PartialEq, PartialOrd, Eq, Ord, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub struct Range {
     pub base: Address,
     pub prefix_len: u8
