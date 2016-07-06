@@ -42,8 +42,8 @@ impl Protocol for Frame {
             let mut dst = [0; 16];
             src[0] = data[pos]; src[1] = data[pos+1];
             dst[0] = data[pos]; dst[1] = data[pos+1];
-            src[2..8].clone_from_slice(src_data);
-            dst[2..8].clone_from_slice(dst_data);
+            src[2..8].copy_from_slice(src_data);
+            dst[2..8].copy_from_slice(dst_data);
             Ok((Address{data: src, len: 8}, Address{data: dst, len: 8}))
         } else {
             let src = try!(Address::read_from_fixed(&src_data, 6));

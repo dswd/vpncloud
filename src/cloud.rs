@@ -5,7 +5,7 @@
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::collections::{HashMap, HashSet};
 use std::net::UdpSocket;
-use std::io::Result as IoResult;
+use std::io;
 use std::fmt;
 use std::os::unix::io::AsRawFd;
 use std::marker::PhantomData;
@@ -279,7 +279,7 @@ impl<P: Protocol> GenericCloud<P> {
     /// # Errors
     /// Returns an IOError if the underlying system call fails
     #[allow(dead_code)]
-    pub fn address(&self) -> IoResult<(SocketAddr, SocketAddr)> {
+    pub fn address(&self) -> io::Result<(SocketAddr, SocketAddr)> {
         Ok((try!(self.socket4.local_addr()), try!(self.socket6.local_addr())))
     }
 

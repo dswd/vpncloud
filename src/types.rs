@@ -41,7 +41,7 @@ impl Address {
             return Err(Error::ParseError("Address too short"));
         }
         let mut bytes = [0; 16];
-        bytes[0..len].clone_from_slice(&data[0..len]);
+        bytes[0..len].copy_from_slice(&data[0..len]);
         Ok(Address{data: bytes, len: len as u8})
     }
 
@@ -50,7 +50,7 @@ impl Address {
         assert!(data.len() >= self.len as usize + 1);
         data[0] = self.len;
         let len = self.len as usize;
-        data[1..len+1].clone_from_slice(&self.data[0..len]);
+        data[1..len+1].copy_from_slice(&self.data[0..len]);
         self.len as usize + 1
     }
 }
@@ -114,7 +114,7 @@ impl FromStr for Address {
         if let Ok(addr) = Ipv4Addr::from_str(text) {
             let ip = addr.octets();
             let mut res = [0; 16];
-            res[0..4].clone_from_slice(&ip);
+            res[0..4].copy_from_slice(&ip);
             return Ok(Address{data: res, len: 4});
         }
         if let Ok(addr) = Ipv6Addr::from_str(text) {

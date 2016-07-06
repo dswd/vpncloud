@@ -9,7 +9,7 @@ use super::types::{NodeId, Error, NetworkId, Range, NODE_ID_BYTES};
 use super::util::{bytes_to_hex, Encoder};
 use super::crypto::Crypto;
 
-const MAGIC: [u8; 3] = [0x76, 0x70, 0x6e];
+const MAGIC: [u8; 3] = *b"vpn";
 pub const VERSION: u8 = 1;
 
 const NETWORK_ID_BYTES: usize = 8;
@@ -36,7 +36,7 @@ impl TopHeader {
             return Err(Error::ParseError("Empty message"));
         }
         let mut header = TopHeader::default();
-        header.magic.clone_from_slice(&data[0..3]);
+        header.magic.copy_from_slice(&data[0..3]);
         header.version = data[3];
         header.crypto_method = data[4];
         header.flags = data[6];
@@ -45,7 +45,7 @@ impl TopHeader {
     }
 
     pub fn write_to(&self, data: &mut [u8]) -> usize {
-        data[0..3].clone_from_slice(&self.magic);
+        data[0..3].copy_from_slice(&self.magic);
         data[3] = self.version;
         data[4] = self.crypto_method;
         data[6] = self.flags;
@@ -177,7 +177,7 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
             let stage = data[pos];
             pos += 1;
             let mut node_id = [0; NODE_ID_BYTES];
-            node_id.clone_from_slice(&data[pos..pos+NODE_ID_BYTES]);
+            node_id.copy_from_slice(&data[pos..pos+NODE_ID_BYTES]);
             pos += NODE_ID_BYTES;
             let count = data[pos] as usize;
             pos += 1;
@@ -223,7 +223,7 @@ pub fn encode<'a>(options: &Options, msg: &'a mut Message, mut buf: &'a mut [u8]
             pos += 1;
             for addr in v4addrs {
                 let ip = addr.ip().octets();
-                buf[pos..pos+4].clone_from_slice(&ip);
+                buf[pos..pos+4].copy_from_slice(&ip);
                 pos += 4;
                 Encoder::write_u16(addr.port(), &mut buf[pos..]);
                 pos += 2;
@@ -246,7 +246,7 @@ pub fn encode<'a>(options: &Options, msg: &'a mut Message, mut buf: &'a mut [u8]
             assert!(buf.len() >= pos + 2 + NODE_ID_BYTES);
             buf[pos] = stage;
             pos += 1;
-            buf[pos..pos+NODE_ID_BYTES].clone_from_slice(node_id);
+            buf[pos..pos+NODE_ID_BYTES].copy_from_slice(node_id);
             pos += NODE_ID_BYTES;
             assert!(ranges.len() <= 255);
             buf[pos] = ranges.len() as u8;
