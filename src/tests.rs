@@ -349,6 +349,7 @@ fn address_range_decode_encode() {
     assert_eq!(range.write_to(&mut buf), 6);
     assert_eq!(&buf[0..6], &[4, 0, 1, 2, 3, 24]);
     assert_eq!((range, 6), Range::read_from(&buf).unwrap());
+    assert!(Range::read_from(&buf[..5]).is_err()); // Missing prefix length
     buf[0] = 17;
     assert!(Range::read_from(&buf).is_err());
 }
