@@ -259,7 +259,7 @@ impl Crypto {
                 ) };
                 match res {
                     0 => Ok(mlen as usize),
-                    _ => Err(Error::CryptoError("Failed to decrypt"))
+                    _ => Err(Error::Crypto("Failed to decrypt"))
                 }
             },
             Crypto::AES256GCM{ref state, ..} => {
@@ -277,7 +277,7 @@ impl Crypto {
                 ) };
                 match res {
                     0 => Ok(mlen as usize),
-                    _ => Err(Error::CryptoError("Failed to decrypt"))
+                    _ => Err(Error::Crypto("Failed to decrypt"))
                 }
             }
         }

@@ -237,10 +237,10 @@ impl<P: Protocol> GenericCloud<P> {
             };
             try!(match socket.send_to(msg_data, addr) {
                 Ok(written) if written == msg_data.len() => Ok(()),
-                Ok(_) => Err(Error::SocketError("Sent out truncated packet")),
+                Ok(_) => Err(Error::Socket("Sent out truncated packet")),
                 Err(e) => {
                     error!("Failed to send via network {:?}", e);
-                    Err(Error::SocketError("IOError when sending"))
+                    Err(Error::Socket("IOError when sending"))
                 }
             })
         }
@@ -263,10 +263,10 @@ impl<P: Protocol> GenericCloud<P> {
         };
         match socket.send_to(msg_data, addr) {
             Ok(written) if written == msg_data.len() => Ok(()),
-            Ok(_) => Err(Error::SocketError("Sent out truncated packet")),
+            Ok(_) => Err(Error::Socket("Sent out truncated packet")),
             Err(e) => {
                 error!("Failed to send via network {:?}", e);
-                Err(Error::SocketError("IOError when sending"))
+                Err(Error::Socket("IOError when sending"))
             }
         }
     }
@@ -504,7 +504,7 @@ impl<P: Protocol> GenericCloud<P> {
                     Ok(()) => (),
                     Err(e) => {
                         error!("Failed to send via device: {}", e);
-                        return Err(Error::TunTapDevError("Failed to write to device"));
+                        return Err(Error::TunTapDev("Failed to write to device"));
                     }
                 }
                 if self.learning {

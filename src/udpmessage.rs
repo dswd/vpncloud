@@ -33,7 +33,7 @@ impl TopHeader {
 
     pub fn read_from(data: &[u8]) -> Result<(TopHeader, usize), Error> {
         if data.len() < TopHeader::size() {
-            return Err(Error::ParseError("Empty message"));
+            return Err(Error::Parse("Empty message"));
         }
         let mut header = TopHeader::default();
         header.magic.copy_from_slice(&data[0..3]);
@@ -100,18 +100,18 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
     let mut end = data.len();
     let (header, mut pos) = try!(TopHeader::read_from(&data[..end]));
     if header.magic != MAGIC {
-        return Err(Error::ParseError("Wrong protocol"));
+        return Err(Error::Parse("Wrong protocol"));
     }
     if header.version != VERSION {
-        return Err(Error::ParseError("Wrong version"));
+        return Err(Error::Parse("Wrong version"));
     }
     if header.crypto_method != crypto.method() {
-        return Err(Error::CryptoError("Wrong crypto method"));
+        return Err(Error::Crypto("Wrong crypto method"));
     }
     if crypto.method() > 0 {
         let len = crypto.nonce_bytes();
         if end < pos + len {
-            return Err(Error::ParseError("Truncated crypto header"));
+            return Err(Error::Parse("Truncated crypto header"));
         }
         {
             let (before, after) = data.split_at_mut(pos);
@@ -124,7 +124,7 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
     let mut options = Options::default();
     if header.flags & 0x01 > 0 {
         if end < pos + NETWORK_ID_BYTES {
-            return Err(Error::ParseError("Truncated options"));
+            return Err(Error::Parse("Truncated options"));
         }
         options.network_id = Some(Encoder::read_u64(&data[pos..pos+NETWORK_ID_BYTES]));
         pos += NETWORK_ID_BYTES;
@@ -133,14 +133,14 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
         0 => Message::Data(data, pos, end),
         1 => {
             if end < pos + 1 {
-                return Err(Error::ParseError("Empty peers"));
+                return Err(Error::Parse("Missing IPv4 count"));
             }
             let mut peers = Vec::new();
             let count = data[pos];
             pos += 1;
             let len = count as usize * 6;
             if end < pos + len {
-                return Err(Error::ParseError("Peer data too short"));
+                return Err(Error::Parse("IPv4 peer data too short"));
             }
             for _ in 0..count {
                 let ip = &data[pos..];
@@ -150,11 +150,14 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
                 let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(ip[0], ip[1], ip[2], ip[3]), port));
                 peers.push(addr);
             }
+            if end < pos + 1 {
+                return Err(Error::Parse("Missing IPv6 count"));
+            }
             let count = data[pos];
             pos += 1;
             let len = count as usize * 18;
             if end < pos + len {
-                return Err(Error::ParseError("Peer data too short"));
+                return Err(Error::Parse("IPv6 peer data too short"));
             }
             for _ in 0..count {
                 let mut ip = [0u16; 8];
@@ -172,7 +175,7 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
         },
         2 => {
             if end < pos + 2 + NODE_ID_BYTES {
-                return Err(Error::ParseError("Init data too short"));
+                return Err(Error::Parse("Init data too short"));
             }
             let stage = data[pos];
             pos += 1;
@@ -190,7 +193,7 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
             Message::Init(stage, node_id, addrs)
         },
         3 => Message::Close,
-        _ => return Err(Error::ParseError("Unknown message type"))
+        _ => return Err(Error::Parse("Unknown message type"))
     };
     Ok((options, msg))
 }

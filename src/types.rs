@@ -25,7 +25,7 @@ impl Address {
     #[inline]
     pub fn read_from(data: &[u8]) -> Result<(Address, usize), Error> {
         if data.len() < 1 {
-            return Err(Error::ParseError("Address too short"));
+            return Err(Error::Parse("Address too short"));
         }
         let len = data[0] as usize;
         let addr = try!(Address::read_from_fixed(&data[1..], len));
@@ -35,10 +35,10 @@ impl Address {
     #[inline]
     pub fn read_from_fixed(data: &[u8], len: usize) -> Result<Address, Error> {
         if len > 16 {
-            return Err(Error::ParseError("Invalid address, too long"));
+            return Err(Error::Parse("Invalid address, too long"));
         }
         if data.len() < len {
-            return Err(Error::ParseError("Address too short"));
+            return Err(Error::Parse("Address too short"));
         }
         let mut bytes = [0; 16];
         bytes[0..len].copy_from_slice(&data[0..len]);
@@ -59,15 +59,7 @@ impl Address {
 impl PartialEq for Address {
     #[inline]
     fn eq(&self, rhs: &Self) -> bool {
-        if self.len != rhs.len {
-            return false;
-        }
-        for i in 0..self.len as usize {
-            if self.data[i] != rhs.data[i] {
-                return false;
-            }
-        }
-        true
+        self.len == rhs.len && self.data[..self.len as usize] == rhs.data[..self.len as usize]
     }
 }
 
@@ -129,11 +121,11 @@ impl FromStr for Address {
         if parts.len() == 6 {
             let mut bytes = [0; 16];
             for i in 0..6 {
-                bytes[i] = try!(u8::from_str_radix(&parts[i], 16).map_err(|_| Error::ParseError("Failed to parse mac")));
+                bytes[i] = try!(u8::from_str_radix(&parts[i], 16).map_err(|_| Error::Parse("Failed to parse mac")));
             }
             return Ok(Address{data: bytes, len: 6});
         }
-        Err(Error::ParseError("Failed to parse address"))
+        Err(Error::Parse("Failed to parse address"))
     }
 }
 
@@ -149,7 +141,7 @@ impl Range {
     pub fn read_from(data: &[u8]) -> Result<(Range, usize), Error> {
         let (address, read) = try!(Address::read_from(data));
         if data.len() < read + 1 {
-            return Err(Error::ParseError("Range too short"));
+            return Err(Error::Parse("Range too short"));
         }
         let prefix_len = data[read];
         Ok((Range{base: address, prefix_len: prefix_len}, read + 1))
@@ -170,10 +162,10 @@ impl FromStr for Range {
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let pos = match text.find('/') {
             Some(pos) => pos,
-            None => return Err(Error::ParseError("Invalid range format"))
+            None => return Err(Error::Parse("Invalid range format"))
         };
         let prefix_len = try!(u8::from_str(&text[pos+1..])
-            .map_err(|_| Error::ParseError("Failed to parse prefix length")));
+            .map_err(|_| Error::Parse("Failed to parse prefix length")));
         let base = try!(Address::from_str(&text[..pos]));
         Ok(Range{base: base, prefix_len: prefix_len})
     }
@@ -221,21 +213,19 @@ pub trait Protocol: Sized {
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
-    ParseError(&'static str),
+    Parse(&'static str),
     WrongNetwork(Option<NetworkId>),
-    SocketError(&'static str),
-    NameError(String),
-    TunTapDevError(&'static str),
-    CryptoError(&'static str)
+    Socket(&'static str),
+    Name(String),
+    TunTapDev(&'static str),
+    Crypto(&'static str)
 }
 impl fmt::Display for Error {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
-            Error::ParseError(ref msg) => write!(formatter, "{}", msg),
-            Error::SocketError(ref msg) => write!(formatter, "{}", msg),
-            Error::TunTapDevError(ref msg) => write!(formatter, "{}", msg),
-            Error::CryptoError(ref msg) => write!(formatter, "{}", msg),
-            Error::NameError(ref name) => write!(formatter, "failed to resolve name '{}'", name),
+            Error::Parse(ref msg) | Error::Socket(ref msg) |
+            Error::TunTapDev(ref msg) | Error::Crypto(ref msg) => write!(formatter, "{}", msg),
+            Error::Name(ref name) => write!(formatter, "failed to resolve name '{}'", name),
             Error::WrongNetwork(Some(net)) => write!(formatter, "wrong network id: {}", net),
             Error::WrongNetwork(None) => write!(formatter, "wrong network id: none"),
         }

@@ -26,7 +26,7 @@ impl Protocol for Frame {
     /// This method will fail when the given data is not a valid ethernet frame.
     fn parse(data: &[u8]) -> Result<(Address, Address), Error> {
         if data.len() < 14 {
-            return Err(Error::ParseError("Frame is too short"));
+            return Err(Error::Parse("Frame is too short"));
         }
         let mut pos = 0;
         let dst_data = &data[pos..pos+6];
@@ -36,7 +36,7 @@ impl Protocol for Frame {
         if data[pos] == 0x81 && data[pos+1] == 0x00 {
             pos += 2;
             if data.len() < pos + 2 {
-                return Err(Error::ParseError("Vlan frame is too short"));
+                return Err(Error::Parse("Vlan frame is too short"));
             }
             let mut src = [0; 16];
             let mut dst = [0; 16];

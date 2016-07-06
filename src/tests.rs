@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use super::ethernet::{Frame, SwitchTable};
 use super::ip::{RoutingTable, Packet};
-use super::types::{Error, Protocol, Address, Range, Table};
+use super::types::{Protocol, Address, Range, Table};
 use super::udpmessage::{Options, Message, decode, encode};
 use super::crypto::{Crypto, CryptoMethod};
 
@@ -109,6 +109,14 @@ fn udpmessage_peers() {
     let (options2, msg2) = decode(&mut should, &mut crypto).unwrap();
     assert_eq!(options, options2);
     assert_eq!(msg, msg2);
+    // Missing IPv4 count
+    assert!(decode(&mut[118,112,110,1,0,0,0,1], &mut crypto).is_err());
+    // Truncated IPv4
+    assert!(decode(&mut[118,112,110,1,0,0,0,1,1], &mut crypto).is_err());
+    // Missing IPv6 count
+    assert!(decode(&mut[118,112,110,1,0,0,0,1,1,1,2,3,4,0,0], &mut crypto).is_err());
+    // Truncated IPv6
+    assert!(decode(&mut[118,112,110,1,0,0,0,1,1,1,2,3,4,0,0,1], &mut crypto).is_err());
 }
 
 #[test]
@@ -292,6 +300,8 @@ fn routing_table() {
     table.learn(Address::from_str("192.168.2.0").unwrap(), Some(27), peer3.clone());
     assert_eq!(table.lookup(&Address::from_str("192.168.2.31").unwrap()), Some(peer3));
     assert_eq!(table.lookup(&Address::from_str("192.168.2.32").unwrap()), Some(peer1));
+    table.learn(Address::from_str("192.168.2.0").unwrap(), Some(28), peer3.clone());
+    assert_eq!(table.lookup(&Address::from_str("192.168.2.1").unwrap()), Some(peer3));
 }
 
 #[test]
@@ -301,7 +311,7 @@ fn address_parse_fmt() {
     assert_eq!(format!("{}", Address{data: [3,56,120,45,22,5,1,2,0,0,0,0,0,0,0,0], len: 8}), "vlan824/78:2d:16:05:01:02");
     assert_eq!(format!("{}", Address::from_str("0001:0203:0405:0607:0809:0a0b:0c0d:0e0f").unwrap()), "0001:0203:0405:0607:0809:0a0b:0c0d:0e0f");
     assert_eq!(format!("{:?}", Address{data: [1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0], len: 2}), "0102");
-    assert_eq!(Address::from_str(""), Err(Error::ParseError("Failed to parse address")));
+    assert!(Address::from_str("").is_err()); // Failed to parse address
 }
 
 #[test]
@@ -317,11 +327,30 @@ fn address_decode_encode() {
     assert_eq!(&buf[0..7], &[6, 0x78, 0x2d, 0x16, 0x05, 0x01, 0x02]);
     assert_eq!((addr, 7), Address::read_from(&buf).unwrap());
     assert_eq!(addr, Address::read_from_fixed(&buf[1..], 6).unwrap());
-    assert_eq!(Address::read_from(&buf[0..0]), Err(Error::ParseError("Address too short")));
+    assert!(Address::read_from(&buf[0..0]).is_err()); // Address too short
     buf[0] = 100;
-    assert_eq!(Address::read_from(&buf), Err(Error::ParseError("Invalid address, too long")));
+    assert!(Address::read_from(&buf).is_err()); // Invalid address, too long
     buf[0] = 5;
-    assert_eq!(Address::read_from(&buf[0..4]), Err(Error::ParseError("Address too short")));
+    assert!(Address::read_from(&buf[0..4]).is_err()); // Address too short
+}
+
+#[test]
+fn address_eq() {
+    assert!(Address::read_from_fixed(&[1,2,3,4], 4) == Address::read_from_fixed(&[1,2,3,4], 4));
+    assert!(Address::read_from_fixed(&[1,2,3,4], 4) != Address::read_from_fixed(&[1,2,3,5], 4));
+    assert!(Address::read_from_fixed(&[1,2,3,4], 3) == Address::read_from_fixed(&[1,2,3,5], 3));
+    assert!(Address::read_from_fixed(&[1,2,3,4], 3) != Address::read_from_fixed(&[1,2,3,4], 4));
+}
+
+#[test]
+fn address_range_decode_encode() {
+    let mut buf = [0; 32];
+    let range = Range{base: Address{data: [0,1,2,3,0,0,0,0,0,0,0,0,0,0,0,0], len: 4}, prefix_len: 24};
+    assert_eq!(range.write_to(&mut buf), 6);
+    assert_eq!(&buf[0..6], &[4, 0, 1, 2, 3, 24]);
+    assert_eq!((range, 6), Range::read_from(&buf).unwrap());
+    buf[0] = 17;
+    assert!(Range::read_from(&buf).is_err());
 }
 
 #[test]

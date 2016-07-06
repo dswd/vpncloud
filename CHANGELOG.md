@@ -4,6 +4,7 @@ This project follows [semantic versioning](http://semver.org).
 
 ### UNRELEASED
 
+- [added] Added more tests
 - [added] Added pluggable polling system
 - [added] Added documentation
 - [changed] Code cleanup
@@ -14,6 +15,7 @@ This project follows [semantic versioning](http://semver.org).
 - [fixed] Reconnecting to lost peers when receiving from them or sending to them
 - [fixed] Sending peer list more often to prevent timeouts
 - [fixed] Removing learnt addresses of lost peers
+- [fixed] Fixed possible crash in message decoding
 
 ### v0.6.0 (2016-06-02)
 

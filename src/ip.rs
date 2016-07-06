@@ -25,13 +25,13 @@ impl Protocol for Packet {
     /// This method will fail when the given data is not a valid ipv4 and ipv6 packet.
     fn parse(data: &[u8]) -> Result<(Address, Address), Error> {
         if data.len() < 1 {
-            return Err(Error::ParseError("Empty header"));
+            return Err(Error::Parse("Empty header"));
         }
         let version = data[0] >> 4;
         match version {
             4 => {
                 if data.len() < 20 {
-                    return Err(Error::ParseError("Truncated IPv4 header"));
+                    return Err(Error::Parse("Truncated IPv4 header"));
                 }
                 let src = try!(Address::read_from_fixed(&data[12..], 4));
                 let dst = try!(Address::read_from_fixed(&data[16..], 4));
@@ -39,13 +39,13 @@ impl Protocol for Packet {
             },
             6 => {
                 if data.len() < 40 {
-                    return Err(Error::ParseError("Truncated IPv6 header"));
+                    return Err(Error::Parse("Truncated IPv6 header"));
                 }
                 let src = try!(Address::read_from_fixed(&data[8..], 16));
                 let dst = try!(Address::read_from_fixed(&data[24..], 16));
                 Ok((src, dst))
             },
-            _ => Err(Error::ParseError("Invalid version"))
+            _ => Err(Error::Parse("Invalid version"))
         }
     }
 }
