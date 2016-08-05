@@ -1,3 +1,21 @@
+vpncloud (0.7.0) stable; urgency=medium
+
+  * [added] Added more tests
+  * [added] Added pluggable polling system
+  * [added] Added documentation
+  * [changed] Code cleanup
+  * [changed] Updated dependencies
+  * [changed] Turned some clippy warnings off
+  * [changed] Cross-compiling for ARM
+  * [changed] Updated libsodium to 1.0.11
+  * [removed] Removed Address remove code for prefix table
+  * [fixed] Reconnecting to lost peers when receiving from them or sending to them
+  * [fixed] Sending peer list more often to prevent timeouts
+  * [fixed] Removing learnt addresses of lost peers
+  * [fixed] Fixed possible crash in message decoding
+
+ -- Dennis Schwerdel <schwerdel@informatik.uni-kl.de>  Fri, 05 Aug 2016 08:47:06 +0200
+
 vpncloud (0.6.0) stable; urgency=medium
 
   * [added] Exponential backoff for reconnect timeouts

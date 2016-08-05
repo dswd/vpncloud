@@ -4,6 +4,9 @@ This project follows [semantic versioning](http://semver.org).
 
 ### UNRELEASED
 
+
+### v0.7.0 (2016-08-05)
+
 - [added] Added more tests
 - [added] Added pluggable polling system
 - [added] Added documentation
@@ -11,6 +14,7 @@ This project follows [semantic versioning](http://semver.org).
 - [changed] Updated dependencies
 - [changed] Turned some clippy warnings off
 - [changed] Cross-compiling for ARM
+- [changed] Updated libsodium to 1.0.11
 - [removed] Removed Address remove code for prefix table
 - [fixed] Reconnecting to lost peers when receiving from them or sending to them
 - [fixed] Sending peer list more often to prevent timeouts

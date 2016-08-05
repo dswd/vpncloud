@@ -16,6 +16,10 @@ bench:
 	git submodule update --init
 	cargo bench --features bench
 
+.PHONY: deb
+deb:
+	make -C deb
+
 .PHONY: clean
 clean:
 	rm -rf target
