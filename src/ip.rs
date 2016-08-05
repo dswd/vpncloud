@@ -65,7 +65,7 @@ type Hash = BuildHasherDefault<FnvHasher>;
 /// To speed up lookup, prefixes are grouped into full bytes and map to a list of prefixes with
 /// more fine grained prefixes.
 #[derive(Default)]
-pub struct RoutingTable(HashMap<Vec<u8>, Vec<RoutingEntry>, Hash>);
+pub struct RoutingTable(HashMap<[u8; 16], Vec<RoutingEntry>, Hash>);
 
 impl RoutingTable {
     /// Creates a new empty routing table
@@ -87,8 +87,8 @@ impl Table for RoutingTable {
         // length.
         let group_len = prefix_len as usize / 8;
         assert!(group_len <= 16);
-        let mut group_bytes = Vec::with_capacity(group_len);
-        group_bytes.extend_from_slice(&addr.data[0..group_len]);
+        let mut group_bytes = [0; 16];
+        group_bytes[..group_len].copy_from_slice(&addr.data[..group_len]);
         // Create an entry
         let routing_entry = RoutingEntry{address: address, bytes: addr.data, prefix_len: prefix_len};
         // Add the entry to the routing table, creating a new list of the prefix group is empty.
@@ -99,14 +99,20 @@ impl Table for RoutingTable {
     }
 
     /// Retrieves a peer for an address if it is inside the routing table
+    #[allow(unknown_lints, needless_range_loop)]
     fn lookup(&mut self, addr: &Address) -> Option<SocketAddr> {
         let len = addr.len as usize;
         let mut found = None;
         let mut found_len: isize = -1;
         // Iterate over the prefix length from longest prefix group to shortest (empty) prefix
         // group
+        let mut group_bytes = addr.data;
+        for i in len..16 {
+            group_bytes[i] = 0;
+        }
         for i in 0..len+1 {
-            if let Some(group) = self.0.get(&addr.data[0..len-i]) {
+            group_bytes[len-i] = 0;
+            if let Some(group) = self.0.get(&group_bytes) {
                 // If the group is not empty, check every entry
                 for entry in group {
                     // Calculate the match length of the address and the prefix
