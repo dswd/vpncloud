@@ -1,8 +1,8 @@
 # Whether this VPN should be started with the daemon.
 ENABLED=0
 
-# The address to listen for data. [default: `0.0.0.0:3210`]
-# Note: Every VPN needs a different listen address.
+# The port number on which to listen for data. [default: `3210`]
+# Note: Every VPN needs a different port number.
 LISTEN=''
 
 # Address of a peer to connect to. The address should be in the form
