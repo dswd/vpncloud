@@ -8,9 +8,13 @@ use std::str::FromStr;
 use super::MAGIC;
 use super::ethernet::{Frame, SwitchTable};
 use super::ip::{RoutingTable, Packet};
-use super::types::{Protocol, Address, Range, Table};
+use super::device::Type;
+use super::types::{Protocol, Address, Range, Table, Mode};
 use super::udpmessage::{Message, decode, encode};
 use super::crypto::{Crypto, CryptoMethod};
+use super::config::{Config, ConfigFile};
+use super::configfile;
+use super::Args;
 
 
 impl<'a> PartialEq for Message<'a> {
@@ -389,4 +393,92 @@ fn encrypt_decrypt_aes256() {
     assert!(nonce1 != nonce2);
     receiver.decrypt(&mut buffer[..size], &nonce2, &header).unwrap();
     assert_eq!(msg_bytes, &buffer[..msg_bytes.len()] as &[u8]);
+}
+
+#[test]
+fn config_file() {
+    let config_file = "
+device_type: tun
+device_name: vpncloud%d
+ifup: ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up
+crypto: aes256
+shared_key: mysecret
+port: 3210
+peers:
+  - remote.machine.foo:3210
+  - remote.machine.bar:3210
+peer_timeout: 1800
+mode: normal
+subnets:
+  - 10.0.1.0/24
+    ";
+    assert_eq!(configfile::parse_str::<ConfigFile>(config_file).unwrap(), ConfigFile{
+        device_type: Some(Type::Tun),
+        device_name: Some("vpncloud%d".to_string()),
+        ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
+        ifdown: None,
+        crypto: Some(CryptoMethod::AES256),
+        shared_key: Some("mysecret".to_string()),
+        magic: None,
+        port: Some(3210),
+        peers: Some(vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()]),
+        peer_timeout: Some(1800),
+        mode: Some(Mode::Normal),
+        dst_timeout: None,
+        subnets: Some(vec!["10.0.1.0/24".to_string()])
+    })
+}
+
+#[test]
+fn config_merge() {
+    let mut config = Config::default();
+    config.merge_file(ConfigFile{
+        device_type: Some(Type::Tun),
+        device_name: Some("vpncloud%d".to_string()),
+        ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
+        ifdown: None,
+        crypto: Some(CryptoMethod::AES256),
+        shared_key: Some("mysecret".to_string()),
+        magic: None,
+        port: Some(3210),
+        peers: Some(vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()]),
+        peer_timeout: Some(1800),
+        mode: Some(Mode::Normal),
+        dst_timeout: None,
+        subnets: Some(vec!["10.0.1.0/24".to_string()])
+    });
+    assert_eq!(config, Config{
+        device_type: Type::Tun,
+        device_name: "vpncloud%d".to_string(),
+        ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
+        crypto: CryptoMethod::AES256,
+        shared_key: Some("mysecret".to_string()),
+        port: 3210,
+        peers: vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()],
+        peer_timeout: 1800,
+        mode: Mode::Normal,
+        subnets: vec!["10.0.1.0/24".to_string()],
+        ..Default::default()
+    });
+    config.merge_args(Args{
+        flag_type: Some(Type::Tap),
+        flag_device: Some("vpncloud0".to_string()),
+        flag_shared_key: None,
+        flag_subnet: vec![],
+        flag_connect: vec!["another:3210".to_string()],
+        ..Default::default()
+    });
+    assert_eq!(config, Config{
+        device_type: Type::Tap,
+        device_name: "vpncloud0".to_string(),
+        ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
+        crypto: CryptoMethod::AES256,
+        shared_key: Some("mysecret".to_string()),
+        port: 3210,
+        peers: vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string(), "another:3210".to_string()],
+        peer_timeout: 1800,
+        mode: Mode::Normal,
+        subnets: vec!["10.0.1.0/24".to_string()],
+        ..Default::default()
+    });
 }

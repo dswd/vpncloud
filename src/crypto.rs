@@ -119,7 +119,7 @@ extern {
 }
 
 
-#[derive(RustcDecodable, Debug)]
+#[derive(RustcDecodable, Debug, PartialEq)]
 pub enum CryptoMethod {
     ChaCha20, AES256
 }

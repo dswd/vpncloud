@@ -1,14 +1,14 @@
 use super::{MAGIC, Args};
 
-use device::Type;
-use types::{Mode, HeaderMagic};
-use crypto::CryptoMethod;
-use util::{Encoder, Duration};
+use super::device::Type;
+use super::types::{Mode, HeaderMagic};
+use super::crypto::CryptoMethod;
+use super::util::{Encoder, Duration};
 
 use std::hash::{Hash, SipHasher, Hasher};
 
 
-#[derive(RustcDecodable, Debug)]
+#[derive(RustcDecodable, Debug, PartialEq)]
 pub struct Config {
     pub device_type: Type,
     pub device_name: String,
@@ -145,7 +145,7 @@ impl Config {
 }
 
 
-#[derive(RustcDecodable, Debug)]
+#[derive(RustcDecodable, Debug, PartialEq, Default)]
 pub struct ConfigFile {
     pub device_type: Option<Type>,
     pub device_name: Option<String>,

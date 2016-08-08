@@ -53,7 +53,7 @@ const MAGIC: HeaderMagic = *b"vpn\x01";
 
 static USAGE: &'static str = include_str!("usage.txt");
 
-#[derive(RustcDecodable, Debug)]
+#[derive(RustcDecodable, Debug, Default)]
 pub struct Args {
     flag_config: Option<String>,
     flag_type: Option<Type>,
