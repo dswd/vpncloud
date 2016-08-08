@@ -236,10 +236,7 @@ impl<P: Protocol> GenericCloud<P> {
             try!(match socket.send_to(msg_data, addr) {
                 Ok(written) if written == msg_data.len() => Ok(()),
                 Ok(_) => Err(Error::Socket("Sent out truncated packet", io::Error::new(io::ErrorKind::Other, "truncated"))),
-                Err(e) => {
-                    error!("Failed to send via network {}", e);
-                    Err(Error::Socket("IOError when sending", e))
-                }
+                Err(e) => Err(Error::Socket("IOError when sending", e))
             })
         }
         Ok(())
@@ -262,10 +259,7 @@ impl<P: Protocol> GenericCloud<P> {
         match socket.send_to(msg_data, addr) {
             Ok(written) if written == msg_data.len() => Ok(()),
             Ok(_) => Err(Error::Socket("Sent out truncated packet", io::Error::new(io::ErrorKind::Other, "truncated"))),
-            Err(e) => {
-                error!("Failed to send via network {}", e);
-                Err(Error::Socket("IOError when sending", e))
-            }
+            Err(e) => Err(Error::Socket("IOError when sending", e))
         }
     }
 
