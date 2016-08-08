@@ -4,7 +4,10 @@ This project follows [semantic versioning](http://semver.org).
 
 ### UNRELEASED
 
+- [added] Added `-s` shorthand for `--subnet`
+- [added] Added support for YAML config file via `--config`
 - [changed] Configurable magic header is now used instead of Network-ID (**incompatible**)
+- [changed] Clarified documentation on TUN netmasks
 - [fixed] Fixed documentation of listen parameter
 - [fixed] Fixed problem with multiple subnets
 

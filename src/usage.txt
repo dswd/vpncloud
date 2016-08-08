@@ -1,7 +1,9 @@
 Usage:
-    vpncloud [options] [-t <type>] [-d <name>] [-l <listen>] [-c <addr>...] [-s <subnet>...]
+    vpncloud [options] [--config <file>] [-t <type>] [-d <name>] [-l <listen>] [-c <addr>...] [-s <subnet>...]
 
 Options:
+    --config <file>                 Read configuration options from the
+                                    specified file.
     -t <type>, --type <type>        Set the type of network ("tap" or "tun").
                                     [default: tap]
     -d <name>, --device <name>      Name of the virtual device.
@@ -19,9 +21,8 @@ Options:
     --shared-key <key>              The shared key to encrypt all traffic.
     --crypto <method>               The encryption method to use ("aes256", or
                                     "chacha20"). [default: chacha20]
-    --peer-timeout <secs>           Peer timeout in seconds. [default: 1800]
+    --peer-timeout <secs>           Peer timeout in seconds.
     --dst-timeout <secs>            Switch table entry timeout in seconds.
-                                    [default: 300]
     --ifup <command>                A command to setup the network interface.
     --ifdown <command>              A command to bring down the network
                                     interface.

@@ -3,10 +3,17 @@ vpncloud(1) -- Peer-to-peer VPN
 
 ## SYNOPSIS
 
-`vpncloud [options] [-t <type>] [-d <name>] [-l <addr>] [-c <addr>...]`
+`vpncloud [options] [--config <file>] [-t <type>] [-d <name>] [-l <addr>] [-c <addr>...]`
 
 
 ## OPTIONS
+
+  * `--config <file>`:
+
+    Read configuration options from the specified file. Please see the section
+    **CONFIG FILES** for documentation on the file format.
+    If the same option is defined in the config file and as a parameter, the
+    parameter overrides the config file.
 
   * `-t <type>`, `--type <type>`:
 
@@ -211,6 +218,44 @@ interface is configured with (/16 in this example).
   This method does only protect against attacks on single messages but not
   against attacks that manipulate the message series itself (i.e. suppress
   messages, reorder them, or duplicate them).
+
+
+## CONFIG FILES
+
+The config file is a YAML file that contains configuration values. All entries
+are optional and override the defaults. Please see the section **OPTIONS** for
+detailed descriptions of the options.
+
+* `device_type`: Set the type of network. Same as `--type`
+* `device_name`: Name of the virtual device. Same as `--device`
+* `ifup`: A command to setup the network interface. Same as `--ifup`
+* `ifup`: A command to bring down the network interface. Same as `--ifdown`
+* `crypto`: The encryption method to use. Same as `--crypto`
+* `shared_key`: The shared key to encrypt all traffic. Same as `--shared-key`
+* `magic`: Override the 4-byte magic header of each packet. Same as `--magic`
+* `port`: The port number on which to listen for data. Same as `--listen`
+* `peers`: A list of addresses to connect to. See `--connect`
+* `peer_timeout`: Peer timeout in seconds. Same as`--peer-timeout`
+* `mode`: The mode of the VPN. Same as `--mode`
+* `dst_timeout`: Switch table entry timeout in seconds. Same as `--dst-timeout`
+* `subnets`: A list of local subnets to use. See `--subnet`
+
+
+### Example
+
+device_type: tun
+device_name: vpncloud%d
+ifup: ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up
+crypto: aes256
+shared_key: mysecret
+port: 3210
+peers:
+  - remote.machine.foo:3210
+  - remote.machine.bar:3210
+peer_timeout: 1800
+mode: normal
+subnets:
+  - 10.0.1.0/24
 
 
 ## NETWORK PROTOCOL

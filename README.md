@@ -34,6 +34,7 @@ somewhat stable state. VpnCloud features the following functionality:
   Ethernet networks.
 * High throughput and low additional latency (see [performance page](https://github.com/dswd/vpncloud.rs/wiki/Performance-Measurements))
 * Support for tunneled VLans (TAP device)
+* Option to hide protocol header
 
 
 ### Installing

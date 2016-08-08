@@ -16,6 +16,7 @@ extern crate aligned_alloc;
 extern crate rand;
 extern crate fnv;
 extern crate net2;
+extern crate yaml_rust;
 #[cfg(feature = "bench")] extern crate test;
 
 #[macro_use] pub mod util;
@@ -27,12 +28,13 @@ pub mod ip;
 pub mod cloud;
 pub mod device;
 pub mod poll;
+pub mod config;
+pub mod configfile;
 #[cfg(test)] mod tests;
 #[cfg(feature = "bench")] mod benches;
 
 use docopt::Docopt;
 
-use std::hash::{Hash, SipHasher, Hasher};
 use std::str::FromStr;
 use std::process::Command;
 
@@ -42,11 +44,36 @@ use ip::RoutingTable;
 use types::{Mode, Range, Table, Protocol, HeaderMagic};
 use cloud::GenericCloud;
 use crypto::{Crypto, CryptoMethod};
-use util::{Duration, Encoder};
+use util::Duration;
+use config::Config;
 
 
 const VERSION: u8 = 1;
 const MAGIC: HeaderMagic = *b"vpn\x01";
+
+static USAGE: &'static str = include_str!("usage.txt");
+
+#[derive(RustcDecodable, Debug)]
+pub struct Args {
+    flag_config: Option<String>,
+    flag_type: Option<Type>,
+    flag_mode: Option<Mode>,
+    flag_shared_key: Option<String>,
+    flag_crypto: Option<CryptoMethod>,
+    flag_subnet: Vec<String>,
+    flag_device: Option<String>,
+    flag_listen: Option<u16>,
+    flag_network_id: Option<String>,
+    flag_magic: Option<String>,
+    flag_connect: Vec<String>,
+    flag_peer_timeout: Option<Duration>,
+    flag_dst_timeout: Option<Duration>,
+    flag_verbose: bool,
+    flag_quiet: bool,
+    flag_ifup: Option<String>,
+    flag_ifdown: Option<String>,
+    flag_version: bool
+}
 
 
 struct SimpleLogger;
@@ -65,29 +92,6 @@ impl log::Log for SimpleLogger {
     }
 }
 
-static USAGE: &'static str = include_str!("usage.txt");
-
-#[derive(RustcDecodable, Debug)]
-struct Args {
-    flag_type: Type,
-    flag_mode: Mode,
-    flag_shared_key: Option<String>,
-    flag_crypto: CryptoMethod,
-    flag_subnet: Vec<String>,
-    flag_device: String,
-    flag_listen: u16,
-    flag_network_id: Option<String>,
-    flag_magic: Option<String>,
-    flag_connect: Vec<String>,
-    flag_peer_timeout: Duration,
-    flag_dst_timeout: Duration,
-    flag_verbose: bool,
-    flag_quiet: bool,
-    flag_ifup: Option<String>,
-    flag_ifdown: Option<String>,
-    flag_version: bool
-}
-
 fn run_script(script: String, ifname: &str) {
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(&script).env("IFNAME", ifname);
@@ -102,18 +106,18 @@ fn run_script(script: String, ifname: &str) {
     }
 }
 
-fn run<T: Protocol> (mut args: Args) {
-    let device = try_fail!(Device::new(&args.flag_device, args.flag_type),
-        "Failed to open virtual {} interface {}: {}", args.flag_type, &args.flag_device);
+fn run<T: Protocol> (config: Config) {
+    let device = try_fail!(Device::new(&config.device_name, config.device_type),
+        "Failed to open virtual {} interface {}: {}", config.device_type, config.device_name);
     info!("Opened device {}", device.ifname());
-    let mut ranges = Vec::with_capacity(args.flag_subnet.len());
-    for s in args.flag_subnet {
-        ranges.push(try_fail!(Range::from_str(&s), "Invalid subnet format: {} ({})", s));
+    let mut ranges = Vec::with_capacity(config.subnets.len());
+    for s in &config.subnets {
+        ranges.push(try_fail!(Range::from_str(s), "Invalid subnet format: {} ({})", s));
     }
-    let dst_timeout = args.flag_dst_timeout;
-    let peer_timeout = args.flag_peer_timeout;
-    let (learning, broadcasting, table): (bool, bool, Box<Table>) = match args.flag_mode {
-        Mode::Normal => match args.flag_type {
+    let dst_timeout = config.dst_timeout;
+    let peer_timeout = config.peer_timeout;
+    let (learning, broadcasting, table): (bool, bool, Box<Table>) = match config.mode {
+        Mode::Normal => match config.device_type {
             Type::Tap => (true, true, Box::new(SwitchTable::new(dst_timeout))),
             Type::Tun => (false, false, Box::new(RoutingTable::new()))
         },
@@ -121,41 +125,22 @@ fn run<T: Protocol> (mut args: Args) {
         Mode::Switch => (true, true, Box::new(SwitchTable::new(dst_timeout))),
         Mode::Hub => (false, true, Box::new(SwitchTable::new(dst_timeout)))
     };
-    if let Some(network_id) = args.flag_network_id {
-        warn!("The --network-id argument is deprecated, please use --magic instead.");
-        if args.flag_magic.is_none() {
-            args.flag_magic = Some(network_id);
-        }
-    }
-    let magic = args.flag_magic.map_or(MAGIC, |name| {
-        if name.starts_with("hash:") {
-            let mut s = SipHasher::new();
-            name[6..].hash(&mut s);
-            let mut data = [0; 4];
-            Encoder::write_u32((s.finish() & 0xffffffff) as u32, &mut data);
-            data
-        } else {
-            let num = try_fail!(u32::from_str_radix(&name, 16), "Failed to parse header magic: {}");
-            let mut data = [0; 4];
-            Encoder::write_u32(num, &mut data);
-            data
-        }
-    });
+    let magic = config.get_magic();
     Crypto::init();
-    let crypto = match args.flag_shared_key {
-        Some(key) => Crypto::from_shared_key(args.flag_crypto, &key),
+    let crypto = match config.shared_key {
+        Some(key) => Crypto::from_shared_key(config.crypto, &key),
         None => Crypto::None
     };
-    let mut cloud = GenericCloud::<T>::new(magic, device, args.flag_listen, table, peer_timeout, learning, broadcasting, ranges, crypto);
-    if let Some(script) = args.flag_ifup {
+    let mut cloud = GenericCloud::<T>::new(magic, device, config.port, table, peer_timeout, learning, broadcasting, ranges, crypto);
+    if let Some(script) = config.ifup {
         run_script(script, cloud.ifname());
     }
-    for addr in args.flag_connect {
+    for addr in config.peers {
         try_fail!(cloud.connect(&addr as &str), "Failed to send message to {}: {}", &addr);
         cloud.add_reconnect_peer(addr);
     }
     cloud.run();
-    if let Some(script) = args.flag_ifdown {
+    if let Some(script) = config.ifdown {
         run_script(script, cloud.ifname());
     }
 }
@@ -183,9 +168,16 @@ fn main() {
         }
         Box::new(SimpleLogger)
     }).unwrap();
-    debug!("Args: {:?}", args);
-    match args.flag_type {
-        Type::Tap => run::<ethernet::Frame>(args),
-        Type::Tun => run::<ip::Packet>(args),
+    let mut config = Config::default();
+    if let Some(ref file) = args.flag_config {
+        info!("Reading config file '{}'", file);
+        let config_file = try_fail!(configfile::parse(file), "Failed to load config file: {:?}");
+        config.merge_file(config_file)
+    }
+    config.merge_args(args);
+    debug!("Config: {:?}", config);
+    match config.device_type {
+        Type::Tap => run::<ethernet::Frame>(config),
+        Type::Tun => run::<ip::Packet>(config)
     }
 }
