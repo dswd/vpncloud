@@ -19,9 +19,9 @@ use signal::trap::Trap;
 use rand::{random, sample, thread_rng};
 use net2::UdpBuilder;
 
-use super::types::{Table, Protocol, Range, Error, NetworkId, NodeId};
+use super::types::{Table, Protocol, Range, Error, HeaderMagic, NodeId};
 use super::device::Device;
-use super::udpmessage::{encode, decode, Options, Message};
+use super::udpmessage::{encode, decode, Message};
 use super::crypto::Crypto;
 use super::util::{now, Time, Duration, resolve};
 use super::poll::{self, Poll};
@@ -153,6 +153,7 @@ pub struct ReconnectEntry {
 }
 
 pub struct GenericCloud<P: Protocol> {
+    magic: HeaderMagic,
     node_id: NodeId,
     peers: PeerList,
     addresses: Vec<Range>,
@@ -164,7 +165,6 @@ pub struct GenericCloud<P: Protocol> {
     socket4: UdpSocket,
     socket6: UdpSocket,
     device: Device,
-    options: Options,
     crypto: Crypto,
     next_peerlist: Time,
     update_freq: Duration,
@@ -176,7 +176,7 @@ pub struct GenericCloud<P: Protocol> {
 impl<P: Protocol> GenericCloud<P> {
     #[allow(unknown_lints)]
     #[allow(too_many_arguments)]
-    pub fn new(device: Device, listen: u16, network_id: Option<NetworkId>, table: Box<Table>,
+    pub fn new(magic: HeaderMagic, device: Device, listen: u16, table: Box<Table>,
         peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>,
         crypto: Crypto) -> Self {
         let socket4 = match UdpBuilder::new_v4().expect("Failed to obtain ipv4 socket builder")
@@ -190,9 +190,8 @@ impl<P: Protocol> GenericCloud<P> {
             Ok(socket) => socket,
             Err(err) => fail!("Failed to open ipv6 address ::{}: {}", listen, err)
         };
-        let mut options = Options::default();
-        options.network_id = network_id;
         GenericCloud{
+            magic: magic,
             node_id: random(),
             peers: PeerList::new(peer_timeout),
             addresses: addresses,
@@ -204,7 +203,6 @@ impl<P: Protocol> GenericCloud<P> {
             socket4: socket4,
             socket6: socket6,
             device: device,
-            options: options,
             crypto: crypto,
             next_peerlist: now(),
             update_freq: peer_timeout/2-60,
@@ -229,7 +227,7 @@ impl<P: Protocol> GenericCloud<P> {
     fn broadcast_msg(&mut self, msg: &mut Message) -> Result<(), Error> {
         debug!("Broadcasting {:?}", msg);
         // Encrypt and encode once and send several times
-        let msg_data = encode(&self.options, msg, &mut self.buffer_out, &mut self.crypto);
+        let msg_data = encode(msg, &mut self.buffer_out, self.magic, &mut self.crypto);
         for addr in self.peers.as_vec() {
             let socket = match addr {
                 SocketAddr::V4(_) => &self.socket4,
@@ -256,7 +254,7 @@ impl<P: Protocol> GenericCloud<P> {
     fn send_msg(&mut self, addr: SocketAddr, msg: &mut Message) -> Result<(), Error> {
         debug!("Sending {:?} to {}", msg, addr);
         // Encrypt and encode
-        let msg_data = encode(&self.options, msg, &mut self.buffer_out, &mut self.crypto);
+        let msg_data = encode(msg, &mut self.buffer_out, self.magic, &mut self.crypto);
         let socket = match addr {
             SocketAddr::V4(_) => &self.socket4,
             SocketAddr::V6(_) => &self.socket6
@@ -456,11 +454,7 @@ impl<P: Protocol> GenericCloud<P> {
     /// Handles a message received from the network
     ///
     /// This method handles messages from the network, i.e. from peers. `peer` contains the sender
-    /// of the message. `options` contains the options from the message and `msg` contains the
-    /// message.
-    ///
-    /// If the `network_id` in the messages options differs from the `network_id` of this node,
-    /// the message is simply ignored.
+    /// of the message and `msg` contains the message.
     ///
     /// Then this method will check the message type and will handle each message type differently.
     ///
@@ -490,11 +484,7 @@ impl<P: Protocol> GenericCloud<P> {
     /// # `Message::Close` message
     /// If this message is received, the sender is removed from the peer list and its claimed
     /// addresses are removed from the table.
-    pub fn handle_net_message(&mut self, peer: SocketAddr, options: Options, msg: Message) -> Result<(), Error> {
-        if self.options.network_id != options.network_id {
-            info!("Ignoring message from {} with wrong token {:?}", peer, options.network_id);
-            return Err(Error::WrongNetwork(options.network_id));
-        }
+    pub fn handle_net_message(&mut self, peer: SocketAddr, msg: Message) -> Result<(), Error> {
         debug!("Received {:?} from {}", msg, peer);
         match msg {
             Message::Data(payload, start, end) => {
@@ -583,7 +573,7 @@ impl<P: Protocol> GenericCloud<P> {
                             fd if fd == socket6_fd => try_fail!(self.socket6.recv_from(&mut buffer), "Failed to read from ipv6 network socket: {}"),
                             _ => unreachable!()
                         };
-                        if let Err(e) = decode(&mut buffer[..size], &mut self.crypto).and_then(|(options, msg)| self.handle_net_message(src, options, msg)) {
+                        if let Err(e) = decode(&mut buffer[..size], self.magic, &mut self.crypto).and_then(|msg| self.handle_net_message(src, msg)) {
                             error!("Error: {}, from: {}", e, src);
                         }
                     },

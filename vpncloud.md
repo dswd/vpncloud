@@ -56,10 +56,13 @@ vpncloud(1) -- Peer-to-peer VPN
     computers lacking this support, only CHACHA20 is supported.
     [default: `chacha20`]
 
-  * `--network-id <id>`:
+  * `--magic <id>`:
 
-    An optional token that identifies the network and helps to distinguish it
-    from other networks.
+    Override the 4-byte magic header of each packet. This header identifies the
+    network and helps to distinguish it from other networks and other
+    applications. The id can either be a 4 byte / 8 character hexadecimal
+    string or an arbitrary string prefixed with "hash:" which will then be
+    hashed into 4 bytes.
 
   * `--peer-timeout <secs>`:
 
@@ -129,8 +132,8 @@ and to allow the automatic cross-connect behavior. There are some important
 things to note:
 
   - To avoid that different networks that reuse each others addresses merge due
-    to the cross-connect behavior, the `network_id` option can be used and set
-    to any unique string to identify the network. The `network_id` must be the
+    to the cross-connect behavior, the `magic` option can be used and set
+    to any unique string to identify the network. The `magic` must be the
     same on all nodes of the same VPN network.
 
   - The cross-connect behavior can be able to connect nodes that are behind
@@ -203,7 +206,7 @@ vpncloud -t tun -c REMOTE_HOST:PORT --subnet 10.0.0.X/32 --ifup 'ifconfig $IFNAM
   The shared key is hashed using *ScryptSalsa208Sha256* to derive a key,
   which is used to encrypt the payload of messages using *ChaCha20Poly1305* or
   *AES256-GCM*. The encryption includes an authentication that also protects the
-  header and all additional headers.
+  header.
   This method does only protect against attacks on single messages but not
   against attacks that manipulate the message series itself (i.e. suppress
   messages, reorder them, or duplicate them).
@@ -216,21 +219,17 @@ implementations and to maximize the performance.
 
 Every packet sent over UDP contains the following header (in order):
 
-  * 3 bytes `magic constant` = `[0x76, 0x70, 0x6e]` ("vpn")
+  * 4 bytes `magic`
 
     This field is used to identify the packet and to sort out packets that do
-    not belong.
-
-  * 1 byte `version number` = 1 (currently)
-
-    This field specifies the version and helps nodes to parse the rest of the
-    header and the packet.
+    not belong. The default is `[0x76, 0x70, 0x6e, 0x01]` ("vpn\x01").
+    This field can be used to identify VpnCloud packets and might be set to
+    something different to hide the protocol.
 
   * 1 byte `crypto method`
 
     This field specifies the method that must be used to decrypt the rest of the
-    data (additional headers and message contents). The currently supported
-    methods are:
+    data. The currently supported methods are:
 
     - Method `0`, **No encryption**: Rest of the data can be read without
       decrypting it.
@@ -245,21 +244,12 @@ Every packet sent over UDP contains the following header (in order):
       `libsodium::crypto_aead_aes256gcm` method, using the 8 byte header
       as additional data.
 
-  * 1 `reserved byte` that is currently unused
-
-  * 1 byte for `flags`
-
-    This byte contains flags that specify the presence of additional headers.
-    The flags are enumerated from bit 1 (least significant bit) to bit 8
-    (most significant bit). The additional headers must be present in this same
-    order. Currently the following additional headers are supported:
-
-    - Bit 1: Network ID
+  * 2 `reserved bytes` that are currently unused
 
   * 1 byte for the `message type`
 
-    This byte specifies the type of message that follows after all additional
-    headers. Currently the following message types are supported:
+    This byte specifies the type of message that follows. Currently the
+    following message types are supported:
 
     - Type 0: Data packet
     - Type 1: Peer list
@@ -269,21 +259,14 @@ Every packet sent over UDP contains the following header (in order):
 After this 8 byte header, the rest of the message follows. It is encrypted using
 the method specified in the header.
 
-In the decrypted data, the additional headers as specified in the `flags` field
-will follow in the order of their respective flag bits.
-
-  * **Network ID**:
-
-    The network id is encoded as 8 bytes.
-
-After the additional headers, the message as specified in the `message type`
-field will follow:
+In the decrypted data, the message as specified in the `message type` field
+will follow:
 
   * **Data packet** (message type 0):
     This packet contains payload. The format of the data depends on the device
     type. For TUN devices, this data contains an IP packet. For TAP devices it
-    contains an Ethernet frame. The data starts right after all additional
-    headers and ends at the end of the packet.
+    contains an Ethernet frame. The data starts right after the header and ends
+    at the end of the packet.
     If it is an Ethernet frame, it will start with the destination MAC and end
     with the payload. It does not contain the preamble, SFD, padding, and CRC
     fields.

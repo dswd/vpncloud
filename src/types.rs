@@ -12,7 +12,7 @@ use super::util::{bytes_to_hex, Encoder};
 
 pub const NODE_ID_BYTES: usize = 16;
 
-pub type NetworkId = u64;
+pub type HeaderMagic = [u8; 4];
 pub type NodeId = [u8; NODE_ID_BYTES];
 
 
@@ -215,7 +215,7 @@ pub trait Protocol: Sized {
 #[derive(Debug)]
 pub enum Error {
     Parse(&'static str),
-    WrongNetwork(Option<NetworkId>),
+    WrongHeaderMagic(HeaderMagic),
     Socket(&'static str, io::Error),
     Name(String),
     TunTapDev(&'static str, io::Error),
@@ -229,8 +229,7 @@ impl fmt::Display for Error {
             Error::TunTapDev(ref msg, ref err) => write!(formatter, "{}: {:?}", msg, err),
             Error::Crypto(ref msg) => write!(formatter, "{}", msg),
             Error::Name(ref name) => write!(formatter, "failed to resolve name '{}'", name),
-            Error::WrongNetwork(Some(net)) => write!(formatter, "wrong network id: {}", net),
-            Error::WrongNetwork(None) => write!(formatter, "wrong network id: none"),
+            Error::WrongHeaderMagic(net) => write!(formatter, "wrong header magic: {}", bytes_to_hex(&net)),
         }
     }
 }

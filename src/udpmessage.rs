@@ -5,23 +5,17 @@
 use std::fmt;
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr, SocketAddrV6, Ipv6Addr};
 
-use super::types::{NodeId, Error, NetworkId, Range, NODE_ID_BYTES};
+use super::types::{NodeId, HeaderMagic, Error, Range, NODE_ID_BYTES};
 use super::util::{bytes_to_hex, Encoder};
 use super::crypto::Crypto;
 
-const MAGIC: [u8; 3] = *b"vpn";
-pub const VERSION: u8 = 1;
-
-const NETWORK_ID_BYTES: usize = 8;
-
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 #[repr(packed)]
 struct TopHeader {
-    magic: [u8; 3],
-    version: u8,
+    magic: HeaderMagic,
     crypto_method : u8,
-    _reserved: u8,
-    flags: u8,
+    _reserved1: u8,
+    _reserved2: u8,
     msgtype: u8
 }
 
@@ -36,33 +30,18 @@ impl TopHeader {
             return Err(Error::Parse("Empty message"));
         }
         let mut header = TopHeader::default();
-        header.magic.copy_from_slice(&data[0..3]);
-        header.version = data[3];
+        header.magic.copy_from_slice(&data[0..4]);
         header.crypto_method = data[4];
-        header.flags = data[6];
         header.msgtype = data[7];
         Ok((header, TopHeader::size()))
     }
 
     pub fn write_to(&self, data: &mut [u8]) -> usize {
-        data[0..3].copy_from_slice(&self.magic);
-        data[3] = self.version;
+        data[0..4].copy_from_slice(&self.magic);
         data[4] = self.crypto_method;
-        data[6] = self.flags;
         data[7] = self.msgtype;
         TopHeader::size()
     }
-}
-
-impl Default for TopHeader {
-    fn default() -> Self {
-        TopHeader{magic: MAGIC, version: VERSION, crypto_method: 0, _reserved: 0, flags: 0, msgtype: 0}
-    }
-}
-
-#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
-pub struct Options {
-    pub network_id: Option<NetworkId>,
 }
 
 pub enum Message<'a> {
@@ -96,14 +75,11 @@ impl<'a> fmt::Debug for Message<'a> {
 
 #[allow(unknown_lints)]
 #[allow(needless_range_loop)]
-pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, Message<'a>), Error> {
+pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &mut Crypto) -> Result<Message<'a>, Error> {
     let mut end = data.len();
     let (header, mut pos) = try!(TopHeader::read_from(&data[..end]));
-    if header.magic != MAGIC {
-        return Err(Error::Parse("Wrong protocol"));
-    }
-    if header.version != VERSION {
-        return Err(Error::Parse("Wrong version"));
+    if header.magic != magic {
+        return Err(Error::WrongHeaderMagic(header.magic));
     }
     if header.crypto_method != crypto.method() {
         return Err(Error::Crypto("Wrong crypto method"));
@@ -120,14 +96,6 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
             end = try!(crypto.decrypt(crypto_data, nonce, &before[..TopHeader::size()])) + pos;
         }
         assert_eq!(end, data.len()-crypto.additional_bytes());
-    }
-    let mut options = Options::default();
-    if header.flags & 0x01 > 0 {
-        if end < pos + NETWORK_ID_BYTES {
-            return Err(Error::Parse("Truncated options"));
-        }
-        options.network_id = Some(Encoder::read_u64(&data[pos..pos+NETWORK_ID_BYTES]));
-        pos += NETWORK_ID_BYTES;
     }
     let msg = match header.msgtype {
         0 => Message::Data(data, pos, end),
@@ -195,12 +163,12 @@ pub fn decode<'a>(data: &'a mut [u8], crypto: &mut Crypto) -> Result<(Options, M
         3 => Message::Close,
         _ => return Err(Error::Parse("Unknown message type"))
     };
-    Ok((options, msg))
+    Ok(msg)
 }
 
 #[allow(unknown_lints)]
 #[allow(needless_range_loop)]
-pub fn encode<'a>(options: &Options, msg: &'a mut Message, mut buf: &'a mut [u8], crypto: &mut Crypto) -> &'a mut [u8] {
+pub fn encode<'a>(msg: &'a mut Message, mut buf: &'a mut [u8], magic: HeaderMagic, crypto: &mut Crypto) -> &'a mut [u8] {
     let mut start = 64;
     let mut end = 64;
     match *msg {
@@ -264,14 +232,10 @@ pub fn encode<'a>(options: &Options, msg: &'a mut Message, mut buf: &'a mut [u8]
     }
     assert!(start >= 64);
     assert!(buf.len() >= end + 64);
-    if let Some(id) = options.network_id {
-        assert!(start >= NETWORK_ID_BYTES);
-        Encoder::write_u64(id, &mut buf[start-NETWORK_ID_BYTES..]);
-        start -= NETWORK_ID_BYTES;
-    }
     let crypto_start = start;
     start -= crypto.nonce_bytes();
     let mut header = TopHeader::default();
+    header.magic = magic;
     header.msgtype = match *msg {
         Message::Data(_, _, _) => 0,
         Message::Peers(_) => 1,
@@ -279,9 +243,6 @@ pub fn encode<'a>(options: &Options, msg: &'a mut Message, mut buf: &'a mut [u8]
         Message::Close => 3
     };
     header.crypto_method = crypto.method();
-    if options.network_id.is_some() {
-        header.flags |= 0x01;
-    }
     start -= TopHeader::size();
     header.write_to(&mut buf[start..]);
     if crypto.method() > 0 {

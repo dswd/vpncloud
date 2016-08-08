@@ -59,6 +59,20 @@ impl Encoder {
     }
 
     #[inline]
+    pub fn read_u32(data: &[u8]) -> u32 {
+        ((data[0] as u32) << 24) | ((data[1] as u32) << 16) |
+        ((data[2] as u32) << 8) | data[3] as u32
+    }
+
+    #[inline]
+    pub fn write_u32(val: u32, data: &mut [u8]) {
+        data[0] = ((val >> 24) & 0xff) as u8;
+        data[1] = ((val >> 16) & 0xff) as u8;
+        data[2] = ((val >> 8) & 0xff) as u8;
+        data[3] = (val & 0xff) as u8;
+    }
+
+    #[inline]
     pub fn read_u64(data: &[u8]) -> u64 {
         ((data[0] as u64) << 56) | ((data[1] as u64) << 48) |
         ((data[2] as u64) << 40) | ((data[3] as u64) << 32) |

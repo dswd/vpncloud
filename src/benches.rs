@@ -8,9 +8,10 @@ use std::str::FromStr;
 use std::net::{UdpSocket, ToSocketAddrs, Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::os::unix::io::AsRawFd;
 
+use super::MAGIC;
 use super::cloud::GenericCloud;
 use super::device::{Device, Type};
-use super::udpmessage::{Options, Message, encode, decode};
+use super::udpmessage::{Message, encode, decode};
 use super::crypto::{Crypto, CryptoMethod};
 use super::ethernet::{Frame, SwitchTable};
 use super::types::{Address, Table, Protocol};
@@ -51,27 +52,25 @@ fn crypto_aes256(b: &mut Bencher) {
 
 #[bench]
 fn message_encode(b: &mut Bencher) {
-    let mut options = Options::default();
     let mut crypto = Crypto::None;
     let mut payload = [0; 1600];
     let mut msg = Message::Data(&mut payload, 64, 1464);
     let mut buf = [0; 1600];
     b.iter(|| {
-        encode(&mut options, &mut msg, &mut buf[..], &mut crypto);
+        encode(&mut msg, &mut buf[..], MAGIC, &mut crypto);
     });
     b.bytes = 1400;
 }
 
 #[bench]
 fn message_decode(b: &mut Bencher) {
-    let mut options = Options::default();
     let mut crypto = Crypto::None;
     let mut payload = [0; 1600];
     let mut msg = Message::Data(&mut payload, 64, 1464);
     let mut buf = [0; 1600];
-    let mut res = encode(&mut options, &mut msg, &mut buf[..], &mut crypto);
+    let mut res = encode(&mut msg, &mut buf[..], MAGIC, &mut crypto);
     b.iter(|| {
-        decode(&mut res, &mut crypto).unwrap();
+        decode(&mut res, MAGIC, &mut crypto).unwrap();
     });
     b.bytes = 1400;
 }
@@ -152,7 +151,7 @@ fn epoll_wait(b: &mut Bencher) {
 #[bench]
 fn handle_interface_data(b: &mut Bencher) {
     let mut node = GenericCloud::<Frame>::new(
-        Device::dummy("vpncloud0", "/dev/null", Type::Tap).unwrap(), 0, None,
+        MAGIC, Device::dummy("vpncloud0", "/dev/null", Type::Tap).unwrap(), 0,
         Box::new(SwitchTable::new(300)), 1800, true, true, vec![], Crypto::None
     );
     let mut data = [0; 1500];
@@ -166,14 +165,14 @@ fn handle_interface_data(b: &mut Bencher) {
 #[bench]
 fn handle_net_message(b: &mut Bencher) {
     let mut node = GenericCloud::<Frame>::new(
-        Device::dummy("vpncloud0", "/dev/null", Type::Tap).unwrap(), 0, None,
+        MAGIC, Device::dummy("vpncloud0", "/dev/null", Type::Tap).unwrap(), 0,
         Box::new(SwitchTable::new(300)), 1800, true, true, vec![], Crypto::None
     );
     let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 1));
     let mut data = [0; 1500];
     data[105] = 45;
     b.iter(|| {
-        node.handle_net_message(addr.clone(), Options::default(), Message::Data(&mut data, 0, 1400)).unwrap()
+        node.handle_net_message(addr.clone(), Message::Data(&mut data, 0, 1400)).unwrap()
     });
     b.bytes = 1400;
 }

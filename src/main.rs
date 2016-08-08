@@ -39,11 +39,14 @@ use std::process::Command;
 use device::{Device, Type};
 use ethernet::SwitchTable;
 use ip::RoutingTable;
-use types::{Mode, Range, Table, Protocol};
+use types::{Mode, Range, Table, Protocol, HeaderMagic};
 use cloud::GenericCloud;
-use udpmessage::VERSION;
 use crypto::{Crypto, CryptoMethod};
-use util::Duration;
+use util::{Duration, Encoder};
+
+
+const VERSION: u8 = 1;
+const MAGIC: HeaderMagic = *b"vpn\x01";
 
 
 struct SimpleLogger;
@@ -74,6 +77,7 @@ struct Args {
     flag_device: String,
     flag_listen: u16,
     flag_network_id: Option<String>,
+    flag_magic: Option<String>,
     flag_connect: Vec<String>,
     flag_peer_timeout: Duration,
     flag_dst_timeout: Duration,
@@ -98,7 +102,7 @@ fn run_script(script: String, ifname: &str) {
     }
 }
 
-fn run<T: Protocol> (args: Args) {
+fn run<T: Protocol> (mut args: Args) {
     let device = try_fail!(Device::new(&args.flag_device, args.flag_type),
         "Failed to open virtual {} interface {}: {}", args.flag_type, &args.flag_device);
     info!("Opened device {}", device.ifname());
@@ -117,17 +121,32 @@ fn run<T: Protocol> (args: Args) {
         Mode::Switch => (true, true, Box::new(SwitchTable::new(dst_timeout))),
         Mode::Hub => (false, true, Box::new(SwitchTable::new(dst_timeout)))
     };
-    let network_id = args.flag_network_id.map(|name| {
-        let mut s = SipHasher::new();
-        name.hash(&mut s);
-        s.finish()
+    if let Some(network_id) = args.flag_network_id {
+        warn!("The --network-id argument is deprecated, please use --magic instead.");
+        if args.flag_magic.is_none() {
+            args.flag_magic = Some(network_id);
+        }
+    }
+    let magic = args.flag_magic.map_or(MAGIC, |name| {
+        if name.starts_with("hash:") {
+            let mut s = SipHasher::new();
+            name[6..].hash(&mut s);
+            let mut data = [0; 4];
+            Encoder::write_u32((s.finish() & 0xffffffff) as u32, &mut data);
+            data
+        } else {
+            let num = try_fail!(u32::from_str_radix(&name, 16), "Failed to parse header magic: {}");
+            let mut data = [0; 4];
+            Encoder::write_u32(num, &mut data);
+            data
+        }
     });
     Crypto::init();
     let crypto = match args.flag_shared_key {
         Some(key) => Crypto::from_shared_key(args.flag_crypto, &key),
         None => Crypto::None
     };
-    let mut cloud = GenericCloud::<T>::new(device, args.flag_listen, network_id, table, peer_timeout, learning, broadcasting, ranges, crypto);
+    let mut cloud = GenericCloud::<T>::new(magic, device, args.flag_listen, table, peer_timeout, learning, broadcasting, ranges, crypto);
     if let Some(script) = args.flag_ifup {
         run_script(script, cloud.ifname());
     }

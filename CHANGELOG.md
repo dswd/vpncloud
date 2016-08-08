@@ -4,6 +4,9 @@ This project follows [semantic versioning](http://semver.org).
 
 ### UNRELEASED
 
+- [changed] Configurable magic header is now used instead of Network-ID (**incompatible**)
+- [fixed] Fixed documentation of listen parameter
+- [fixed] Fixed problem with multiple subnets
 
 ### v0.7.0 (2016-08-05)
 
