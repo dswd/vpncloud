@@ -237,7 +237,7 @@ impl<P: Protocol> GenericCloud<P> {
                 Ok(written) if written == msg_data.len() => Ok(()),
                 Ok(_) => Err(Error::Socket("Sent out truncated packet", io::Error::new(io::ErrorKind::Other, "truncated"))),
                 Err(e) => {
-                    error!("Failed to send via network {:?}", e);
+                    error!("Failed to send via network {}", e);
                     Err(Error::Socket("IOError when sending", e))
                 }
             })
@@ -263,7 +263,7 @@ impl<P: Protocol> GenericCloud<P> {
             Ok(written) if written == msg_data.len() => Ok(()),
             Ok(_) => Err(Error::Socket("Sent out truncated packet", io::Error::new(io::ErrorKind::Other, "truncated"))),
             Err(e) => {
-                error!("Failed to send via network {:?}", e);
+                error!("Failed to send via network {}", e);
                 Err(Error::Socket("IOError when sending", e))
             }
         }
@@ -564,8 +564,20 @@ impl<P: Protocol> GenericCloud<P> {
         try_fail!(poll_handle.register(socket6_fd, poll::READ), "Failed to add ipv4 socket to poll handle: {}");
         try_fail!(poll_handle.register(device_fd, poll::READ), "Failed to add ipv4 socket to poll handle: {}");
         let mut buffer = [0; 64*1024];
+        let mut poll_error = false;
         loop {
-            for evt in try_fail!(poll_handle.wait(1000), "Poll wait failed: {}") {
+            let evts = match poll_handle.wait(1000) {
+                Ok(evts) => evts,
+                Err(err) => {
+                    if poll_error {
+                        fail!("Poll wait failed again: {}", err);
+                    }
+                    error!("Poll wait failed: {}, retrying...", err);
+                    poll_error = true;
+                    continue
+                }
+            };
+            for evt in evts {
                 match evt.fd() {
                     fd if (fd == socket4_fd || fd == socket6_fd) => {
                         let (size, src) = match evt.fd() {
@@ -589,6 +601,7 @@ impl<P: Protocol> GenericCloud<P> {
                 }
             }
             if self.next_housekeep < now() {
+                poll_error = false;
                 // Check for signals
                 if trap.wait(dummy_time).is_some() {
                     break;
