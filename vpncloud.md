@@ -37,7 +37,7 @@ vpncloud(1) -- Peer-to-peer VPN
     `addr:port`. If the node is not started, the connection will be retried
     periodically. This parameter can be repeated to connect to multiple peers.
 
-  * `--subnet <subnet>`:
+  * `-s <subnet>`, `--subnet <subnet>`:
 
     The local subnets to use. This parameter should be in the form
     `address/prefixlen` where address is an IPv4 address, an IPv6 address, or a
@@ -174,21 +174,22 @@ Afterwards, the interface can be used to communicate.
 
 ### Routed TUN example
 
-In this example, 4 nodes should communicate using IP. First, VpnCloud need to
-be started on both nodes:
+In this example, 2 nodes and their subnets should communicate using IP.
+First, VpnCloud need to be started on both nodes:
 
 ```
-vpncloud -t tun -c REMOTE_HOST:PORT --subnet 10.0.0.X/32 --ifup 'ifconfig $IFNAME 10.0.0.0/24 mtu 1400 up'
+vpncloud -t tun -c REMOTE_HOST:PORT --subnet 10.0.X.0/24 --ifup 'ifconfig $IFNAME 10.0.X.1/16 mtu 1400 up'
 ```
+
+It is important to configure the interface in a way that all addresses on the
+VPN can be reached directly. E.g. if subnets 10.0.1.0/24, 10.0.2.0/24 and so on
+are used, the interface needs to be configured as 10.0.1.1/16.
+For TUN devices, this means that the prefix length of the subnets
+(/24 in this example) must be different than the prefix length that the
+interface is configured with (/16 in this example).
 
 
 ### Important notes
-
-- It is important to configure the interface in a way that all addresses on the
-  VPN can be reached directly. E.g. if addresses 10.0.0.1, 10.0.0.2 and so on
-  are used, the interface needs to be configured as /24.
-  For TUN devices, this means that the prefix length of the subnets must be
-  different than the prefix length that the interface is configured with.
 
 - VpnCloud can be used to connect two separate networks. TAP networks can be
   bridged using `brctl` and TUN networks must be routed. It is very important
