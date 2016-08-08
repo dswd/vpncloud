@@ -1,5 +1,5 @@
 Usage:
-    vpncloud [options] [-t <type>] [-d <name>] [-l <listen>] [-c <addr>...]
+    vpncloud [options] [-t <type>] [-d <name>] [-l <listen>] [-c <addr>...] [-s <subnet>...]
 
 Options:
     -t <type>, --type <type>        Set the type of network ("tap" or "tun").
@@ -11,7 +11,7 @@ Options:
     -l <port>, --listen <port>      The port number on which to listen for data.
                                     [default: 3210]
     -c <addr>, --connect <addr>     Address of a peer to connect to.
-    --subnet <subnet>               The local subnets to use.
+    -s <addr>, --subnet <subnet>    The local subnets to use.
     --network-id <id>               Optional token that identifies the network.
     --shared-key <key>              The shared key to encrypt all traffic.
     --crypto <method>               The encryption method to use ("aes256", or
