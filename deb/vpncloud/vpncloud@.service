@@ -1,0 +1,10 @@
+[Unit]
+Description=VPNCloud connection to %i
+Before=systemd-user-sessions.service
+
+[Service]
+ExecStart=/usr/bin/vpncloud --config /etc/vpncloud/%i.yml
+WorkingDirectory=/etc/vpncloud
+
+[Install]
+WantedBy=multi-user.target
