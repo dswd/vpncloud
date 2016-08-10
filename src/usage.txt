@@ -5,13 +5,10 @@ Options:
     --config <file>                 Read configuration options from the
                                     specified file.
     -t <type>, --type <type>        Set the type of network ("tap" or "tun").
-                                    [default: tap]
     -d <name>, --device <name>      Name of the virtual device.
-                                    [default: vpncloud%d]
     -m <mode>, --mode <mode>        The mode of the VPN ("hub", "switch",
-                                    "router", or "normal"). [default: normal]
+                                    "router", or "normal").
     -l <port>, --listen <port>      The port number on which to listen for data.
-                                    [default: 3210]
     -c <addr>, --connect <addr>     Address of a peer to connect to.
     -s <addr>, --subnet <subnet>    The local subnets to use.
     --magic <hex>                   Override the 4-byte magic header of each
@@ -20,7 +17,7 @@ Options:
                                     (DEPRECATED)
     --shared-key <key>              The shared key to encrypt all traffic.
     --crypto <method>               The encryption method to use ("aes256", or
-                                    "chacha20"). [default: chacha20]
+                                    "chacha20").
     --peer-timeout <secs>           Peer timeout in seconds.
     --dst-timeout <secs>            Switch table entry timeout in seconds.
     --ifup <command>                A command to setup the network interface.
