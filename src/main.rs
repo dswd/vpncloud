@@ -17,6 +17,7 @@ extern crate rand;
 extern crate fnv;
 extern crate net2;
 extern crate yaml_rust;
+extern crate igd;
 #[cfg(feature = "bench")] extern crate test;
 
 #[macro_use] pub mod util;
@@ -30,6 +31,7 @@ pub mod device;
 pub mod poll;
 pub mod config;
 pub mod configfile;
+pub mod port_forwarding;
 #[cfg(test)] mod tests;
 #[cfg(feature = "bench")] mod benches;
 
@@ -44,6 +46,7 @@ use ip::RoutingTable;
 use types::{Mode, Range, Table, Protocol, HeaderMagic};
 use cloud::GenericCloud;
 use crypto::{Crypto, CryptoMethod};
+use port_forwarding::PortForwarding;
 use util::Duration;
 use config::Config;
 
@@ -72,7 +75,8 @@ pub struct Args {
     flag_quiet: bool,
     flag_ifup: Option<String>,
     flag_ifdown: Option<String>,
-    flag_version: bool
+    flag_version: bool,
+    flag_no_port_forwarding: bool
 }
 
 
@@ -131,7 +135,12 @@ fn run<T: Protocol> (config: Config) {
         Some(key) => Crypto::from_shared_key(config.crypto, &key),
         None => Crypto::None
     };
-    let mut cloud = GenericCloud::<T>::new(magic, device, config.port, table, peer_timeout, learning, broadcasting, ranges, crypto);
+    let port_forwarding = if config.port_forwarding {
+        PortForwarding::new(config.port)
+    } else {
+        None
+    };
+    let mut cloud = GenericCloud::<T>::new(magic, device, config.port, table, peer_timeout, learning, broadcasting, ranges, crypto, port_forwarding);
     if let Some(script) = config.ifup {
         run_script(script, cloud.ifname());
     }

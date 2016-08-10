@@ -23,6 +23,7 @@ use super::types::{Table, Protocol, Range, Error, HeaderMagic, NodeId};
 use super::device::Device;
 use super::udpmessage::{encode, decode, Message};
 use super::crypto::Crypto;
+use super::port_forwarding::PortForwarding;
 use super::util::{now, Time, Duration, resolve};
 use super::poll::{self, Poll};
 
@@ -170,6 +171,7 @@ pub struct GenericCloud<P: Protocol> {
     update_freq: Duration,
     buffer_out: [u8; 64*1024],
     next_housekeep: Time,
+    port_forwarding: Option<PortForwarding>,
     _dummy_p: PhantomData<P>,
 }
 
@@ -178,7 +180,7 @@ impl<P: Protocol> GenericCloud<P> {
     #[allow(too_many_arguments)]
     pub fn new(magic: HeaderMagic, device: Device, listen: u16, table: Box<Table>,
         peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>,
-        crypto: Crypto) -> Self {
+        crypto: Crypto, port_forwarding: Option<PortForwarding>) -> Self {
         let socket4 = match UdpBuilder::new_v4().expect("Failed to obtain ipv4 socket builder")
             .reuse_address(true).expect("Failed to set so_reuseaddr").bind(("0.0.0.0", listen)) {
             Ok(socket) => socket,
@@ -208,6 +210,7 @@ impl<P: Protocol> GenericCloud<P> {
             update_freq: peer_timeout/2-60,
             buffer_out: [0; 64*1024],
             next_housekeep: now(),
+            port_forwarding: port_forwarding,
             _dummy_p: PhantomData,
         }
     }
@@ -347,6 +350,10 @@ impl<P: Protocol> GenericCloud<P> {
             self.table.remove_all(&peer);
         }
         self.table.housekeep();
+        // Periodically extend the port-forwarding
+        if let Some(ref mut pfw) = self.port_forwarding {
+            pfw.check_extend();
+        }
         // Periodically send peer list to peers
         let now = now();
         if self.next_peerlist <= now {

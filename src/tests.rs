@@ -411,6 +411,7 @@ peer_timeout: 1800
 mode: normal
 subnets:
   - 10.0.1.0/24
+port_forwarding: true
     ";
     assert_eq!(configfile::parse_str::<ConfigFile>(config_file).unwrap(), ConfigFile{
         device_type: Some(Type::Tun),
@@ -425,7 +426,8 @@ subnets:
         peer_timeout: Some(1800),
         mode: Some(Mode::Normal),
         dst_timeout: None,
-        subnets: Some(vec!["10.0.1.0/24".to_string()])
+        subnets: Some(vec!["10.0.1.0/24".to_string()]),
+        port_forwarding: Some(true)
     })
 }
 
@@ -445,7 +447,8 @@ fn config_merge() {
         peer_timeout: Some(1800),
         mode: Some(Mode::Normal),
         dst_timeout: None,
-        subnets: Some(vec!["10.0.1.0/24".to_string()])
+        subnets: Some(vec!["10.0.1.0/24".to_string()]),
+        port_forwarding: None
     });
     assert_eq!(config, Config{
         device_type: Type::Tun,

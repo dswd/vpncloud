@@ -96,6 +96,11 @@ vpncloud(1) -- Peer-to-peer VPN
     The name of the allocated device will be available via the environment
     variable `IFNAME`.
 
+  * `--no-port-forwarding`:
+
+    Disable automatic port forward. If this option is not set, VpnCloud tries to
+    detect a NAT router and automatically add a port forwarding to it.
+
   * `-v`, `--verbose`:
 
     Print debug information, including information for data being received and
@@ -239,6 +244,7 @@ detailed descriptions of the options.
 * `mode`: The mode of the VPN. Same as `--mode`
 * `dst_timeout`: Switch table entry timeout in seconds. Same as `--dst-timeout`
 * `subnets`: A list of local subnets to use. See `--subnet`
+* `port_forwarding`: Whether to activate port forwardig. See `--no-port-forwarding`
 
 
 ### Example
@@ -256,6 +262,7 @@ peer_timeout: 1800
 mode: normal
 subnets:
   - 10.0.1.0/24
+port_forwarding: true
 
 
 ## NETWORK PROTOCOL

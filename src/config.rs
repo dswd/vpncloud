@@ -23,6 +23,7 @@ pub struct Config {
     pub mode: Mode,
     pub dst_timeout: Duration,
     pub subnets: Vec<String>,
+    pub port_forwarding: bool,
 }
 
 impl Default for Config {
@@ -34,7 +35,8 @@ impl Default for Config {
             magic: None,
             port: 3210, peers: vec![], peer_timeout: 1800,
             mode: Mode::Normal, dst_timeout: 300,
-            subnets: vec![]
+            subnets: vec![],
+            port_forwarding: true
         }
     }
 }
@@ -80,6 +82,9 @@ impl Config {
         if let Some(mut val) = file.subnets {
             self.subnets.append(&mut val);
         }
+        if let Some(val) = file.port_forwarding {
+            self.port_forwarding = val;
+        }
     }
 
     pub fn merge_args(&mut self, mut args: Args) {
@@ -122,6 +127,9 @@ impl Config {
             self.dst_timeout = val;
         }
         self.subnets.append(&mut args.flag_subnet);
+        if args.flag_no_port_forwarding {
+            self.port_forwarding = false;
+        }
     }
 
     pub fn get_magic(&self) -> HeaderMagic {
@@ -160,4 +168,5 @@ pub struct ConfigFile {
     pub mode: Option<Mode>,
     pub dst_timeout: Option<Duration>,
     pub subnets: Option<Vec<String>>,
+    pub port_forwarding: Option<bool>
 }

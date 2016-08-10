@@ -4,12 +4,13 @@ This project follows [semantic versioning](http://semver.org).
 
 ### UNRELEASED
 
+- [added] Support for automatic port forwarding via UPnP
 - [added] Added `-s` shorthand for `--subnet`
-- [added] Added support for YAML config file via `--config`
+- [added] Support for YAML config file via `--config`
 - [changed] Configurable magic header is now used instead of Network-ID (**incompatible**)
 - [changed] Clarified documentation on TUN netmasks
 - [fixed] Fixed documentation of listen parameter
-- [fixed] Fixed problem with multiple
+- [fixed] Fixed problem with multiple subnets
 - [fixed] Fixed problem with interrupted poll after suspend to ram
 
 ### v0.7.0 (2016-08-05)
