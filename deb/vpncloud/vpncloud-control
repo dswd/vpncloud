@@ -21,6 +21,7 @@ DAEMON=$(which $NAME)
 status() {
   echo "Network status"
   for net in $NETWORKS; do
+    [ -f "$NETCONFIGS/$net.net" ] || continue
     echo -en "\t$net: "
     if start-stop-daemon --status --pidfile /run/$NAME-$net.pid --name $NAME; then
       echo "running"
@@ -36,30 +37,8 @@ start() {
   #   1 if daemon was already running
   #   2 if daemon could not be started
   for net in $NETWORKS; do
-    ENABLED=0
-    unset DEVICE LISTEN TYPE MODE SHARED_KEY CRYPTO IFUP IFDOWN NETWORK_ID PEER_TIMEOUT DST_TIMEOUT PEERS SUBNETS
-    [ -f "$NETCONFIGS/$net.net" ] && . $NETCONFIGS/$net.net
-    if [ $ENABLED -eq 1 ]; then
-      PARAMS=""
-      [ -z "$DEVICE" ] || PARAMS="$PARAMS --device $DEVICE"
-      [ -z "$LISTEN" ] || PARAMS="$PARAMS --listen $LISTEN"
-      [ -z "$TYPE" ] || PARAMS="$PARAMS --type $TYPE"
-      [ -z "$MODE" ] || PARAMS="$PARAMS --mode $MODE"
-      [ -z "$SHARED_KEY" ] || PARAMS="$PARAMS --shared-key '$SHARED_KEY'"
-      [ -z "$CRYPTO" ] || PARAMS="$PARAMS --crypto $CRYPTO"
-      [ -z "$IFUP" ] || PARAMS="$PARAMS --ifup '$IFUP'"
-      [ -z "$IFDOWN" ] || PARAMS="$PARAMS --ifdown '$IFDOWN'"
-      [ -z "$NETWORK_ID" ] || PARAMS="$PARAMS --network-id $NETWORK_ID"
-      [ -z "$PEER_TIMEOUT" ] || PARAMS="$PARAMS --peer-timeout $PEER_TIMEOUT"
-      [ -z "$DST_TIMEOUT" ] || PARAMS="$PARAMS --peer-timeout $DST_TIMEOUT"
-      for peer in $PEERS; do
-        PARAMS="$PARAMS --connect $peer"
-      done
-      for subnet in $SUBNETS; do
-        PARAMS="$PARAMS --subnet $subnet"
-      done
-      start-stop-daemon --start --pidfile /run/$NAME-$net.pid --make-pidfile --name $NAME --background --startas /bin/sh -- -c "exec $DAEMON $PARAMS >/var/log/vpncloud-$net.log 2>&1"
-    fi
+    [ -f "$NETCONFIGS/$net.net" ] || continue
+    start-stop-daemon --start --pidfile /run/$NAME-$net.pid --make-pidfile --name $NAME --background --startas /bin/sh -- -c "exec $DAEMON --config $NETCONFIGS/$net.net >/var/log/vpncloud-$net.log 2>&1"
   done
   return 0
 }
@@ -71,7 +50,9 @@ stop() {
   #   2 if daemon could not be stopped
   #   other if a failure occurred
   for net in $NETWORKS; do
-    start-stop-daemon --stop --quiet --pidfile /run/$NAME-$net.pid --name $NAME --retry 60
+    [ -f "$NETCONFIGS/$net.net" ] || continue
+    start-stop-daemon --stop --quiet --pidfile /run/$NAME-$net.pid --retry 60
+    rm -f /run/$NAME-$net.pid
   done
   return 0
 }

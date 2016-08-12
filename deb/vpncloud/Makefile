@@ -5,7 +5,7 @@ vpncloud.1: vpncloud.1.ronn
 
 install:
 	install -d $(DESTDIR)/etc/vpncloud
-	install -m 600 example.net $(DESTDIR)/etc/vpncloud/example.net
+	install -m 600 example.net.disabled $(DESTDIR)/etc/vpncloud/example.net.disabled
 	install -d $(DESTDIR)/var/log
 	install -d $(DESTDIR)/run
 	install -d $(DESTDIR)/usr/bin
