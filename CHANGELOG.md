@@ -9,9 +9,14 @@ This project follows [semantic versioning](http://semver.org).
 - [added] Support for YAML config file via `--config`
 - [changed] Configurable magic header is now used instead of Network-ID (**incompatible**)
 - [changed] Clarified documentation on TUN netmasks
+- [changed] Added timestamps to output
+- [changed] Using new YAML config instead of old config files (**incompatible**)
+- [changed] Prefer IPv4 over IPv6 when possible
 - [fixed] Fixed documentation of listen parameter
 - [fixed] Fixed problem with multiple subnets
 - [fixed] Fixed problem with interrupted poll after suspend to ram
+- [fixed] Forgot to extend peer timeout on peer exchange
+- [fixed] No longer broadcasting to additional addresses
 
 ### v0.7.0 (2016-08-05)
 

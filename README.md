@@ -69,7 +69,7 @@ contributions are very welcome:
 * **Linux packages**: VpnCloud is stable enough to be packaged for Linux
   distributions. Maintainers who want to package VpnCloud are very welcome.
 * **Security review**: The security has been implemented with strong security
-  primitives but it would great if a cryptography expert could verify the
+  primitives but it would be great if a cryptography expert could verify the
   system.
 * **Feedback on use cases**: Some feedback on how VpnCloud is being used and
   maybe some tutorials covering common use cases would be nice.
