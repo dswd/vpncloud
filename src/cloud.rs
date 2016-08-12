@@ -98,6 +98,13 @@ impl PeerList {
     }
 
     #[inline]
+    fn refresh(&mut self, addr: &SocketAddr) {
+        if let Some(&mut (ref mut timeout, _node_id, ref _alt_addrs)) = self.peers.get_mut(addr) {
+            *timeout = now()+self.timeout as Time;
+        }
+    }
+
+    #[inline]
     fn add_alt_addr(&mut self, node_id: NodeId, addr: SocketAddr) {
         if let Some(main_addr) = self.nodes.get(&node_id) {
             if let Some(&mut (_timeout, _node_id, ref mut alt_addrs)) = self.peers.get_mut(main_addr) {
@@ -512,6 +519,8 @@ impl<P: Protocol> GenericCloud<P> {
                         try!(self.connect(p));
                     }
                 }
+                // Refresh peer
+                self.peers.refresh(&peer);
             },
             Message::Init(stage, node_id, ranges) => {
                 // Avoid connecting to self
