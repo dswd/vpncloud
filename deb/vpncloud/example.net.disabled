@@ -1,3 +1,5 @@
+# This configuration file uses the YAML format.
+
 # The port number on which to listen for data.
 # Note: Every VPN needs a different port number.
 #port: 3210
@@ -7,8 +9,8 @@
 # periodically. This parameter can be repeated to connect to multiple peers.
 # Note: Several entries can be separated by spaces.
 #peers:
-#  - node2.address:3210
-#  - node3.address:3210
+#  - node2.example.com:3210
+#  - node3.example.com:3210
 
 # Peer timeout in seconds. The peers will exchange information periodically
 # and drop peers that are silent for this period of time.
@@ -30,7 +32,7 @@
 # The encryption method to use ("aes256", or "chacha20"). Most current CPUs
 # have special support for AES256 so this should be faster. For older
 # computers lacking this support, only CHACHA20 is supported.
-#crypto: chacha2
+#crypto: chacha20
 
 # Name of the virtual device. Any `%d` will be filled with a free number.
 #device_name: "vpncloud%d"
