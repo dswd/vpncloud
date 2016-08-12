@@ -91,7 +91,11 @@ impl log::Log for SimpleLogger {
     #[inline]
     fn log(&self, record: &log::LogRecord) {
         if self.enabled(record.metadata()) {
-            println!("{} - {}", record.level(), record.args());
+            println!("{} - {} - {}",
+                time::strftime("%F %T", &time::now()).expect("Failed to format timestamp"),
+                record.level(),
+                record.args()
+            );
         }
     }
 }
