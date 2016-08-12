@@ -238,8 +238,8 @@ impl<P: Protocol> GenericCloud<P> {
         debug!("Broadcasting {:?}", msg);
         // Encrypt and encode once and send several times
         let msg_data = encode(msg, &mut self.buffer_out, self.magic, &mut self.crypto);
-        for addr in self.peers.as_vec() {
-            let socket = match addr {
+        for addr in self.peers.peers.keys() {
+            let socket = match *addr {
                 SocketAddr::V4(_) => &self.socket4,
                 SocketAddr::V6(_) => &self.socket6
             };
