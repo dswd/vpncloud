@@ -55,7 +55,7 @@ impl PeerList {
             }
         }
         for addr in &del {
-            debug!("Forgot peer: {}", addr);
+            info!("Forgot peer: {}", addr);
             if let Some((_timeout, nodeid, alt_addrs)) = self.peers.remove(addr) {
                 self.nodes.remove(&nodeid);
                 self.addresses.remove(addr);
