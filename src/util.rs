@@ -123,8 +123,8 @@ macro_rules! try_fail {
 }
 
 
-pub fn resolve<Addr: ToSocketAddrs+fmt::Display>(addr: Addr) -> Result<Vec<SocketAddr>, Error> {
-    let addrs = try!(addr.to_socket_addrs().map_err(|_| Error::Name(format!("{}", addr))));
+pub fn resolve<Addr: ToSocketAddrs+fmt::Debug>(addr: Addr) -> Result<Vec<SocketAddr>, Error> {
+    let addrs = try!(addr.to_socket_addrs().map_err(|_| Error::Name(format!("{:?}", addr))));
     // Remove duplicates in addrs (why are there duplicates???)
     let mut addrs = addrs.collect::<Vec<_>>();
     // Try IPv4 first as it usually is faster

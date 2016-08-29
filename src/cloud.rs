@@ -73,7 +73,7 @@ impl PeerList {
     }
 
     #[inline]
-    fn is_connected<Addr: ToSocketAddrs+fmt::Display>(&self, addr: Addr) -> Result<bool, Error> {
+    fn is_connected<Addr: ToSocketAddrs+fmt::Debug>(&self, addr: Addr) -> Result<bool, Error> {
         for addr in try!(resolve(addr)) {
             if self.contains_addr(&addr) {
                 return Ok(true);
@@ -155,6 +155,8 @@ impl PeerList {
 #[derive(Clone)]
 pub struct ReconnectEntry {
     address: String,
+    resolved: Vec<SocketAddr>,
+    next_resolve: Time,
     tries: u16,
     timeout: u16,
     next: Time
@@ -300,6 +302,8 @@ impl<P: Protocol> GenericCloud<P> {
             address: add,
             tries: 0,
             timeout: 1,
+            resolved: vec![],
+            next_resolve: now(),
             next: now()
         })
     }
@@ -309,7 +313,7 @@ impl<P: Protocol> GenericCloud<P> {
     /// # Errors
     /// Returns an `Error::SocketError` if the given address is a name that failed to resolve to
     /// actual addresses.
-    fn is_blacklisted<Addr: ToSocketAddrs+fmt::Display>(&self, addr: Addr) -> Result<bool, Error> {
+    fn is_blacklisted<Addr: ToSocketAddrs+fmt::Debug>(&self, addr: Addr) -> Result<bool, Error> {
         for addr in try!(resolve(addr)) {
             if self.blacklist_peers.contains(&addr) {
                 return Ok(true);
@@ -326,11 +330,11 @@ impl<P: Protocol> GenericCloud<P> {
     ///
     /// # Errors
     /// This method returns `Error::NameError` if the address is a name that fails to resolve.
-    pub fn connect<Addr: ToSocketAddrs+fmt::Display+Clone>(&mut self, addr: Addr) -> Result<(), Error> {
+    pub fn connect<Addr: ToSocketAddrs+fmt::Debug+Clone>(&mut self, addr: Addr) -> Result<(), Error> {
         if try!(self.peers.is_connected(addr.clone())) || try!(self.is_blacklisted(addr.clone())) {
             return Ok(())
         }
-        debug!("Connecting to {}", addr);
+        debug!("Connecting to {:?}", addr);
         let subnets = self.addresses.clone();
         let node_id = self.node_id;
         // Send a message to each resolved address
@@ -385,15 +389,22 @@ impl<P: Protocol> GenericCloud<P> {
             if entry.next > now {
                 continue
             }
-            try!(self.connect(&entry.address as &str));
+            try!(self.connect(&entry.resolved as &[SocketAddr]));
         }
         for entry in &mut self.reconnect_peers {
             // Schedule for next second if node is connected
-            if try!(self.peers.is_connected(&entry.address as &str)) {
+            if try!(self.peers.is_connected(&entry.resolved as &[SocketAddr])) {
                 entry.tries = 0;
                 entry.timeout = 1;
                 entry.next = now + 1;
                 continue
+            }
+            // Resolve entries anew
+            if entry.next_resolve <= now {
+                if let Ok(addrs) = resolve(&entry.address as &str) {
+                    entry.resolved = addrs;
+                }
+                entry.next_resolve = now + 60;
             }
             // Ignore if next attempt is already in the future
             if entry.next > now {
