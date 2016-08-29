@@ -27,9 +27,9 @@ impl fmt::Display for ParseError {
             ParseError::Read(ref err) => write!(formatter, "Failed to read config: {}", err),
             ParseError::Syntax(ref err) => write!(formatter, "Invalid config syntax: {}", err),
             ParseError::NoDocument => write!(formatter, "Config was empty"),
-            ParseError::InvalidType(ref exp, ref value) => write!(formatter, "Invalid value encountered for type {}: {:?}", exp, value),
+            ParseError::InvalidType(exp, ref value) => write!(formatter, "Invalid value encountered for type {}: {:?}", exp, value),
             ParseError::InvalidOption(ref opt, ref opts) => write!(formatter, "Invalid option value {}, choices were {:?}", opt, opts),
-            ParseError::Unsupported(ref reason) => write!(formatter, "Failed to decode config: {}", reason),
+            ParseError::Unsupported(reason) => write!(formatter, "Failed to decode config: {}", reason),
             ParseError::Other(ref reason) => write!(formatter, "Failed to decode config: {}", reason)
         }
     }

@@ -224,10 +224,10 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
-            Error::Parse(ref msg) => write!(formatter, "{}", msg),
-            Error::Socket(ref msg, ref err) => write!(formatter, "{}: {:?}", msg, err),
-            Error::TunTapDev(ref msg, ref err) => write!(formatter, "{}: {:?}", msg, err),
-            Error::Crypto(ref msg) => write!(formatter, "{}", msg),
+            Error::Parse(msg) => write!(formatter, "{}", msg),
+            Error::Socket(msg, ref err) => write!(formatter, "{}: {:?}", msg, err),
+            Error::TunTapDev(msg, ref err) => write!(formatter, "{}: {:?}", msg, err),
+            Error::Crypto(msg) => write!(formatter, "{}", msg),
             Error::Name(ref name) => write!(formatter, "failed to resolve name '{}'", name),
             Error::WrongHeaderMagic(net) => write!(formatter, "wrong header magic: {}", bytes_to_hex(&net)),
         }
