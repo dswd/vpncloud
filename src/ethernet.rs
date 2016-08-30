@@ -4,6 +4,7 @@
 
 use std::net::SocketAddr;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::hash::BuildHasherDefault;
 
 use fnv::FnvHasher;
@@ -99,9 +100,21 @@ impl Table for SwitchTable {
     /// Learns the given address, inserting it in the hash map
     #[inline]
     fn learn(&mut self, key: Address, _prefix_len: Option<u8>, addr: SocketAddr) {
-        let value = SwitchTableValue{address: addr, timeout: now()+self.timeout as Time};
-        if self.table.insert(key, value).is_none() {
-            info!("Learned address {} => {}", key, addr);
+        let deadline = now() + self.timeout as Time;
+        match self.table.entry(key) {
+            Entry::Vacant(entry) => {
+                entry.insert(SwitchTableValue{address: addr, timeout: deadline});
+                info!("Learned address {} => {}", key, addr);
+            },
+            Entry::Occupied(mut entry) => {
+                let mut entry = entry.get_mut();
+                if entry.timeout + 10 >= deadline {
+                    // Do not override recently learnt entries
+                    return
+                }
+                entry.timeout = deadline;
+                entry.address = addr;
+            }
         }
     }
 

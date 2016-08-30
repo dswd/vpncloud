@@ -29,6 +29,10 @@ use super::poll::{self, Poll};
 
 type Hash = BuildHasherDefault<FnvHasher>;
 
+const MAX_RECONNECT_INTERVAL: u16 = 3600;
+const RESOLVE_INTERVAL: Time = 300;
+
+
 struct PeerList {
     timeout: Duration,
     peers: HashMap<SocketAddr, (Time, NodeId, Vec<SocketAddr>), Hash>,
@@ -404,7 +408,7 @@ impl<P: Protocol> GenericCloud<P> {
                 if let Ok(addrs) = resolve(&entry.address as &str) {
                     entry.resolved = addrs;
                 }
-                entry.next_resolve = now + 60;
+                entry.next_resolve = now + RESOLVE_INTERVAL;
             }
             // Ignore if next attempt is already in the future
             if entry.next > now {
@@ -417,8 +421,8 @@ impl<P: Protocol> GenericCloud<P> {
                 entry.timeout *= 2;
             }
             // Maximum interval is one hour
-            if entry.timeout > 3600 {
-                entry.timeout = 3600;
+            if entry.timeout > MAX_RECONNECT_INTERVAL {
+                entry.timeout = MAX_RECONNECT_INTERVAL;
             }
             // Schedule next connection attempt
             entry.next = now + entry.timeout as Time;
