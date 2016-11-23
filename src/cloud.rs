@@ -166,6 +166,7 @@ pub struct ReconnectEntry {
     next: Time
 }
 
+
 pub struct GenericCloud<P: Protocol> {
     magic: HeaderMagic,
     node_id: NodeId,
@@ -586,8 +587,8 @@ impl<P: Protocol> GenericCloud<P> {
         let socket6_fd = self.socket6.as_raw_fd();
         let device_fd = self.device.as_raw_fd();
         try_fail!(poll_handle.register(socket4_fd, poll::READ), "Failed to add ipv4 socket to poll handle: {}");
-        try_fail!(poll_handle.register(socket6_fd, poll::READ), "Failed to add ipv4 socket to poll handle: {}");
-        try_fail!(poll_handle.register(device_fd, poll::READ), "Failed to add ipv4 socket to poll handle: {}");
+        try_fail!(poll_handle.register(socket6_fd, poll::READ), "Failed to add ipv6 socket to poll handle: {}");
+        try_fail!(poll_handle.register(device_fd, poll::READ), "Failed to add device to poll handle: {}");
         let mut buffer = [0; 64*1024];
         let mut poll_error = false;
         loop {
