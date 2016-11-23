@@ -38,7 +38,7 @@ start() {
   #   2 if daemon could not be started
   for net in $NETWORKS; do
     [ -f "$NETCONFIGS/$net.net" ] || continue
-    start-stop-daemon --start --pidfile /run/$NAME-$net.pid --make-pidfile --name $NAME --background --startas /bin/sh -- -c "exec $DAEMON --config $NETCONFIGS/$net.net >/var/log/vpncloud-$net.log 2>&1"
+    start-stop-daemon --start --pidfile /run/$NAME-$net.pid --name $NAME -- "$DAEMON --daemon --config $NETCONFIGS/$net.net --pid-file /run/$NAME-$net.pid"
   done
   return 0
 }

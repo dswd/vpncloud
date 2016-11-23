@@ -14,7 +14,7 @@ use std::time::Instant;
 use std::cmp::{min, max};
 
 use fnv::FnvHasher;
-use nix::sys::signal::{SIGTERM, SIGQUIT, SIGINT};
+use libc::{SIGTERM, SIGQUIT, SIGINT};
 use signal::trap::Trap;
 use rand::{random, sample, thread_rng};
 use net2::UdpBuilder;

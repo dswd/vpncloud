@@ -10,7 +10,6 @@ extern crate time;
 extern crate docopt;
 extern crate rustc_serialize;
 extern crate signal;
-extern crate nix;
 extern crate libc;
 extern crate aligned_alloc;
 extern crate rand;
@@ -19,6 +18,7 @@ extern crate net2;
 extern crate yaml_rust;
 extern crate igd;
 extern crate siphasher;
+extern crate daemonize;
 #[cfg(feature = "bench")] extern crate test;
 
 #[macro_use] pub mod util;
@@ -38,8 +38,12 @@ pub mod port_forwarding;
 
 use docopt::Docopt;
 
+use std::sync::Mutex;
 use std::str::FromStr;
 use std::process::Command;
+use std::fs::File;
+use std::path::Path;
+use std::io::{self, Write};
 
 use device::{Device, Type};
 use ethernet::SwitchTable;
@@ -77,13 +81,31 @@ pub struct Args {
     flag_ifup: Option<String>,
     flag_ifdown: Option<String>,
     flag_version: bool,
-    flag_no_port_forwarding: bool
+    flag_no_port_forwarding: bool,
+    flag_daemon: bool,
+    flag_pid_file: Option<String>,
+    flag_user: Option<String>,
+    flag_group: Option<String>,
+    flag_log_file: Option<String>
 }
 
 
-struct SimpleLogger;
+struct DualLogger {
+    file: Mutex<Option<File>>
+}
 
-impl log::Log for SimpleLogger {
+impl DualLogger {
+    pub fn new<P: AsRef<Path>>(path: Option<P>) -> Result<Self, io::Error> {
+        if let Some(path) = path {
+            let file = try!(File::create(path));
+            Ok(DualLogger{file: Mutex::new(Some(file))})
+        } else {
+            Ok(DualLogger{file: Mutex::new(None)})
+        }
+    }
+}
+
+impl log::Log for DualLogger {
     #[inline]
     fn enabled(&self, _metadata: &log::LogMetadata) -> bool {
         true
@@ -92,11 +114,12 @@ impl log::Log for SimpleLogger {
     #[inline]
     fn log(&self, record: &log::LogRecord) {
         if self.enabled(record.metadata()) {
-            println!("{} - {} - {}",
-                time::strftime("%F %T", &time::now()).expect("Failed to format timestamp"),
-                record.level(),
-                record.args()
-            );
+            println!("{} - {}", record.level(), record.args());
+            let mut file = self.file.lock().expect("Lock poisoned");
+            if let &mut Some(ref mut file) = &mut file as &mut Option<File> {
+                let time = time::strftime("%F %T", &time::now()).expect("Failed to format timestamp");
+                writeln!(file, "{} - {} - {}", time, record.level(), record.args()).expect("Failed to write to logfile");
+            }
         }
     }
 }
@@ -153,6 +176,20 @@ fn run<T: Protocol> (config: Config) {
         try_fail!(cloud.connect(&addr as &str), "Failed to send message to {}: {}", &addr);
         cloud.add_reconnect_peer(addr);
     }
+    if config.daemonize {
+        info!("Running process as daemon");
+        let mut daemonize = daemonize::Daemonize::new();
+        if let Some(user) = config.user {
+            daemonize = daemonize.user(&user as &str);
+        }
+        if let Some(group) = config.group {
+            daemonize = daemonize.group(&group as &str);
+        }
+        if let Some(pid_file) = config.pid_file {
+            daemonize = daemonize.pid_file(pid_file).chown_pid_file(true);
+        }
+        try_fail!(daemonize.start(), "Failed to daemonize: {}");
+    }
     cloud.run();
     if let Some(script) = config.ifdown {
         run_script(script, cloud.ifname());
@@ -180,7 +217,7 @@ fn main() {
         } else {
             max_log_level.set(log::LogLevelFilter::Info);
         }
-        Box::new(SimpleLogger)
+        Box::new(try_fail!(DualLogger::new(args.flag_log_file.as_ref()), "Failed to open logfile: {}"))
     }).unwrap();
     let mut config = Config::default();
     if let Some(ref file) = args.flag_config {

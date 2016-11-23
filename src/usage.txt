@@ -23,7 +23,13 @@ Options:
     --ifup <command>                A command to setup the network interface.
     --ifdown <command>              A command to bring down the network
                                     interface.
+    --pid-file <file>               Store the process id in this file when
+                                    daemonizing.
+    --user <user>                   Run as other user when daemonizing.
+    --group <group>                 Run as other group when daemonizing.
+    --log-file <file>               Print logs also to this file.
     --no-port-forwarding            Disable automatic port forward.
+    --daemon                        Run the process in the background.
     -v, --verbose                   Print debug information.
     -q, --quiet                     Only print errors and warnings.
     -h, --help                      Display the help.

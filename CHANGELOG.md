@@ -7,6 +7,10 @@ This project follows [semantic versioning](http://semver.org).
 - [added] Support for automatic port forwarding via UPnP
 - [added] Added `-s` shorthand for `--subnet`
 - [added] Support for YAML config file via `--config`
+- [added] Support for running in the background
+- [added] Support for dropping permissions
+- [added] Support for writing a pid file
+- [added] Support for writing logs to logfile
 - [changed] Not overriding recently learnt addresses in switch mode
 - [changed] Caching resolved addresses to increase performance
 - [changed] Configurable magic header is now used instead of Network-ID (**incompatible**)

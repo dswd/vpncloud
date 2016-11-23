@@ -11,3 +11,5 @@ install:
 	install -d $(DESTDIR)/usr/bin
 	install -m 755 vpncloud $(DESTDIR)/usr/bin/vpncloud
 	install -m 755 vpncloud-control $(DESTDIR)/usr/bin/vpncloud-control
+	install -d $(DESTDIR)/lib/systemd/system
+	install -m 644 vpncloud@.service $(DESTDIR)/lib/systemd/system/vpncloud@.service

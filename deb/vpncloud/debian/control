@@ -2,7 +2,7 @@ Source: vpncloud
 Section: misc
 Priority: extra
 Maintainer: Dennis Schwerdel <schwerdel@informatik.uni-kl.de>
-Build-Depends: debhelper (>= 7), ruby-ronn
+Build-Depends: debhelper (>= 9), ruby-ronn
 Standards-Version: 3.8.3
 
 Package: vpncloud

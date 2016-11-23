@@ -88,6 +88,8 @@ vpncloud(1) -- Peer-to-peer VPN
     parameter to `sh -c`) when the device has been created to configure it.
     The name of the allocated device will be available via the environment
     variable `IFNAME`.
+    Please note that this command is executed with the full permissions of the
+    caller.
 
   * `--ifdown <command>`:
 
@@ -95,6 +97,36 @@ vpncloud(1) -- Peer-to-peer VPN
     parameter to `sh -c`) to remove any configuration from the device.
     The name of the allocated device will be available via the environment
     variable `IFNAME`.
+    Please note that this command is executed with the (limited) permissions of
+    the user and group given as `--user` and `--group`.
+
+  * `--pid-file <file>`:
+
+    Store the process id in this file when running in the background. If set,
+    the given file will be created containing the process id of the new
+    background process. This option is only used when running in background.
+
+  * `--user <user>`:
+  * `--group <group>`:
+
+    Change the user and/or group of the process once all the setup has been
+    done and before spawning the background process. This option is only used
+    when running in background.
+
+  * `--log-file <file>`:
+
+    If set, print logs also to the given file. The file will be created and
+    truncated if is exists.
+
+  * `--daemon`:
+
+    Spawn a background process instead of running the process in the foreground.
+    If this flag is set, the process will first carry out all the
+    initialization, then drop permissions if `--user` or `--group` is used and
+    then spawn a background process and write its process id to a file if
+    `--pid-file` is set. Then, the main process will exit and the background
+    process continues to provide the VPN. At the time, when the main process
+    exits, the interface exists and is properly configured to be used.
 
   * `--no-port-forwarding`:
 
@@ -245,6 +277,9 @@ detailed descriptions of the options.
 * `dst_timeout`: Switch table entry timeout in seconds. Same as `--dst-timeout`
 * `subnets`: A list of local subnets to use. See `--subnet`
 * `port_forwarding`: Whether to activate port forwardig. See `--no-port-forwarding`
+* `user`: The name of a user to run the background process under. See `--user`
+* `group`: The name of a group to run the background process under. See `--group`
+* `pid_file`: The path of the pid file to create. See `--pid-file`
 
 
 ### Example
@@ -263,6 +298,9 @@ mode: normal
 subnets:
   - 10.0.1.0/24
 port_forwarding: true
+user: nobody
+group: nogroup
+pid_file: /run/vpncloud.pid
 
 
 ## NETWORK PROTOCOL
@@ -297,7 +335,7 @@ Every packet sent over UDP contains the following header (in order):
       `libsodium::crypto_aead_aes256gcm` method, using the 8 byte header
       as additional data.
 
-  * 2 `reserved bytes` that are currently unused
+  * 2 `reserved bytes` that are currently unused and set to 0
 
   * 1 byte for the `message type`
 

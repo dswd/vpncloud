@@ -25,6 +25,10 @@ pub struct Config {
     pub dst_timeout: Duration,
     pub subnets: Vec<String>,
     pub port_forwarding: bool,
+    pub daemonize: bool,
+    pub pid_file: Option<String>,
+    pub user: Option<String>,
+    pub group: Option<String>
 }
 
 impl Default for Config {
@@ -37,7 +41,11 @@ impl Default for Config {
             port: 3210, peers: vec![], peer_timeout: 1800,
             mode: Mode::Normal, dst_timeout: 300,
             subnets: vec![],
-            port_forwarding: true
+            port_forwarding: true,
+            daemonize: false,
+            pid_file: None,
+            user: None,
+            group: None
         }
     }
 }
@@ -86,6 +94,15 @@ impl Config {
         if let Some(val) = file.port_forwarding {
             self.port_forwarding = val;
         }
+        if let Some(val) = file.pid_file {
+            self.pid_file = Some(val);
+        }
+        if let Some(val) = file.user {
+            self.user = Some(val);
+        }
+        if let Some(val) = file.group {
+            self.group = Some(val);
+        }
     }
 
     pub fn merge_args(&mut self, mut args: Args) {
@@ -131,6 +148,18 @@ impl Config {
         if args.flag_no_port_forwarding {
             self.port_forwarding = false;
         }
+        if args.flag_daemon {
+            self.daemonize = true;
+        }
+        if let Some(val) = args.flag_pid_file {
+            self.pid_file = Some(val);
+        }
+        if let Some(val) = args.flag_user {
+            self.user = Some(val);
+        }
+        if let Some(val) = args.flag_group {
+            self.group = Some(val);
+        }
     }
 
     pub fn get_magic(&self) -> HeaderMagic {
@@ -169,5 +198,8 @@ pub struct ConfigFile {
     pub mode: Option<Mode>,
     pub dst_timeout: Option<Duration>,
     pub subnets: Option<Vec<String>>,
-    pub port_forwarding: Option<bool>
+    pub port_forwarding: Option<bool>,
+    pub pid_file: Option<String>,
+    pub user: Option<String>,
+    pub group: Option<String>,
 }
