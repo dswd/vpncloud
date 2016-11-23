@@ -39,6 +39,8 @@ impl TopHeader {
     pub fn write_to(&self, data: &mut [u8]) -> usize {
         data[0..4].copy_from_slice(&self.magic);
         data[4] = self.crypto_method;
+        data[5] = 0;
+        data[6] = 0;
         data[7] = self.msgtype;
         TopHeader::size()
     }
