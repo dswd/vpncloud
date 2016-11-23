@@ -5,7 +5,8 @@ use super::types::{Mode, HeaderMagic};
 use super::crypto::CryptoMethod;
 use super::util::{Encoder, Duration};
 
-use std::hash::{Hash, SipHasher, Hasher};
+use std::hash::{Hash, Hasher};
+use siphasher::sip::SipHasher24;
 
 
 #[derive(RustcDecodable, Debug, PartialEq)]
@@ -135,7 +136,7 @@ impl Config {
     pub fn get_magic(&self) -> HeaderMagic {
         if let Some(ref name) = self.magic {
             if name.starts_with("hash:") {
-                let mut s = SipHasher::new();
+                let mut s = SipHasher24::new();
                 name[6..].hash(&mut s);
                 let mut data = [0; 4];
                 Encoder::write_u32((s.finish() & 0xffffffff) as u32, &mut data);

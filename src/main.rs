@@ -18,6 +18,7 @@ extern crate fnv;
 extern crate net2;
 extern crate yaml_rust;
 extern crate igd;
+extern crate siphasher;
 #[cfg(feature = "bench")] extern crate test;
 
 #[macro_use] pub mod util;
