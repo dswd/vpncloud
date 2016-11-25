@@ -1,6 +1,6 @@
 [root]
 name = "vpncloud"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "aligned_alloc 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "bitflags 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",

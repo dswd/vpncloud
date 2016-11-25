@@ -2,7 +2,7 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### UNRELEASED
+### v0.8.0 (2016-11-25)
 
 - [added] Support for automatic port forwarding via UPnP
 - [added] Added `-s` shorthand for `--subnet`

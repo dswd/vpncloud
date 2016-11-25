@@ -1,6 +1,6 @@
 [package]
 name = "vpncloud"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Dennis Schwerdel <schwerdel@informatik.uni-kl.de>"]
 build = "build.rs"
 license = "GPL-3.0"
@@ -34,3 +34,6 @@ pkg-config = "0.3"
 [features]
 default = []
 bench = []
+
+[profile.release]
+lto = true

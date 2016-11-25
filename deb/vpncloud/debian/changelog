@@ -1,3 +1,27 @@
+vpncloud (0.8.0) stable; urgency=medium
+
+  * [added] Support for automatic port forwarding via UPnP
+  * [added] Added `-s` shorthand for `--subnet`
+  * [added] Support for YAML config file via `--config`
+  * [added] Support for running in the background
+  * [added] Support for dropping permissions
+  * [added] Support for writing a pid file
+  * [added] Support for writing logs to logfile
+  * [changed] Not overriding recently learnt addresses in switch mode
+  * [changed] Caching resolved addresses to increase performance
+  * [changed] Configurable magic header is now used instead of Network-ID (**incompatible**)
+  * [changed] Clarified documentation on TUN netmasks
+  * [changed] Added timestamps to output
+  * [changed] Using new YAML config instead of old config files (**incompatible**)
+  * [changed] Prefer IPv4 over IPv6 when possible
+  * [fixed] Fixed documentation of listen parameter
+  * [fixed] Fixed problem with multiple subnets
+  * [fixed] Fixed problem with interrupted poll after suspend to ram
+  * [fixed] Forgot to extend peer timeout on peer exchange
+  * [fixed] No longer broadcasting to additional addresses
+
+ -- Dennis Schwerdel <schwerdel@informatik.uni-kl.de>  Fri, 25 Nov 2016 07:30:17 +0100
+
 vpncloud (0.7.0) stable; urgency=medium
 
   * [added] Added more tests
