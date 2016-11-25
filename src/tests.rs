@@ -412,6 +412,9 @@ mode: normal
 subnets:
   - 10.0.1.0/24
 port_forwarding: true
+user: nobody
+group: nogroup
+pid_file: /run/vpncloud.run
     ";
     assert_eq!(configfile::parse_str::<ConfigFile>(config_file).unwrap(), ConfigFile{
         device_type: Some(Type::Tun),
@@ -427,7 +430,10 @@ port_forwarding: true
         mode: Some(Mode::Normal),
         dst_timeout: None,
         subnets: Some(vec!["10.0.1.0/24".to_string()]),
-        port_forwarding: Some(true)
+        port_forwarding: Some(true),
+        user: Some("nobody".to_string()),
+        group: Some("nogroup".to_string()),
+        pid_file: Some("/run/vpncloud.run".to_string())
     })
 }
 
@@ -448,7 +454,10 @@ fn config_merge() {
         mode: Some(Mode::Normal),
         dst_timeout: None,
         subnets: Some(vec!["10.0.1.0/24".to_string()]),
-        port_forwarding: None
+        port_forwarding: None,
+        user: Some("nobody".to_string()),
+        group: Some("nogroup".to_string()),
+        pid_file: Some("/run/vpncloud.run".to_string())
     });
     assert_eq!(config, Config{
         device_type: Type::Tun,
@@ -461,6 +470,9 @@ fn config_merge() {
         peer_timeout: 1800,
         mode: Mode::Normal,
         subnets: vec!["10.0.1.0/24".to_string()],
+        user: Some("nobody".to_string()),
+        group: Some("nogroup".to_string()),
+        pid_file: Some("/run/vpncloud.run".to_string()),
         ..Default::default()
     });
     config.merge_args(Args{
@@ -482,6 +494,9 @@ fn config_merge() {
         peer_timeout: 1800,
         mode: Mode::Normal,
         subnets: vec!["10.0.1.0/24".to_string()],
+        user: Some("nobody".to_string()),
+        group: Some("nogroup".to_string()),
+        pid_file: Some("/run/vpncloud.run".to_string()),
         ..Default::default()
     });
 }

@@ -1,5 +1,12 @@
 # This configuration file uses the YAML format.
 
+# This configuration can be enabled/disabled and controlled by adding the
+# network to `/etc/default/vpncloud` and starting/stopping it via
+# `/etc/init.d/vpncloud start/stop` on non-systemd systems and via
+# `systemctl enable/disable vpncloud@NAME` and
+# `service vpncloud@NAME start/stop` on systemd systems.
+
+
 # The port number on which to listen for data.
 # Note: Every VPN needs a different port number.
 #port: 3210
@@ -68,3 +75,14 @@
 # The name of the allocated device will be available via the environment
 # variable `IFNAME`.
 #ifdown: ""
+
+# Store the process id in this file when running in the background. If set,
+# the given file will be created containing the process id of the new
+# background process. This option is only used when running in background.
+#pid_file: ""
+
+# Change the user and/or group of the process once all the setup has been
+# done and before spawning the background process. This option is only used
+# when running in background.
+#user: ""
+#group: ""
