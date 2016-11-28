@@ -77,7 +77,7 @@ fn message_decode(b: &mut Bencher) {
 
 #[bench]
 fn switch_learn(b: &mut Bencher) {
-    let mut table = SwitchTable::new(10);
+    let mut table = SwitchTable::new(10, 0);
     let addr = Address::from_str("12:34:56:78:90:ab").unwrap();
     let peer = "1.2.3.4:5678".to_socket_addrs().unwrap().next().unwrap();
     b.iter(|| {
@@ -88,7 +88,7 @@ fn switch_learn(b: &mut Bencher) {
 
 #[bench]
 fn switch_lookup(b: &mut Bencher) {
-    let mut table = SwitchTable::new(10);
+    let mut table = SwitchTable::new(10, 0);
     let addr = Address::from_str("12:34:56:78:90:ab").unwrap();
     let peer = "1.2.3.4:5678".to_socket_addrs().unwrap().next().unwrap();
     table.learn(addr.clone(), None, peer);
@@ -152,7 +152,7 @@ fn epoll_wait(b: &mut Bencher) {
 fn handle_interface_data(b: &mut Bencher) {
     let mut node = GenericCloud::<Frame>::new(
         MAGIC, Device::dummy("vpncloud0", "/dev/null", Type::Tap).unwrap(), 0,
-        Box::new(SwitchTable::new(300)), 1800, true, true, vec![], Crypto::None, None
+        Box::new(SwitchTable::new(300, 10)), 1800, true, true, vec![], Crypto::None, None
     );
     let mut data = [0; 1500];
     data[105] = 45;
@@ -166,7 +166,7 @@ fn handle_interface_data(b: &mut Bencher) {
 fn handle_net_message(b: &mut Bencher) {
     let mut node = GenericCloud::<Frame>::new(
         MAGIC, Device::dummy("vpncloud0", "/dev/null", Type::Tap).unwrap(), 0,
-        Box::new(SwitchTable::new(300)), 1800, true, true, vec![], Crypto::None, None
+        Box::new(SwitchTable::new(300, 10)), 1800, true, true, vec![], Crypto::None, None
     );
     let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 1));
     let mut data = [0; 1500];

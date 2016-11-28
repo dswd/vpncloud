@@ -150,12 +150,12 @@ fn run<T: Protocol> (config: Config) {
     let peer_timeout = config.peer_timeout;
     let (learning, broadcasting, table): (bool, bool, Box<Table>) = match config.mode {
         Mode::Normal => match config.device_type {
-            Type::Tap => (true, true, Box::new(SwitchTable::new(dst_timeout))),
+            Type::Tap => (true, true, Box::new(SwitchTable::new(dst_timeout, 10))),
             Type::Tun => (false, false, Box::new(RoutingTable::new()))
         },
         Mode::Router => (false, false, Box::new(RoutingTable::new())),
-        Mode::Switch => (true, true, Box::new(SwitchTable::new(dst_timeout))),
-        Mode::Hub => (false, true, Box::new(SwitchTable::new(dst_timeout)))
+        Mode::Switch => (true, true, Box::new(SwitchTable::new(dst_timeout, 10))),
+        Mode::Hub => (false, true, Box::new(SwitchTable::new(dst_timeout, 10)))
     };
     let magic = config.get_magic();
     Crypto::init();

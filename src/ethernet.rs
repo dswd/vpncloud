@@ -71,13 +71,15 @@ pub struct SwitchTable {
     /// The table storing the actual mapping
     table: HashMap<Address, SwitchTableValue, Hash>,
     /// Timeout period for forgetting learnt addresses
-    timeout: Duration
+    timeout: Duration,
+    // Timeout period for not overwriting learnt addresses
+    protection_period: Duration,
 }
 
 impl SwitchTable {
     /// Creates a new switch table
-    pub fn new(timeout: Duration) -> Self {
-        SwitchTable{table: HashMap::default(), timeout: timeout}
+    pub fn new(timeout: Duration, protection_period: Duration) -> Self {
+        SwitchTable{table: HashMap::default(), timeout: timeout, protection_period: protection_period}
     }
 }
 
@@ -108,7 +110,7 @@ impl Table for SwitchTable {
             },
             Entry::Occupied(mut entry) => {
                 let mut entry = entry.get_mut();
-                if entry.timeout + 10 >= deadline {
+                if entry.timeout + self.protection_period as Time > deadline {
                     // Do not override recently learnt entries
                     return
                 }

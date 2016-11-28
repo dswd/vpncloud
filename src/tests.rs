@@ -4,6 +4,8 @@
 
 use std::net::{ToSocketAddrs, SocketAddr};
 use std::str::FromStr;
+use std::thread;
+use std::time::Duration;
 
 use super::MAGIC;
 use super::ethernet::{Frame, SwitchTable};
@@ -237,12 +239,19 @@ fn decode_invalid_packet() {
 
 #[test]
 fn switch() {
-    let mut table = SwitchTable::new(10);
+    let mut table = SwitchTable::new(10, 1);
     let addr = Address::from_str("12:34:56:78:90:ab").unwrap();
     let peer = "1.2.3.4:5678".to_socket_addrs().unwrap().next().unwrap();
+    let peer2 = "1.2.3.5:7890".to_socket_addrs().unwrap().next().unwrap();
     assert!(table.lookup(&addr).is_none());
     table.learn(addr.clone(), None, peer.clone());
     assert_eq!(table.lookup(&addr), Some(peer));
+    // Do not override within 1 seconds
+    table.learn(addr.clone(), None, peer2.clone());
+    assert_eq!(table.lookup(&addr), Some(peer));
+    thread::sleep(Duration::from_secs(1));
+    table.learn(addr.clone(), None, peer2.clone());
+    assert_eq!(table.lookup(&addr), Some(peer2));
 }
 
 #[test]
@@ -493,6 +502,7 @@ fn config_merge() {
         flag_listen: Some(3211),
         flag_peer_timeout: Some(1801),
         flag_dst_timeout: Some(301),
+        flag_mode: Some(Mode::Switch),
         flag_subnet: vec![],
         flag_connect: vec!["another:3210".to_string()],
         flag_no_port_forwarding: true,
@@ -514,7 +524,7 @@ fn config_merge() {
         peers: vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string(), "another:3210".to_string()],
         peer_timeout: 1801,
         dst_timeout: 301,
-        mode: Mode::Normal,
+        mode: Mode::Switch,
         port_forwarding: false,
         subnets: vec!["10.0.1.0/24".to_string()],
         user: Some("root".to_string()),
