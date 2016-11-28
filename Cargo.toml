@@ -37,3 +37,9 @@ bench = []
 
 [profile.release]
 lto = true
+
+[profile.dev]
+lto = false
+
+[profile.test]
+lto = false

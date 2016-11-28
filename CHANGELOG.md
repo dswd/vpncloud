@@ -2,6 +2,11 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### UNRELEASED
+
+- [added] Added more tests
+- [changed] Updated dependencies
+
 ### v0.8.0 (2016-11-25)
 
 - [added] Support for automatic port forwarding via UPnP
@@ -18,6 +23,7 @@ This project follows [semantic versioning](http://semver.org).
 - [changed] Added timestamps to output
 - [changed] Using new YAML config instead of old config files (**incompatible**)
 - [changed] Prefer IPv4 over IPv6 when possible
+- [changed] Updated dependencies
 - [fixed] Fixed documentation of listen parameter
 - [fixed] Fixed problem with multiple subnets
 - [fixed] Fixed problem with interrupted poll after suspend to ram

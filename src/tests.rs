@@ -400,7 +400,9 @@ fn config_file() {
     let config_file = "
 device_type: tun
 device_name: vpncloud%d
+magic: 0123ABCD
 ifup: ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up
+ifdown: 'true'
 crypto: aes256
 shared_key: mysecret
 port: 3210
@@ -408,6 +410,7 @@ peers:
   - remote.machine.foo:3210
   - remote.machine.bar:3210
 peer_timeout: 1800
+dst_timeout: 300
 mode: normal
 subnets:
   - 10.0.1.0/24
@@ -420,15 +423,15 @@ pid_file: /run/vpncloud.run
         device_type: Some(Type::Tun),
         device_name: Some("vpncloud%d".to_string()),
         ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
-        ifdown: None,
+        ifdown: Some("true".to_string()),
         crypto: Some(CryptoMethod::AES256),
         shared_key: Some("mysecret".to_string()),
-        magic: None,
+        magic: Some("0123ABCD".to_string()),
         port: Some(3210),
         peers: Some(vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()]),
         peer_timeout: Some(1800),
         mode: Some(Mode::Normal),
-        dst_timeout: None,
+        dst_timeout: Some(300),
         subnets: Some(vec!["10.0.1.0/24".to_string()]),
         port_forwarding: Some(true),
         user: Some("nobody".to_string()),
@@ -444,17 +447,17 @@ fn config_merge() {
         device_type: Some(Type::Tun),
         device_name: Some("vpncloud%d".to_string()),
         ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
-        ifdown: None,
+        ifdown: Some("true".to_string()),
         crypto: Some(CryptoMethod::AES256),
         shared_key: Some("mysecret".to_string()),
-        magic: None,
+        magic: Some("0123ABCD".to_string()),
         port: Some(3210),
         peers: Some(vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()]),
         peer_timeout: Some(1800),
         mode: Some(Mode::Normal),
-        dst_timeout: None,
+        dst_timeout: Some(300),
         subnets: Some(vec!["10.0.1.0/24".to_string()]),
-        port_forwarding: None,
+        port_forwarding: Some(true),
         user: Some("nobody".to_string()),
         group: Some("nogroup".to_string()),
         pid_file: Some("/run/vpncloud.run".to_string())
@@ -463,12 +466,16 @@ fn config_merge() {
         device_type: Type::Tun,
         device_name: "vpncloud%d".to_string(),
         ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
+        ifdown: Some("true".to_string()),
+        magic: Some("0123ABCD".to_string()),
         crypto: CryptoMethod::AES256,
         shared_key: Some("mysecret".to_string()),
         port: 3210,
         peers: vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()],
         peer_timeout: 1800,
+        dst_timeout: 300,
         mode: Mode::Normal,
+        port_forwarding: true,
         subnets: vec!["10.0.1.0/24".to_string()],
         user: Some("nobody".to_string()),
         group: Some("nogroup".to_string()),
@@ -478,25 +485,42 @@ fn config_merge() {
     config.merge_args(Args{
         flag_type: Some(Type::Tap),
         flag_device: Some("vpncloud0".to_string()),
-        flag_shared_key: None,
+        flag_ifup: Some("ifconfig $IFNAME 10.0.1.2/16 mtu 1400 up".to_string()),
+        flag_ifdown: Some("ifconfig $IFNAME down".to_string()),
+        flag_crypto: Some(CryptoMethod::ChaCha20),
+        flag_shared_key: Some("anothersecret".to_string()),
+        flag_magic: Some("hash:mynet".to_string()),
+        flag_listen: Some(3211),
+        flag_peer_timeout: Some(1801),
+        flag_dst_timeout: Some(301),
         flag_subnet: vec![],
         flag_connect: vec!["another:3210".to_string()],
+        flag_no_port_forwarding: true,
+        flag_daemon: true,
+        flag_pid_file: Some("/run/vpncloud-mynet.run".to_string()),
+        flag_user: Some("root".to_string()),
+        flag_group: Some("root".to_string()),
         ..Default::default()
     });
     assert_eq!(config, Config{
         device_type: Type::Tap,
         device_name: "vpncloud0".to_string(),
-        ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
-        crypto: CryptoMethod::AES256,
-        shared_key: Some("mysecret".to_string()),
-        port: 3210,
+        ifup: Some("ifconfig $IFNAME 10.0.1.2/16 mtu 1400 up".to_string()),
+        ifdown: Some("ifconfig $IFNAME down".to_string()),
+        magic: Some("hash:mynet".to_string()),
+        crypto: CryptoMethod::ChaCha20,
+        shared_key: Some("anothersecret".to_string()),
+        port: 3211,
         peers: vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string(), "another:3210".to_string()],
-        peer_timeout: 1800,
+        peer_timeout: 1801,
+        dst_timeout: 301,
         mode: Mode::Normal,
+        port_forwarding: false,
         subnets: vec!["10.0.1.0/24".to_string()],
-        user: Some("nobody".to_string()),
-        group: Some("nogroup".to_string()),
-        pid_file: Some("/run/vpncloud.run".to_string()),
+        user: Some("root".to_string()),
+        group: Some("root".to_string()),
+        pid_file: Some("/run/vpncloud-mynet.run".to_string()),
+        daemonize: true,
         ..Default::default()
     });
 }
