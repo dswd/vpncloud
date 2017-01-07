@@ -24,7 +24,7 @@ net2 = "0.2"
 bitflags = "0.7"
 yaml-rust = "0.3"
 igd = "0.5"
-siphasher = "0.1"
+siphasher = "0.2"
 daemonize = "0.2"
 
 [build-dependencies]
@@ -34,6 +34,7 @@ pkg-config = "0.3"
 [features]
 default = []
 bench = []
+system-libsodium = []
 
 [profile.release]
 lto = true
