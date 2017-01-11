@@ -11,7 +11,7 @@ use std::os::unix::io::AsRawFd;
 use std::marker::PhantomData;
 use std::hash::BuildHasherDefault;
 use std::time::Instant;
-use std::cmp::{min, max};
+use std::cmp::min;
 
 use fnv::FnvHasher;
 use libc::{SIGTERM, SIGQUIT, SIGINT};
@@ -376,11 +376,8 @@ impl<P: Protocol> GenericCloud<P> {
             debug!("Send peer list to all peers");
             let mut peer_num = self.peers.len();
             // If the number of peers is high, send only a fraction of the full peer list to
-            // reduce the management traffic. The number of peers to send is the square root of the
-            // total number of peers.
-            if peer_num > 10 {
-                peer_num = max(10, min(255, (peer_num as f32).sqrt().ceil() as usize));
-            }
+            // reduce the management traffic. The number of peers to send is limited by 20.
+            peer_num = min(peer_num, 20);
             // Select that many peers...
             let peers = self.peers.subset(peer_num);
             // ...and send them to all peers

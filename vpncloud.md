@@ -397,17 +397,17 @@ will follow:
   * **Closing message** (message type 3):
     This packet does not contain any more data.
 
-Nodes are expected to send an **initial message** whenever they connect to a
-node they were not connected to before. As a reply to this message, another
-initial should be sent with stage 2. Also a **peer list** message should be
-sent as a reply.
+Nodes are expected to send an **initial message** with stage 0 whenever they
+connect to a node they were not connected to before. As a reply to this message,
+another initial should be sent with stage 1. Also a **peer list** message should
+be sent as a reply.
 
 When connected, nodes should periodically send their **peer list** to all
 of their peers to spread this information and to avoid peer timeouts.
 To avoid the cubic growth of management traffic, nodes should at a certain
-network size start sending partial peer lists instead of the full list.
-A reasonable number would be the square root of the number of peers.
-The subsets should be selected randomly.
+network size start sending partial peer lists instead of the full list. A
+reasonable number would be about 20 peers. The subsets should be selected
+randomly.
 
 Nodes should remove peers from their peer list after a certain period of
 inactivity or when receiving a **closing message**. Before shutting down, nodes
