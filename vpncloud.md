@@ -266,7 +266,7 @@ detailed descriptions of the options.
 * `device_type`: Set the type of network. Same as `--type`
 * `device_name`: Name of the virtual device. Same as `--device`
 * `ifup`: A command to setup the network interface. Same as `--ifup`
-* `ifup`: A command to bring down the network interface. Same as `--ifdown`
+* `ifdown`: A command to bring down the network interface. Same as `--ifdown`
 * `crypto`: The encryption method to use. Same as `--crypto`
 * `shared_key`: The shared key to encrypt all traffic. Same as `--shared-key`
 * `magic`: Override the 4-byte magic header of each packet. Same as `--magic`
