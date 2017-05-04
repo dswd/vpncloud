@@ -110,8 +110,10 @@ impl Table for RoutingTable {
         for i in len..16 {
             group_bytes[i] = 0;
         }
-        for i in 0..len+1 {
-            group_bytes[len-i] = 0;
+        for i in (0..len+1).rev() {
+            if i < len {
+                group_bytes[i] = 0;
+            }
             if let Some(group) = self.0.get(&group_bytes) {
                 // If the group is not empty, check every entry
                 for entry in group {
@@ -128,9 +130,9 @@ impl Table for RoutingTable {
                     }
                     // If the full prefix matches and the match is longer than the longest prefix
                     // found so far, remember the peer
-                    if match_len as u8 >= entry.prefix_len && match_len as isize > found_len {
+                    if match_len as u8 >= entry.prefix_len && entry.prefix_len as isize > found_len {
                         found = Some(entry.address);
-                        found_len = match_len as isize;
+                        found_len = entry.prefix_len as isize;
                     }
                 }
             }

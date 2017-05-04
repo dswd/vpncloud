@@ -255,7 +255,7 @@ fn switch() {
 }
 
 #[test]
-fn routing_table() {
+fn routing_table_ipv4() {
     let mut table = RoutingTable::new();
     let peer1 = "1.2.3.4:1".to_socket_addrs().unwrap().next().unwrap();
     let peer2 = "1.2.3.4:2".to_socket_addrs().unwrap().next().unwrap();
@@ -286,6 +286,42 @@ fn routing_table() {
     assert_eq!(table.lookup(&Address::from_str("192.168.2.32").unwrap()), Some(peer1));
     table.learn(Address::from_str("192.168.2.0").unwrap(), Some(28), peer3.clone());
     assert_eq!(table.lookup(&Address::from_str("192.168.2.1").unwrap()), Some(peer3));
+}
+
+#[test]
+fn routing_table_ipv6() {
+    let mut table = RoutingTable::new();
+    let peer1 = "::1:1".to_socket_addrs().unwrap().next().unwrap();
+    let peer2 = "::1:2".to_socket_addrs().unwrap().next().unwrap();
+    let peer3 = "::1:3".to_socket_addrs().unwrap().next().unwrap();
+    assert!(table.lookup(&Address::from_str("::1").unwrap()).is_none());
+    table.learn(Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap(), Some(128), peer1.clone());
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap()), Some(peer1));
+    table.learn(Address::from_str("dead:beef:dead:beef:dead:beef:dead:2").unwrap(), None, peer2.clone());
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:2").unwrap()), Some(peer2));
+    table.learn(Address::from_str("dead:beef:dead:beef::").unwrap(), Some(64), peer3.clone());
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:2").unwrap()), Some(peer2));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:3").unwrap()), Some(peer3));
+    table.learn(Address::from_str("dead:beef:dead:be00::").unwrap(), Some(56), peer1.clone());
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:1::").unwrap()), Some(peer3));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:be01::").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:2").unwrap()), Some(peer2));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:3").unwrap()), Some(peer3));
+    table.learn(Address::from_str("::").unwrap(), Some(0), peer2.clone());
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:1::").unwrap()), Some(peer3));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:be01::").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:2").unwrap()), Some(peer2));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:3").unwrap()), Some(peer3));
+    assert_eq!(table.lookup(&Address::from_str("::1").unwrap()), Some(peer2));
+    table.learn(Address::from_str("dead:beef:dead:beef:dead:beef:dead::be00").unwrap(), Some(123), peer2.clone());
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:be1f").unwrap()), Some(peer2));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:be20").unwrap()), Some(peer3));
+    table.learn(Address::from_str("dead:beef:dead:beef:dead:beef:dead::be00").unwrap(), Some(124), peer3.clone());
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:be01").unwrap()), Some(peer3));
 }
 
 #[test]

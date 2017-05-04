@@ -6,6 +6,8 @@ This project follows [semantic versioning](http://semver.org).
 
 - [added] Added more tests
 - [changed] Updated dependencies and libsodium
+- [changed] Small fixes to make clippy happy
+- [fixed] Fixed two problems with routing table
 
 ### v0.8.0 (2016-11-25)
 
