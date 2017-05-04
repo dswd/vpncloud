@@ -153,7 +153,7 @@ impl Table for RoutingTable {
 
     /// Removed all addresses associated with a certain peer
     fn remove_all(&mut self, addr: &SocketAddr) {
-        for (_key, entry) in &mut self.0 {
+        for entry in &mut self.0.values_mut() {
             entry.retain(|entr| &entr.address != addr);
         }
     }
