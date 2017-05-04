@@ -5,7 +5,7 @@ This project follows [semantic versioning](http://semver.org).
 ### UNRELEASED
 
 - [added] Added more tests
-- [changed] Updated dependencies
+- [changed] Updated dependencies and libsodium
 
 ### v0.8.0 (2016-11-25)
 

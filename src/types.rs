@@ -122,7 +122,7 @@ impl FromStr for Address {
         if parts.len() == 6 {
             let mut bytes = [0; 16];
             for i in 0..6 {
-                bytes[i] = try!(u8::from_str_radix(&parts[i], 16).map_err(|_| Error::Parse("Failed to parse mac")));
+                bytes[i] = try!(u8::from_str_radix(parts[i], 16).map_err(|_| Error::Parse("Failed to parse mac")));
             }
             return Ok(Address{data: bytes, len: 6});
         }

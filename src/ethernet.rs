@@ -47,8 +47,8 @@ impl Protocol for Frame {
             dst[2..8].copy_from_slice(dst_data);
             Ok((Address{data: src, len: 8}, Address{data: dst, len: 8}))
         } else {
-            let src = try!(Address::read_from_fixed(&src_data, 6));
-            let dst = try!(Address::read_from_fixed(&dst_data, 6));
+            let src = try!(Address::read_from_fixed(src_data, 6));
+            let dst = try!(Address::read_from_fixed(dst_data, 6));
             Ok((src, dst))
         }
     }

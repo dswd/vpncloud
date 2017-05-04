@@ -124,7 +124,7 @@ impl log::Log for DualLogger {
     }
 }
 
-fn run_script(script: String, ifname: &str) {
+fn run_script(script: &str, ifname: &str) {
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(&script).env("IFNAME", ifname);
     debug!("Running script: {:?}", cmd);
@@ -170,7 +170,7 @@ fn run<T: Protocol> (config: Config) {
     };
     let mut cloud = GenericCloud::<T>::new(magic, device, config.port, table, peer_timeout, learning, broadcasting, ranges, crypto, port_forwarding);
     if let Some(script) = config.ifup {
-        run_script(script, cloud.ifname());
+        run_script(&script, cloud.ifname());
     }
     for addr in config.peers {
         try_fail!(cloud.connect(&addr as &str), "Failed to send message to {}: {}", &addr);
@@ -192,7 +192,7 @@ fn run<T: Protocol> (config: Config) {
     }
     cloud.run();
     if let Some(script) = config.ifdown {
-        run_script(script, cloud.ifname());
+        run_script(&script, cloud.ifname());
     }
 }
 

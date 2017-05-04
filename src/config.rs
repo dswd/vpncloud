@@ -171,7 +171,7 @@ impl Config {
                 Encoder::write_u32((s.finish() & 0xffffffff) as u32, &mut data);
                 data
             } else {
-                let num = try_fail!(u32::from_str_radix(&name, 16), "Failed to parse header magic: {}");
+                let num = try_fail!(u32::from_str_radix(name, 16), "Failed to parse header magic: {}");
                 let mut data = [0; 4];
                 Encoder::write_u32(num, &mut data);
                 data

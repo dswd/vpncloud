@@ -123,6 +123,7 @@ macro_rules! try_fail {
 }
 
 
+#[allow(unknown_lints,needless_pass_by_value)]
 pub fn resolve<Addr: ToSocketAddrs+fmt::Debug>(addr: Addr) -> Result<Vec<SocketAddr>, Error> {
     let addrs = try!(addr.to_socket_addrs().map_err(|_| Error::Name(format!("{:?}", addr))));
     // Remove duplicates in addrs (why are there duplicates???)

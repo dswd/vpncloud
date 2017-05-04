@@ -289,7 +289,7 @@ impl Crypto {
             Crypto::ChaCha20Poly1305{ref key, ref mut nonce} => {
                 inc_nonce_12(nonce);
                 let mut clen: u64 = buf.len() as u64;
-                assert!(nonce_bytes.len() ==  nonce.len());
+                assert_eq!(nonce_bytes.len(), nonce.len());
                 assert!(clen as usize >= mlen + crypto_aead_chacha20poly1305_ietf_ABYTES);
                 let res = unsafe { crypto_aead_chacha20poly1305_ietf_encrypt(
                     buf.as_mut_ptr(), // Base pointer to buffer
@@ -311,7 +311,7 @@ impl Crypto {
             Crypto::AES256GCM{ref state, ref mut nonce} => {
                 inc_nonce_12(nonce);
                 let mut clen: u64 = buf.len() as u64;
-                assert!(nonce_bytes.len() ==  nonce.len());
+                assert_eq!(nonce_bytes.len(), nonce.len());
                 assert!(clen as usize >= mlen + crypto_aead_aes256gcm_ABYTES);
                 let res = unsafe { crypto_aead_aes256gcm_encrypt_afternm(
                     buf.as_mut_ptr(), // Base pointer to buffer

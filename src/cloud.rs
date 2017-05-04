@@ -78,7 +78,7 @@ impl PeerList {
 
     #[inline]
     fn is_connected<Addr: ToSocketAddrs+fmt::Debug>(&self, addr: Addr) -> Result<bool, Error> {
-        for addr in try!(resolve(addr)) {
+        for addr in try!(resolve(&addr)) {
             if self.contains_addr(&addr) {
                 return Ok(true);
             }
@@ -319,7 +319,7 @@ impl<P: Protocol> GenericCloud<P> {
     /// Returns an `Error::SocketError` if the given address is a name that failed to resolve to
     /// actual addresses.
     fn is_blacklisted<Addr: ToSocketAddrs+fmt::Debug>(&self, addr: Addr) -> Result<bool, Error> {
-        for addr in try!(resolve(addr)) {
+        for addr in try!(resolve(&addr)) {
             if self.blacklist_peers.contains(&addr) {
                 return Ok(true);
             }
@@ -343,7 +343,7 @@ impl<P: Protocol> GenericCloud<P> {
         let subnets = self.addresses.clone();
         let node_id = self.node_id;
         // Send a message to each resolved address
-        for a in try!(resolve(addr)) {
+        for a in try!(resolve(&addr)) {
             // Ignore error this time
             let mut msg = Message::Init(0, node_id, subnets.clone());
             self.send_msg(a, &mut msg).ok();
