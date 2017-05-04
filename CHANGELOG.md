@@ -5,8 +5,10 @@ This project follows [semantic versioning](http://semver.org).
 ### UNRELEASED
 
 - [added] Added more tests
-- [changed] Updated dependencies and libsodium
+- [changed] Updated dependencies
+- [changed] Updated libsodium to 1.0.12
 - [changed] Small fixes to make clippy happy
+- [changed] Removed a layer of indirection from inner loop
 - [fixed] Fixed two problems with routing table
 
 ### v0.8.0 (2016-11-25)

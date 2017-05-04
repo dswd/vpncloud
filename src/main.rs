@@ -48,7 +48,7 @@ use std::io::{self, Write};
 use device::{Device, Type};
 use ethernet::SwitchTable;
 use ip::RoutingTable;
-use types::{Mode, Range, Table, Protocol, HeaderMagic};
+use types::{Mode, Range, Protocol, HeaderMagic, Error};
 use cloud::GenericCloud;
 use crypto::{Crypto, CryptoMethod};
 use port_forwarding::PortForwarding;
@@ -138,7 +138,62 @@ fn run_script(script: &str, ifname: &str) {
     }
 }
 
-fn run<T: Protocol> (config: Config) {
+enum AnyTable {
+    Switch(SwitchTable),
+    Routing(RoutingTable)
+}
+
+enum AnyCloud<P: Protocol> {
+    Switch(GenericCloud<P, SwitchTable>),
+    Routing(GenericCloud<P, RoutingTable>)
+}
+
+impl<P: Protocol> AnyCloud<P> {
+    #[allow(unknown_lints,too_many_arguments)]
+    fn new(magic: HeaderMagic, device: Device, listen: u16, table: AnyTable,
+            peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>,
+            crypto: Crypto, port_forwarding: Option<PortForwarding>) -> Self {
+        match table {
+            AnyTable::Switch(t) => AnyCloud::Switch(GenericCloud::<P, SwitchTable>::new(
+                magic, device, listen, t, peer_timeout, learning, broadcast, addresses, crypto, port_forwarding
+            )),
+            AnyTable::Routing(t) => AnyCloud::Routing(GenericCloud::<P, RoutingTable>::new(
+                magic, device, listen, t, peer_timeout, learning, broadcast, addresses, crypto, port_forwarding
+            ))
+        }
+    }
+
+    fn ifname(&self) -> &str {
+        match *self {
+            AnyCloud::Switch(ref c) => c.ifname(),
+            AnyCloud::Routing(ref c) => c.ifname()
+        }
+    }
+
+    fn run(&mut self) {
+        match *self {
+            AnyCloud::Switch(ref mut c) => c.run(),
+            AnyCloud::Routing(ref mut c) => c.run()
+        }
+    }
+
+    fn connect(&mut self, a: &str) -> Result<(), Error> {
+        match *self {
+            AnyCloud::Switch(ref mut c) => c.connect(a),
+            AnyCloud::Routing(ref mut c) => c.connect(a)
+        }
+    }
+
+    fn add_reconnect_peer(&mut self, a: String) {
+        match *self {
+            AnyCloud::Switch(ref mut c) => c.add_reconnect_peer(a),
+            AnyCloud::Routing(ref mut c) => c.add_reconnect_peer(a)
+        }
+    }
+}
+
+
+fn run<P: Protocol> (config: Config) {
     let device = try_fail!(Device::new(&config.device_name, config.device_type),
         "Failed to open virtual {} interface {}: {}", config.device_type, config.device_name);
     info!("Opened device {}", device.ifname());
@@ -148,14 +203,14 @@ fn run<T: Protocol> (config: Config) {
     }
     let dst_timeout = config.dst_timeout;
     let peer_timeout = config.peer_timeout;
-    let (learning, broadcasting, table): (bool, bool, Box<Table>) = match config.mode {
+    let (learning, broadcasting, table) = match config.mode {
         Mode::Normal => match config.device_type {
-            Type::Tap => (true, true, Box::new(SwitchTable::new(dst_timeout, 10))),
-            Type::Tun => (false, false, Box::new(RoutingTable::new()))
+            Type::Tap => (true, true, AnyTable::Switch(SwitchTable::new(dst_timeout, 10))),
+            Type::Tun => (false, false, AnyTable::Routing(RoutingTable::new()))
         },
-        Mode::Router => (false, false, Box::new(RoutingTable::new())),
-        Mode::Switch => (true, true, Box::new(SwitchTable::new(dst_timeout, 10))),
-        Mode::Hub => (false, true, Box::new(SwitchTable::new(dst_timeout, 10)))
+        Mode::Router => (false, false, AnyTable::Routing(RoutingTable::new())),
+        Mode::Switch => (true, true, AnyTable::Switch(SwitchTable::new(dst_timeout, 10))),
+        Mode::Hub => (false, true, AnyTable::Switch(SwitchTable::new(dst_timeout, 10)))
     };
     let magic = config.get_magic();
     Crypto::init();
@@ -168,7 +223,7 @@ fn run<T: Protocol> (config: Config) {
     } else {
         None
     };
-    let mut cloud = GenericCloud::<T>::new(magic, device, config.port, table, peer_timeout, learning, broadcasting, ranges, crypto, port_forwarding);
+    let mut cloud = AnyCloud::<P>::new(magic, device, config.port, table, peer_timeout, learning, broadcasting, ranges, crypto, port_forwarding);
     if let Some(script) = config.ifup {
         run_script(&script, cloud.ifname());
     }

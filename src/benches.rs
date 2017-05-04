@@ -150,9 +150,9 @@ fn epoll_wait(b: &mut Bencher) {
 
 #[bench]
 fn handle_interface_data(b: &mut Bencher) {
-    let mut node = GenericCloud::<Frame>::new(
+    let mut node = GenericCloud::<Frame, SwitchTable>::new(
         MAGIC, Device::dummy("vpncloud0", "/dev/null", Type::Tap).unwrap(), 0,
-        Box::new(SwitchTable::new(300, 10)), 1800, true, true, vec![], Crypto::None, None
+        SwitchTable::new(300, 10), 1800, true, true, vec![], Crypto::None, None
     );
     let mut data = [0; 1500];
     data[105] = 45;
@@ -164,9 +164,9 @@ fn handle_interface_data(b: &mut Bencher) {
 
 #[bench]
 fn handle_net_message(b: &mut Bencher) {
-    let mut node = GenericCloud::<Frame>::new(
+    let mut node = GenericCloud::<Frame, SwitchTable>::new(
         MAGIC, Device::dummy("vpncloud0", "/dev/null", Type::Tap).unwrap(), 0,
-        Box::new(SwitchTable::new(300, 10)), 1800, true, true, vec![], Crypto::None, None
+        SwitchTable::new(300, 10), 1800, true, true, vec![], Crypto::None, None
     );
     let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 1));
     let mut data = [0; 1500];

@@ -167,7 +167,7 @@ pub struct ReconnectEntry {
 }
 
 
-pub struct GenericCloud<P: Protocol> {
+pub struct GenericCloud<P: Protocol, T: Table> {
     magic: HeaderMagic,
     node_id: NodeId,
     peers: PeerList,
@@ -176,7 +176,7 @@ pub struct GenericCloud<P: Protocol> {
     broadcast: bool,
     reconnect_peers: Vec<ReconnectEntry>,
     blacklist_peers: Vec<SocketAddr>,
-    table: Box<Table>,
+    table: T,
     socket4: UdpSocket,
     socket6: UdpSocket,
     device: Device,
@@ -189,10 +189,10 @@ pub struct GenericCloud<P: Protocol> {
     _dummy_p: PhantomData<P>,
 }
 
-impl<P: Protocol> GenericCloud<P> {
+impl<P: Protocol, T: Table> GenericCloud<P, T> {
     #[allow(unknown_lints)]
     #[allow(too_many_arguments)]
-    pub fn new(magic: HeaderMagic, device: Device, listen: u16, table: Box<Table>,
+    pub fn new(magic: HeaderMagic, device: Device, listen: u16, table: T,
         peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>,
         crypto: Crypto, port_forwarding: Option<PortForwarding>) -> Self {
         let socket4 = match UdpBuilder::new_v4().expect("Failed to obtain ipv4 socket builder")
