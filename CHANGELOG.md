@@ -2,7 +2,7 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### UNRELEASED
+### v0.8.1 (2017-05-09)
 
 - [added] Added more tests
 - [changed] Updated dependencies

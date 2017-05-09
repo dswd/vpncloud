@@ -1,3 +1,14 @@
+vpncloud (0.8.1) stable; urgency=medium
+
+  * [added] Added more tests
+  * [changed] Updated dependencies
+  * [changed] Updated libsodium to 1.0.12
+  * [changed] Small fixes to make clippy happy
+  * [changed] Removed a layer of indirection from inner loop
+  * [fixed] Fixed two problems with routing table
+
+ -- Dennis Schwerdel <schwerdel@informatik.uni-kl.de>  Tue, 09 May 2017 09:16:31 +0200
+
 vpncloud (0.8.0) stable; urgency=medium
 
   * [added] Support for automatic port forwarding via UPnP
