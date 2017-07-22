@@ -1,3 +1,7 @@
+// VpnCloud - Peer-to-Peer VPN
+// Copyright (C) 2015-2017  Dennis Schwerdel
+// This software is licensed under GPL-3 or newer (see LICENSE.md)
+
 use std::net::{SocketAddrV4, UdpSocket, SocketAddr};
 use std::io;
 
