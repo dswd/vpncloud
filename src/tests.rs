@@ -7,6 +7,8 @@ use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
 
+use serde_yaml;
+
 use super::MAGIC;
 use super::ethernet::{Frame, SwitchTable};
 use super::ip::{RoutingTable, Packet};
@@ -15,7 +17,6 @@ use super::types::{Protocol, Address, Range, Table, Mode};
 use super::udpmessage::{Message, decode, encode};
 use super::crypto::{Crypto, CryptoMethod};
 use super::config::{Config, ConfigFile};
-use super::configfile;
 use super::Args;
 
 
@@ -464,7 +465,7 @@ user: nobody
 group: nogroup
 pid_file: /run/vpncloud.run
     ";
-    assert_eq!(configfile::parse_str::<ConfigFile>(config_file).unwrap(), ConfigFile{
+    assert_eq!(serde_yaml::from_str::<ConfigFile>(config_file).unwrap(), ConfigFile{
         device_type: Some(Type::Tun),
         device_name: Some("vpncloud%d".to_string()),
         ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),

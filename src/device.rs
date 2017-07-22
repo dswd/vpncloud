@@ -19,8 +19,10 @@ extern {
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum Type {
     /// Tun interface: This interface transports IP packets.
+    #[serde(rename = "tun")]
     Tun,
     /// Tap interface: This insterface transports Ethernet frames.
+    #[serde(rename = "tap")]
     Tap
 }
 

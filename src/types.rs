@@ -187,7 +187,14 @@ impl fmt::Debug for Range {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum Mode {
-    Normal, Hub, Switch, Router
+    #[serde(rename = "normal")]
+    Normal,
+    #[serde(rename = "hub")]
+    Hub,
+    #[serde(rename = "switch")]
+    Switch,
+    #[serde(rename = "router")]
+    Router
 }
 impl fmt::Display for Mode {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
