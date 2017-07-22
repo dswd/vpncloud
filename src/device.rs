@@ -16,7 +16,7 @@ extern {
 
 
 /// The type of a tun/tap device
-#[derive(RustcDecodable, Debug, Clone, Copy, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum Type {
     /// Tun interface: This interface transports IP packets.
     Tun,

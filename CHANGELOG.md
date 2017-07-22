@@ -2,6 +2,11 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### UNRELEASED
+
+- [changed] Using serde instead of rustc_serialize
+- [changed] Updated dependencies
+
 ### v0.8.1 (2017-05-09)
 
 - [added] Added more tests

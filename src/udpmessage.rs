@@ -37,6 +37,7 @@ impl TopHeader {
     }
 
     pub fn write_to(&self, data: &mut [u8]) -> usize {
+        assert!(data.len() >= 8);
         data[0..4].copy_from_slice(&self.magic);
         data[4] = self.crypto_method;
         data[5] = 0;
@@ -114,6 +115,7 @@ pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &mut Crypto) -
             }
             for _ in 0..count {
                 let ip = &data[pos..];
+                assert!(ip.len() >= 4);
                 pos += 4;
                 let port = Encoder::read_u16(&data[pos..]);
                 pos += 2;

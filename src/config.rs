@@ -9,7 +9,7 @@ use std::hash::{Hash, Hasher};
 use siphasher::sip::SipHasher24;
 
 
-#[derive(RustcDecodable, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq)]
 pub struct Config {
     pub device_type: Type,
     pub device_name: String,
@@ -183,7 +183,7 @@ impl Config {
 }
 
 
-#[derive(RustcDecodable, Debug, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
 pub struct ConfigFile {
     pub device_type: Option<Type>,
     pub device_name: Option<String>,

@@ -185,7 +185,7 @@ impl fmt::Debug for Range {
 }
 
 
-#[derive(RustcDecodable, Debug, Clone, Copy, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum Mode {
     Normal, Hub, Switch, Router
 }

@@ -8,7 +8,9 @@
 #[macro_use] extern crate bitflags;
 extern crate time;
 extern crate docopt;
-extern crate rustc_serialize;
+#[macro_use] extern crate serde_derive;
+extern crate serde;
+extern crate serde_yaml;
 extern crate signal;
 extern crate libc;
 extern crate aligned_alloc;
@@ -31,7 +33,6 @@ pub mod cloud;
 pub mod device;
 pub mod poll;
 pub mod config;
-pub mod configfile;
 pub mod port_forwarding;
 #[cfg(test)] mod tests;
 #[cfg(feature = "bench")] mod benches;
@@ -61,7 +62,7 @@ const MAGIC: HeaderMagic = *b"vpn\x01";
 
 static USAGE: &'static str = include_str!("usage.txt");
 
-#[derive(RustcDecodable, Debug, Default)]
+#[derive(Deserialize, Debug, Default)]
 pub struct Args {
     flag_config: Option<String>,
     flag_type: Option<Type>,
@@ -252,7 +253,7 @@ fn run<P: Protocol> (config: Config) {
 }
 
 fn main() {
-    let args: Args = Docopt::new(USAGE).and_then(|d| d.decode()).unwrap_or_else(|e| e.exit());
+    let args: Args = Docopt::new(USAGE).and_then(|d| d.deserialize()).unwrap_or_else(|e| e.exit());
     if args.flag_version {
         Crypto::init();
         println!("VpnCloud v{}, protocol version {}, libsodium {} (AES256: {})",
@@ -277,7 +278,8 @@ fn main() {
     let mut config = Config::default();
     if let Some(ref file) = args.flag_config {
         info!("Reading config file '{}'", file);
-        let config_file = try_fail!(configfile::parse(file), "Failed to load config file: {:?}");
+        let f = try_fail!(File::open(file), "Failed to open config file: {:?}");
+        let config_file = try_fail!(serde_yaml::from_reader(f), "Failed to load config file: {:?}");
         config.merge_file(config_file)
     }
     config.merge_args(args);
