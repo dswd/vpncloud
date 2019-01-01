@@ -6,6 +6,7 @@ This project follows [semantic versioning](http://semver.org).
 
 - [changed] Using serde instead of rustc_serialize
 - [changed] Updated dependencies
+- [fixed] Fixed wrong address
 
 ### v0.8.1 (2017-05-09)
 

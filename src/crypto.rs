@@ -244,7 +244,7 @@ impl Crypto {
         }
     }
 
-    pub fn decrypt(&self, mut buf: &mut [u8], nonce: &[u8], header: &[u8]) -> Result<usize, Error> {
+    pub fn decrypt(&self, buf: &mut [u8], nonce: &[u8], header: &[u8]) -> Result<usize, Error> {
         match *self {
             Crypto::None => Ok(buf.len()),
             Crypto::ChaCha20Poly1305{ref key, ..} => {
@@ -286,7 +286,7 @@ impl Crypto {
         }
     }
 
-    pub fn encrypt(&mut self, mut buf: &mut [u8], mlen: usize, nonce_bytes: &mut [u8], header: &[u8]) -> usize {
+    pub fn encrypt(&mut self, buf: &mut [u8], mlen: usize, nonce_bytes: &mut [u8], header: &[u8]) -> usize {
         match *self {
             Crypto::None => mlen,
             Crypto::ChaCha20Poly1305{ref key, ref mut nonce} => {
