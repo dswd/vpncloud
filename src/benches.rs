@@ -17,7 +17,7 @@ use super::ethernet::{Frame, SwitchTable};
 use super::types::{Address, Table, Protocol};
 use super::ip::Packet;
 use super::util::now as util_now;
-use super::poll::{self, Poll};
+use super::poll::{Poll, Flags};
 
 #[bench]
 fn crypto_salsa20(b: &mut Bencher) {
@@ -141,7 +141,7 @@ fn epoll_wait(b: &mut Bencher) {
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let mut poll_handle = Poll::new(1).unwrap();
     let fd = socket.as_raw_fd();
-    poll_handle.register(fd, poll::WRITE).unwrap();
+    poll_handle.register(fd, Flags::WRITE).unwrap();
     b.iter(|| {
         assert_eq!(poll_handle.wait(1000).unwrap().len(), 1)
     });

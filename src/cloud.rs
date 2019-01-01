@@ -14,9 +14,8 @@ use std::time::Instant;
 use std::cmp::min;
 
 use fnv::FnvHasher;
-use libc::{SIGTERM, SIGQUIT, SIGINT};
-use signal::trap::Trap;
-use rand::{random, sample, thread_rng};
+use signal::{trap::Trap, Signal};
+use rand::{prelude::*, random, thread_rng};
 use net2::UdpBuilder;
 
 use super::types::{Table, Protocol, Range, Error, HeaderMagic, NodeId};
@@ -25,7 +24,7 @@ use super::udpmessage::{encode, decode, Message};
 use super::crypto::Crypto;
 use super::port_forwarding::PortForwarding;
 use super::util::{now, Time, Duration, resolve};
-use super::poll::{self, Poll};
+use super::poll::{Poll, Flags};
 
 type Hash = BuildHasherDefault<FnvHasher>;
 
@@ -44,7 +43,7 @@ impl PeerList {
     fn new(timeout: Duration) -> PeerList {
         PeerList{
             peers: HashMap::default(),
-            timeout: timeout,
+            timeout,
             nodes: HashMap::default(),
             addresses: HashSet::default()
         }
@@ -96,7 +95,7 @@ impl PeerList {
     fn add(&mut self, node_id: NodeId, addr: SocketAddr) {
         if self.nodes.insert(node_id, addr).is_none() {
             info!("New peer: {}", addr);
-            self.peers.insert(addr, (now()+self.timeout as Time, node_id, vec![]));
+            self.peers.insert(addr, (now()+Time::from(self.timeout), node_id, vec![]));
             self.addresses.insert(addr);
         }
     }
@@ -104,7 +103,7 @@ impl PeerList {
     #[inline]
     fn refresh(&mut self, addr: &SocketAddr) {
         if let Some(&mut (ref mut timeout, _node_id, ref _alt_addrs)) = self.peers.get_mut(addr) {
-            *timeout = now()+self.timeout as Time;
+            *timeout = now()+Time::from(self.timeout);
         }
     }
 
@@ -140,7 +139,7 @@ impl PeerList {
 
     #[inline]
     fn subset(&self, size: usize) -> Vec<SocketAddr> {
-        sample(&mut thread_rng(), self.as_vec(), size)
+        self.addresses.iter().choose_multiple(&mut thread_rng(), size).into_iter().cloned().collect()
     }
 
     #[inline]
@@ -190,8 +189,7 @@ pub struct GenericCloud<P: Protocol, T: Table> {
 }
 
 impl<P: Protocol, T: Table> GenericCloud<P, T> {
-    #[allow(unknown_lints)]
-    #[allow(too_many_arguments)]
+    #[allow(unknown_lints,clippy::too_many_arguments)]
     pub fn new(magic: HeaderMagic, device: Device, listen: u16, table: T,
         peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>,
         crypto: Crypto, port_forwarding: Option<PortForwarding>) -> Self {
@@ -207,24 +205,24 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             Err(err) => fail!("Failed to open ipv6 address ::{}: {}", listen, err)
         };
         GenericCloud{
-            magic: magic,
+            magic,
             node_id: random(),
             peers: PeerList::new(peer_timeout),
-            addresses: addresses,
-            learning: learning,
-            broadcast: broadcast,
+            addresses,
+            learning,
+            broadcast,
             reconnect_peers: Vec::new(),
             blacklist_peers: Vec::new(),
-            table: table,
-            socket4: socket4,
-            socket6: socket6,
-            device: device,
-            crypto: crypto,
+            table,
+            socket4,
+            socket6,
+            device,
+            crypto,
             next_peerlist: now(),
             update_freq: peer_timeout/2-60,
             buffer_out: [0; 64*1024],
             next_housekeep: now(),
-            port_forwarding: port_forwarding,
+            port_forwarding,
             _dummy_p: PhantomData,
         }
     }
@@ -384,7 +382,7 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             let mut msg = Message::Peers(peers);
             try!(self.broadcast_msg(&mut msg));
             // Reschedule for next update
-            self.next_peerlist = now + self.update_freq as Time;
+            self.next_peerlist = now + Time::from(self.update_freq);
         }
         // Connect to those reconnect_peers that are due
         for entry in self.reconnect_peers.clone() {
@@ -423,7 +421,7 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
                 entry.timeout = MAX_RECONNECT_INTERVAL;
             }
             // Schedule next connection attempt
-            entry.next = now + entry.timeout as Time;
+            entry.next = now + Time::from(entry.timeout);
         }
         Ok(())
     }
@@ -574,18 +572,17 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
     /// `handle_net_message` method. It will also read from the device and call
     /// `handle_interface_data` for each packet read.
     /// Also, this method will call `housekeep` every second.
-    #[allow(unknown_lints)]
-    #[allow(cyclomatic_complexity)]
+    #[allow(unknown_lints,clippy::cyclomatic_complexity)]
     pub fn run(&mut self) {
         let dummy_time = Instant::now();
-        let trap = Trap::trap(&[SIGINT, SIGTERM, SIGQUIT]);
+        let trap = Trap::trap(&[Signal::SIGINT, Signal::SIGTERM, Signal::SIGQUIT]);
         let mut poll_handle = try_fail!(Poll::new(3), "Failed to create poll handle: {}");
         let socket4_fd = self.socket4.as_raw_fd();
         let socket6_fd = self.socket6.as_raw_fd();
         let device_fd = self.device.as_raw_fd();
-        try_fail!(poll_handle.register(socket4_fd, poll::READ), "Failed to add ipv4 socket to poll handle: {}");
-        try_fail!(poll_handle.register(socket6_fd, poll::READ), "Failed to add ipv6 socket to poll handle: {}");
-        try_fail!(poll_handle.register(device_fd, poll::READ), "Failed to add device to poll handle: {}");
+        try_fail!(poll_handle.register(socket4_fd, Flags::READ), "Failed to add ipv4 socket to poll handle: {}");
+        try_fail!(poll_handle.register(socket6_fd, Flags::READ), "Failed to add ipv6 socket to poll handle: {}");
+        try_fail!(poll_handle.register(device_fd, Flags::READ), "Failed to add device to poll handle: {}");
         let mut buffer = [0; 64*1024];
         let mut poll_error = false;
         loop {

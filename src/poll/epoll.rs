@@ -9,10 +9,10 @@ use std::io;
 use std::ops::{Deref, DerefMut};
 
 bitflags!{
-    pub flags Flags: u32 {
-        const READ = libc::EPOLLIN as u32,
-        const WRITE = libc::EPOLLOUT as u32,
-        const ERROR = libc::EPOLLERR as u32,
+    pub struct Flags: u32 {
+        const READ = libc::EPOLLIN as u32;
+        const WRITE = libc::EPOLLOUT as u32;
+        const ERROR = libc::EPOLLERR as u32;
     }
 }
 
@@ -67,7 +67,7 @@ impl Poll {
         if fd == -1 {
             return Err(io::Error::last_os_error());
         }
-        Ok(Poll{fd: fd, events: events})
+        Ok(Poll{fd, events})
     }
 
     #[inline]

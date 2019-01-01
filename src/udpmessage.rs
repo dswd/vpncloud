@@ -36,6 +36,7 @@ impl TopHeader {
         Ok((header, TopHeader::size()))
     }
 
+    #[allow(unknown_lints,clippy::trivially_copy_pass_by_ref)]
     pub fn write_to(&self, data: &mut [u8]) -> usize {
         assert!(data.len() >= 8);
         data[0..4].copy_from_slice(&self.magic);
@@ -76,8 +77,7 @@ impl<'a> fmt::Debug for Message<'a> {
     }
 }
 
-#[allow(unknown_lints)]
-#[allow(needless_range_loop)]
+#[allow(unknown_lints,clippy::needless_range_loop)]
 pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &mut Crypto) -> Result<Message<'a>, Error> {
     let mut end = data.len();
     let (header, mut pos) = try!(TopHeader::read_from(&data[..end]));
@@ -170,8 +170,7 @@ pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &mut Crypto) -
     Ok(msg)
 }
 
-#[allow(unknown_lints)]
-#[allow(needless_range_loop)]
+#[allow(unknown_lints,clippy::needless_range_loop)]
 pub fn encode<'a>(msg: &'a mut Message, mut buf: &'a mut [u8], magic: HeaderMagic, crypto: &mut Crypto) -> &'a mut [u8] {
     let mut start = 64;
     let mut end = 64;

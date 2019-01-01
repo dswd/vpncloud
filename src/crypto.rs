@@ -38,9 +38,9 @@ const crypto_pwhash_scryptsalsa208sha256_SALTBYTES: usize = 32;
 #[allow(non_upper_case_globals)]
 const crypto_pwhash_scryptsalsa208sha256_STRBYTES: usize = 102;
 #[allow(non_upper_case_globals)]
-const crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_INTERACTIVE: usize = 524288;
+const crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_INTERACTIVE: usize = 524_288;
 #[allow(non_upper_case_globals)]
-const crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_INTERACTIVE: usize = 16777216;
+const crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_INTERACTIVE: usize = 16_777_216;
 
 pub struct Aes256State(*mut [u8; crypto_aead_aes256gcm_STATEBYTES]);
 
@@ -193,8 +193,7 @@ impl Crypto {
     }
 
     #[inline]
-    #[allow(unknown_lints)]
-    #[allow(match_same_arms)]
+    #[allow(unknown_lints,clippy::match_same_arms)]
     pub fn additional_bytes(&self) -> usize {
         match *self {
             Crypto::None => 0,
@@ -225,7 +224,7 @@ impl Crypto {
                 crypto_key.clone_from_slice(&key[..crypto_aead_chacha20poly1305_ietf_KEYBYTES]);
                 let mut nonce = [0u8; crypto_aead_chacha20poly1305_ietf_NPUBBYTES];
                 unsafe { randombytes_buf(nonce.as_mut_ptr(), nonce.len()) };
-                Crypto::ChaCha20Poly1305{key: crypto_key, nonce: nonce}
+                Crypto::ChaCha20Poly1305{key: crypto_key, nonce}
             },
             CryptoMethod::AES256 => {
                 if ! Crypto::aes256_available() {
@@ -239,7 +238,7 @@ impl Crypto {
                     key[..crypto_aead_aes256gcm_KEYBYTES].as_ptr() as *const [u8; crypto_aead_aes256gcm_KEYBYTES]
                 ) };
                 assert_eq!(res, 0);
-                Crypto::AES256GCM{state: state, nonce: nonce}
+                Crypto::AES256GCM{state, nonce}
             }
         }
     }

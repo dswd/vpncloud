@@ -24,7 +24,7 @@ impl Protocol for Packet {
     /// # Errors
     /// This method will fail when the given data is not a valid ipv4 and ipv6 packet.
     fn parse(data: &[u8]) -> Result<(Address, Address), Error> {
-        if data.len() < 1 {
+        if data.is_empty() {
             return Err(Error::Parse("Empty header"));
         }
         let version = data[0] >> 4;
@@ -90,16 +90,16 @@ impl Table for RoutingTable {
         let mut group_bytes = [0; 16];
         group_bytes[..group_len].copy_from_slice(&addr.data[..group_len]);
         // Create an entry
-        let routing_entry = RoutingEntry{address: address, bytes: addr.data, prefix_len: prefix_len};
+        let routing_entry = RoutingEntry{address, bytes: addr.data, prefix_len};
         // Add the entry to the routing table, creating a new list of the prefix group is empty.
         match self.0.entry(group_bytes) {
             hash_map::Entry::Occupied(mut entry) => entry.get_mut().push(routing_entry),
-            hash_map::Entry::Vacant(entry) => { entry.insert(vec![routing_entry]); () }
+            hash_map::Entry::Vacant(entry) => { entry.insert(vec![routing_entry]); }
         }
     }
 
     /// Retrieves a peer for an address if it is inside the routing table
-    #[allow(unknown_lints, needless_range_loop)]
+    #[allow(unknown_lints, clippy::needless_range_loop)]
     fn lookup(&mut self, addr: &Address) -> Option<SocketAddr> {
         let len = addr.len as usize;
         let mut found = None;
@@ -110,7 +110,7 @@ impl Table for RoutingTable {
         for i in len..16 {
             group_bytes[i] = 0;
         }
-        for i in (0..len+1).rev() {
+        for i in (0..=len).rev() {
             if i < len {
                 group_bytes[i] = 0;
             }

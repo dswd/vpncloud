@@ -30,7 +30,7 @@ pub fn now() -> Time {
     time::get_time().sec
 }
 
-const HEX_CHARS: &'static [u8] = b"0123456789abcdef";
+const HEX_CHARS: &[u8] = b"0123456789abcdef";
 
 pub fn bytes_to_hex(bytes: &[u8]) -> String {
     let mut v = Vec::with_capacity(bytes.len() * 2);
@@ -49,7 +49,7 @@ pub struct Encoder;
 impl Encoder {
     #[inline]
     pub fn read_u16(data: &[u8]) -> u16 {
-        ((data[0] as u16) << 8) | data[1] as u16
+        (u16::from(data[0]) << 8) | u16::from(data[1])
     }
 
     #[inline]
@@ -60,8 +60,8 @@ impl Encoder {
 
     #[inline]
     pub fn read_u32(data: &[u8]) -> u32 {
-        ((data[0] as u32) << 24) | ((data[1] as u32) << 16) |
-        ((data[2] as u32) << 8) | data[3] as u32
+        (u32::from(data[0]) << 24) | (u32::from(data[1]) << 16) |
+        (u32::from(data[2]) << 8) | u32::from(data[3])
     }
 
     #[inline]
@@ -74,10 +74,10 @@ impl Encoder {
 
     #[inline]
     pub fn read_u64(data: &[u8]) -> u64 {
-        ((data[0] as u64) << 56) | ((data[1] as u64) << 48) |
-        ((data[2] as u64) << 40) | ((data[3] as u64) << 32) |
-        ((data[4] as u64) << 24) | ((data[5] as u64) << 16) |
-        ((data[6] as u64) << 8) | data[7] as u64
+        (u64::from(data[0]) << 56) | (u64::from(data[1]) << 48) |
+        (u64::from(data[2]) << 40) | (u64::from(data[3]) << 32) |
+        (u64::from(data[4]) << 24) | (u64::from(data[5]) << 16) |
+        (u64::from(data[6]) << 8) | u64::from(data[7])
     }
 
     #[inline]
@@ -123,7 +123,7 @@ macro_rules! try_fail {
 }
 
 
-#[allow(unknown_lints,needless_pass_by_value)]
+#[allow(unknown_lints,clippy::needless_pass_by_value)]
 pub fn resolve<Addr: ToSocketAddrs+fmt::Debug>(addr: Addr) -> Result<Vec<SocketAddr>, Error> {
     let addrs = try!(addr.to_socket_addrs().map_err(|_| Error::Name(format!("{:?}", addr))));
     // Remove duplicates in addrs (why are there duplicates???)

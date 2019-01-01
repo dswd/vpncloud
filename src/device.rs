@@ -81,7 +81,7 @@ impl Device {
                 while ifname_c.last() == Some(&0) {
                     ifname_c.pop();
                 }
-                Ok(Device{fd: fd, ifname: String::from_utf8(ifname_c).unwrap(), type_: type_})
+                Ok(Device{fd, ifname: String::from_utf8(ifname_c).unwrap(), type_})
             },
             _ => Err(IoError::last_os_error())
         }
@@ -118,7 +118,7 @@ impl Device {
         Ok(Device{
             fd: try!(fs::OpenOptions::new().create(true).read(true).write(true).open(path)),
             ifname: ifname.to_string(),
-            type_: type_
+            type_
         })
     }
 

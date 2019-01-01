@@ -172,7 +172,7 @@ impl Config {
                 let mut s = SipHasher24::new();
                 name[6..].hash(&mut s);
                 let mut data = [0; 4];
-                Encoder::write_u32((s.finish() & 0xffffffff) as u32, &mut data);
+                Encoder::write_u32((s.finish() & 0xffff_ffff) as u32, &mut data);
                 data
             } else {
                 let num = try_fail!(u32::from_str_radix(name, 16), "Failed to parse header magic: {}");

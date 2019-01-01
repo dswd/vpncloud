@@ -79,7 +79,7 @@ pub struct SwitchTable {
 impl SwitchTable {
     /// Creates a new switch table
     pub fn new(timeout: Duration, protection_period: Duration) -> Self {
-        SwitchTable{table: HashMap::default(), timeout: timeout, protection_period: protection_period}
+        SwitchTable{table: HashMap::default(), timeout, protection_period}
     }
 }
 
@@ -102,7 +102,7 @@ impl Table for SwitchTable {
     /// Learns the given address, inserting it in the hash map
     #[inline]
     fn learn(&mut self, key: Address, _prefix_len: Option<u8>, addr: SocketAddr) {
-        let deadline = now() + self.timeout as Time;
+        let deadline = now() + Time::from(self.timeout);
         match self.table.entry(key) {
             Entry::Vacant(entry) => {
                 entry.insert(SwitchTableValue{address: addr, timeout: deadline});
@@ -110,7 +110,7 @@ impl Table for SwitchTable {
             },
             Entry::Occupied(mut entry) => {
                 let mut entry = entry.get_mut();
-                if entry.timeout + self.protection_period as Time > deadline {
+                if entry.timeout + Time::from(self.protection_period) > deadline {
                     // Do not override recently learnt entries
                     return
                 }

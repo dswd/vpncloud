@@ -10,7 +10,7 @@ use igd::*;
 use super::util::{Time, now};
 
 const LEASE_TIME: u32 = 300;
-const DESCRIPTION: &'static str = "VpnCloud";
+const DESCRIPTION: &str = "VpnCloud";
 
 
 pub struct PortForwarding {
@@ -90,15 +90,15 @@ impl PortForwarding {
         };
         info!("Port-forwarding: sucessfully activated port forward on {}, timeout: {}", external_addr, timeout);
         let next_extension = if timeout > 0 {
-            Some(now() + timeout as Time - 60)
+            Some(now() + Time::from(timeout) - 60)
         } else {
             None
         };
         Some(PortForwarding {
-            internal_addr: internal_addr,
-            external_addr: external_addr,
-            gateway: gateway,
-            next_extension: next_extension
+            internal_addr,
+            external_addr,
+            gateway,
+            next_extension
         })
     }
 
@@ -114,7 +114,7 @@ impl PortForwarding {
             Ok(()) => debug!("Port-forwarding: extended port forwarding"),
             Err(err) => error!("Port-forwarding: failed to extend port forwarding: {}", err)
         };
-        self.next_extension = Some(now() + LEASE_TIME as Time - 60);
+        self.next_extension = Some(now() + Time::from(LEASE_TIME) - 60);
     }
 
     fn deactivate(&self) {

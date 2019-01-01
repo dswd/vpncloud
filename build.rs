@@ -2,7 +2,7 @@
 // Copyright (C) 2015-2017  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-extern crate gcc;
+extern crate cc;
 extern crate pkg_config;
 
 use std::process::Command;
@@ -11,7 +11,7 @@ use std::env;
 use std::fs;
 
 fn main() {
-    gcc::Config::new().file("src/c/tuntap.c").include("src").compile("libtuntap.a");
+    cc::Build::new().file("src/c/tuntap.c").include("src").compile("libtuntap.a");
     if cfg!(feature = "system-libsodium") {
         pkg_config::Config::new().atleast_version("1.0.8").probe("libsodium").expect("Libsodium >= 1.0.8 missing");
         return

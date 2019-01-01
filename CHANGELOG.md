@@ -5,7 +5,9 @@ This project follows [semantic versioning](http://semver.org).
 ### UNRELEASED
 
 - [changed] Using serde instead of rustc_serialize
+- [changed] Updated libsodium to 1.0.16
 - [changed] Updated dependencies
+- [changed] Making clippy happy
 - [fixed] Fixed wrong address
 
 ### v0.8.1 (2017-05-09)

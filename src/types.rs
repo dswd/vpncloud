@@ -25,7 +25,7 @@ pub struct Address {
 impl Address {
     #[inline]
     pub fn read_from(data: &[u8]) -> Result<(Address, usize), Error> {
-        if data.len() < 1 {
+        if data.is_empty() {
             return Err(Error::Parse("Address too short"));
         }
         let len = data[0] as usize;
@@ -48,10 +48,10 @@ impl Address {
 
     #[inline]
     pub fn write_to(&self, data: &mut[u8]) -> usize {
-        assert!(data.len() >= self.len as usize + 1);
+        assert!(data.len() > self.len as usize);
         data[0] = self.len;
         let len = self.len as usize;
-        data[1..len+1].copy_from_slice(&self.data[0..len]);
+        data[1..=len].copy_from_slice(&self.data[0..len]);
         self.len as usize + 1
     }
 }
@@ -101,8 +101,7 @@ impl fmt::Debug for Address {
 impl FromStr for Address {
     type Err=Error;
 
-    #[allow(unknown_lints)]
-    #[allow(needless_range_loop)]
+    #[allow(unknown_lints,clippy::needless_range_loop)]
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         if let Ok(addr) = Ipv4Addr::from_str(text) {
             let ip = addr.octets();
@@ -145,13 +144,13 @@ impl Range {
             return Err(Error::Parse("Range too short"));
         }
         let prefix_len = data[read];
-        Ok((Range{base: address, prefix_len: prefix_len}, read + 1))
+        Ok((Range{base: address, prefix_len}, read + 1))
     }
 
     #[inline]
     pub fn write_to(&self, data: &mut[u8]) -> usize {
         let pos = self.base.write_to(data);
-        assert!(data.len() >= pos + 1);
+        assert!(data.len() > pos);
         data[pos] = self.prefix_len;
         pos + 1
     }
@@ -168,7 +167,7 @@ impl FromStr for Range {
         let prefix_len = try!(u8::from_str(&text[pos+1..])
             .map_err(|_| Error::Parse("Failed to parse prefix length")));
         let base = try!(Address::from_str(&text[..pos]));
-        Ok(Range{base: base, prefix_len: prefix_len})
+        Ok(Range{base, prefix_len})
     }
 }
 

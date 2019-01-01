@@ -12,25 +12,25 @@ readme = "README.md"
 
 [dependencies]
 time = "0.1"
-docopt = "0.8"
+docopt = "^1"
 serde = "1.0"
 serde_derive = "1.0"
-serde_yaml = "0.7"
-log = "0.3"
-signal = "0.3"
+serde_yaml = "0.8"
+log = { version = "0.4", features = ["std"] }
+signal = "0.6"
 libc = "0.2"
 aligned_alloc = "0.1"
-rand = "0.3"
+rand = "0.6"
 fnv = "1"
 net2 = "0.2"
-bitflags = "0.8"
-yaml-rust = "0.3"
-igd = "0.6"
-siphasher = "0.2"
-daemonize = "0.2"
+bitflags = "^1"
+yaml-rust = "0.4"
+igd = "0.7"
+siphasher = "0.3"
+daemonize = "0.3"
 
 [build-dependencies]
-gcc = "0.3"
+cc = "^1"
 pkg-config = "0.3"
 
 [features]

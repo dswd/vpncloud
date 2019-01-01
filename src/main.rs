@@ -62,6 +62,7 @@ const MAGIC: HeaderMagic = *b"vpn\x01";
 
 static USAGE: &'static str = include_str!("usage.txt");
 
+
 #[derive(Deserialize, Debug, Default)]
 pub struct Args {
     flag_config: Option<String>,
@@ -90,7 +91,6 @@ pub struct Args {
     flag_log_file: Option<String>
 }
 
-
 struct DualLogger {
     file: Mutex<Option<File>>
 }
@@ -108,12 +108,12 @@ impl DualLogger {
 
 impl log::Log for DualLogger {
     #[inline]
-    fn enabled(&self, _metadata: &log::LogMetadata) -> bool {
+    fn enabled(&self, _metadata: &log::Metadata) -> bool {
         true
     }
 
     #[inline]
-    fn log(&self, record: &log::LogRecord) {
+    fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
             println!("{} - {}", record.level(), record.args());
             let mut file = self.file.lock().expect("Lock poisoned");
@@ -123,6 +123,14 @@ impl log::Log for DualLogger {
             }
         }
     }
+
+    #[inline]
+    fn flush(&self) {
+        let mut file = self.file.lock().expect("Lock poisoned");
+        if let Some(ref mut file) = *file {
+            try_fail!(file.flush(), "Logging error: {}");
+        }
+    }
 }
 
 fn run_script(script: &str, ifname: &str) {
@@ -130,9 +138,7 @@ fn run_script(script: &str, ifname: &str) {
     cmd.arg("-c").arg(&script).env("IFNAME", ifname);
     debug!("Running script: {:?}", cmd);
     match cmd.status() {
-        Ok(status) => if status.success() {
-            ()
-        } else {
+        Ok(status) => if !status.success() {
             error!("Script returned with error: {:?}", status.code())
         },
         Err(e) => error!("Failed to execute script {:?}: {}", script, e)
@@ -150,7 +156,7 @@ enum AnyCloud<P: Protocol> {
 }
 
 impl<P: Protocol> AnyCloud<P> {
-    #[allow(unknown_lints,too_many_arguments)]
+    #[allow(unknown_lints,clippy::too_many_arguments)]
     fn new(magic: HeaderMagic, device: Device, listen: u16, table: AnyTable,
             peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>,
             crypto: Crypto, port_forwarding: Option<PortForwarding>) -> Self {
@@ -264,17 +270,18 @@ fn main() {
         );
         return;
     }
-    log::set_logger(|max_log_level| {
-        assert!(!args.flag_verbose || !args.flag_quiet);
+    let logger = try_fail!(DualLogger::new(args.flag_log_file.as_ref()), "Failed to open logfile: {}");
+    log::set_boxed_logger(Box::new(logger)).unwrap();
+    assert!(!args.flag_verbose || !args.flag_quiet);
+    log::set_max_level(
         if args.flag_verbose {
-            max_log_level.set(log::LogLevelFilter::Debug);
+            log::LevelFilter::Debug
         } else if args.flag_quiet {
-            max_log_level.set(log::LogLevelFilter::Error);
+            log::LevelFilter::Error
         } else {
-            max_log_level.set(log::LogLevelFilter::Info);
+            log::LevelFilter::Info
         }
-        Box::new(try_fail!(DualLogger::new(args.flag_log_file.as_ref()), "Failed to open logfile: {}"))
-    }).unwrap();
+    );
     let mut config = Config::default();
     if let Some(ref file) = args.flag_config {
         info!("Reading config file '{}'", file);
