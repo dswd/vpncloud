@@ -25,7 +25,7 @@ addons:
     - libcurl4-openssl-dev
     - libelf-dev
     - libdw-dev
-    - libbfd-dev
+    - binutils-dev
 after_success:
 - ! ' set -e ;
   rm -rf target/kcov ;

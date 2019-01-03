@@ -3,7 +3,6 @@ VpnCloud - Peer-to-Peer VPN
 
 [![Build Status](https://travis-ci.org/dswd/vpncloud.rs.svg?branch=master)](https://travis-ci.org/dswd/vpncloud.rs)
 [![Coverage Status](https://coveralls.io/repos/dswd/vpncloud.rs/badge.svg?branch=master&service=github)](https://coveralls.io/github/dswd/vpncloud.rs?branch=master)
-[![Latest Version](https://img.shields.io/crates/v/vpncloud.svg)](https://crates.io/crates/vpncloud)
 
 **VpnCloud** is a simple VPN over UDP. It creates a virtual network interface on
 the host and forwards all received data via UDP to the destination. VpnCloud
@@ -15,7 +14,7 @@ between two nodes can be as easy as:
 vpncloud -c REMOTE_HOST:PORT --ifup 'ifconfig $IFNAME 10.0.0.1/24 mtu 1400 up'
 ```
 
-For more information, please see the [Wiki](https://github.com/dswd/vpncloud.rs/wiki).
+For more information, please see the [Website](https://vpncloud.ddswd.de).
 
 
 ### Project Status
@@ -32,7 +31,7 @@ somewhat stable state. VpnCloud features the following functionality:
 * Automatic reconnecting when connections are lost
 * Non-native forwarding modes, e.g. IP based learning switch and prefix routed
   Ethernet networks.
-* High throughput and low additional latency (see [performance page](https://github.com/dswd/vpncloud.rs/wiki/Performance-Measurements))
+* High throughput and low additional latency (see [performance page](https://vpncloud.ddswd.de/features/performance)
 * Support for tunneled VLans (TAP device)
 * Option to hide protocol header
 * Automatic port forwarding via UPnP

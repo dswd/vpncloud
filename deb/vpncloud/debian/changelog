@@ -1,3 +1,13 @@
+vpncloud (0.8.2) stable; urgency=medium
+
+  * [changed] Using serde instead of rustc_serialize
+  * [changed] Updated libsodium to 1.0.16
+  * [changed] Updated dependencies
+  * [changed] Making clippy happy
+  * [fixed] Fixed wrong address
+
+ -- Dennis Schwerdel <schwerdel@googlemail.com>  Wed, 02 Jan 2019 19:09:20 +0100
+
 vpncloud (0.8.1) stable; urgency=medium
 
   * [added] Added more tests

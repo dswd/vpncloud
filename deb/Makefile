@@ -11,7 +11,7 @@ $(PACKAGE)_*.deb: $(PACKAGE)/vpncloud.1.ronn $(PACKAGE)/vpncloud
 
 .PHONY: clean
 clean:
-	(cd $(PACKAGE); debuild clean; cd ..)
+	(cd $(PACKAGE); debuild -- clean; cd ..)
 	rm -rf $(PACKAGE)_*
 	rm -f ../target/release/vpncloud
 

@@ -1,5 +1,5 @@
 Usage:
-    vpncloud [options] [--config <file>] [-t <type>] [-d <name>] [-l <listen>] [-c <addr>...] [-s <subnet>...]
+    vpncloud [options] [--config <file>] [-t <type>] [-d <name>] [-l <port>] [-c <addr>...] [-s <subnet>...]
 
 Options:
     --config <file>                 Read configuration options from the
@@ -10,7 +10,7 @@ Options:
                                     "router", or "normal").
     -l <port>, --listen <port>      The port number on which to listen for data.
     -c <addr>, --connect <addr>     Address of a peer to connect to.
-    -s <addr>, --subnet <subnet>    The local subnets to use.
+    -s <subnet>, --subnet <subnet>    The local subnets to use.
     --magic <hex>                   Override the 4-byte magic header of each
                                     packet.
     --network-id <id>               Optional token that identifies the network.
