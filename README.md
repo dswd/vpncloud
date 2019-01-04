@@ -31,7 +31,7 @@ somewhat stable state. VpnCloud features the following functionality:
 * Automatic reconnecting when connections are lost
 * Non-native forwarding modes, e.g. IP based learning switch and prefix routed
   Ethernet networks.
-* High throughput and low additional latency (see [performance page](https://vpncloud.ddswd.de/features/performance)
+* High throughput and low additional latency (see [performance page](https://vpncloud.ddswd.de/features/performance))
 * Support for tunneled VLans (TAP device)
 * Option to hide protocol header
 * Automatic port forwarding via UPnP
@@ -50,7 +50,7 @@ The tests can be run via ``cargo test``.
 
 ##### Debian / Ubuntu
 Deb packages for each release can be found in the
-[releases](https://github.com/dswd/vpncloud.rs/releases) section. Currently only
+[releases](https://github.com/dswd/vpncloud/releases) section. Currently only
 packages for amd64 are available (I am accepting help on building and packaging
 for other platforms).
 
