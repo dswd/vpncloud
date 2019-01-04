@@ -19,7 +19,6 @@ serde_yaml = "0.8"
 log = { version = "0.4", features = ["std"] }
 signal = "0.6"
 libc = "0.2"
-aligned_alloc = "0.1"
 rand = "0.6"
 fnv = "1"
 net2 = "0.2"
@@ -28,6 +27,7 @@ yaml-rust = "0.4"
 igd = "0.7"
 siphasher = "0.3"
 daemonize = "0.3"
+ring = "0.13"
 
 [build-dependencies]
 cc = "^1"

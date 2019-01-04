@@ -13,7 +13,6 @@ extern crate serde;
 extern crate serde_yaml;
 extern crate signal;
 extern crate libc;
-extern crate aligned_alloc;
 extern crate rand;
 extern crate fnv;
 extern crate net2;
@@ -21,6 +20,7 @@ extern crate yaml_rust;
 extern crate igd;
 extern crate siphasher;
 extern crate daemonize;
+extern crate ring;
 #[cfg(feature = "bench")] extern crate test;
 
 #[macro_use] pub mod util;
