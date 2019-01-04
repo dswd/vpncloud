@@ -5,11 +5,11 @@
 use std::ptr;
 use std::ffi::CStr;
 use std::sync::{Once, ONCE_INIT};
+use ring::aead::*;
 
 static CRYPTO_INIT: Once = ONCE_INIT;
 
 use libc::{size_t, c_char, c_ulonglong, c_int};
-use aligned_alloc::{aligned_alloc, aligned_free};
 
 use super::types::Error;
 
@@ -41,22 +41,6 @@ const crypto_pwhash_scryptsalsa208sha256_STRBYTES: usize = 102;
 const crypto_pwhash_scryptsalsa208sha256_OPSLIMIT_INTERACTIVE: usize = 524_288;
 #[allow(non_upper_case_globals)]
 const crypto_pwhash_scryptsalsa208sha256_MEMLIMIT_INTERACTIVE: usize = 16_777_216;
-
-pub struct Aes256State(*mut [u8; crypto_aead_aes256gcm_STATEBYTES]);
-
-impl Aes256State {
-    fn new() -> Aes256State {
-        let ptr = aligned_alloc(crypto_aead_aes256gcm_STATEBYTES, 16)
-            as *mut [u8; crypto_aead_aes256gcm_STATEBYTES];
-        Aes256State(ptr)
-    }
-}
-
-impl Drop for Aes256State {
-    fn drop(&mut self) {
-        unsafe { aligned_free(self.0 as *mut ()) }
-    }
-}
 
 
 #[link(name="sodium", kind="static")]
@@ -127,23 +111,24 @@ pub enum CryptoMethod {
     AES256
 }
 
-pub enum Crypto {
-    None,
-    ChaCha20Poly1305{
-        key: [u8; crypto_aead_chacha20poly1305_ietf_KEYBYTES],
-        nonce: [u8; crypto_aead_chacha20poly1305_ietf_NPUBBYTES]
-    },
-    AES256GCM{
-        state: Aes256State,
-        nonce: [u8; crypto_aead_aes256gcm_NPUBBYTES]
-    }
+pub struct CryptoData {
+    sealing_key: SealingKey,
+    opening_key: OpeningKey,
+    nonce: Vec<u8>
 }
 
-fn inc_nonce_12(nonce: &mut [u8; 12]) {
-    for i in 0..12 {
-        let mut num = nonce[11-i];
+pub enum Crypto {
+    None,
+    ChaCha20Poly1305(CryptoData),
+    AES256GCM(CryptoData)
+}
+
+fn inc_nonce(nonce: &mut [u8]) {
+    let l = nonce.len();
+    for i in (0..l).rev() {
+        let mut num = nonce[i];
         num = num.wrapping_add(1);
-        nonce[11-i] = num;
+        nonce[i] = num;
         if num > 0 {
             break
         }
@@ -170,9 +155,7 @@ impl Crypto {
 
     #[inline]
     pub fn aes256_available() -> bool {
-        unsafe {
-            crypto_aead_aes256gcm_is_available() == 1
-        }
+        true
     }
 
     #[inline]
@@ -188,7 +171,7 @@ impl Crypto {
     pub fn nonce_bytes(&self) -> usize {
         match *self {
             Crypto::None => 0,
-            Crypto::ChaCha20Poly1305{ref nonce, ..} | Crypto::AES256GCM{ref nonce, ..} => nonce.len(),
+            Crypto::ChaCha20Poly1305(ref data) | Crypto::AES256GCM(ref data) => data.sealing_key.algorithm().nonce_len()
         }
     }
 
@@ -218,69 +201,30 @@ impl Crypto {
         if res != 0 {
             fail!("Key derivation failed");
         }
+        let algo = match method {
+            CryptoMethod::ChaCha20 => &CHACHA20_POLY1305,
+            CryptoMethod::AES256 => &AES_256_GCM
+        };
+        let sealing_key = SealingKey::new(algo, &key[..algo.key_len()]).expect("Failed to create key");
+        let opening_key = OpeningKey::new(algo, &key[..algo.key_len()]).expect("Failed to create key");
+        let mut nonce: Vec<u8> = Vec::with_capacity(algo.nonce_len());
+        for _ in 0..algo.nonce_len() {
+            nonce.push(0);
+        }
+        unsafe { randombytes_buf(nonce.as_mut_ptr(), nonce.len()) };
+        let data = CryptoData { sealing_key, opening_key, nonce };
         match method {
-            CryptoMethod::ChaCha20 => {
-                let mut crypto_key = [0; crypto_aead_chacha20poly1305_ietf_KEYBYTES];
-                crypto_key.clone_from_slice(&key[..crypto_aead_chacha20poly1305_ietf_KEYBYTES]);
-                let mut nonce = [0u8; crypto_aead_chacha20poly1305_ietf_NPUBBYTES];
-                unsafe { randombytes_buf(nonce.as_mut_ptr(), nonce.len()) };
-                Crypto::ChaCha20Poly1305{key: crypto_key, nonce}
-            },
-            CryptoMethod::AES256 => {
-                if ! Crypto::aes256_available() {
-                    fail!("AES256 is not supported by this processor, use ChaCha20 instead");
-                }
-                let mut nonce = [0u8; crypto_aead_aes256gcm_NPUBBYTES];
-                unsafe { randombytes_buf(nonce.as_mut_ptr(), nonce.len()) };
-                let state = Aes256State::new();
-                let res = unsafe { crypto_aead_aes256gcm_beforenm(
-                    state.0,
-                    key[..crypto_aead_aes256gcm_KEYBYTES].as_ptr() as *const [u8; crypto_aead_aes256gcm_KEYBYTES]
-                ) };
-                assert_eq!(res, 0);
-                Crypto::AES256GCM{state, nonce}
-            }
+            CryptoMethod::ChaCha20 => Crypto::ChaCha20Poly1305(data),
+            CryptoMethod::AES256 => Crypto::AES256GCM(data)
         }
     }
 
     pub fn decrypt(&self, buf: &mut [u8], nonce: &[u8], header: &[u8]) -> Result<usize, Error> {
         match *self {
             Crypto::None => Ok(buf.len()),
-            Crypto::ChaCha20Poly1305{ref key, ..} => {
-                let mut mlen: u64 = buf.len() as u64;
-                let res = unsafe { crypto_aead_chacha20poly1305_ietf_decrypt(
-                    buf.as_mut_ptr(), // Base pointer to buffer
-                    &mut mlen, // Mutable size of buffer (will be set to used size)
-                    ptr::null_mut::<[u8; 0]>(), // Mutable base pointer to secret nonce (always NULL)
-                    buf.as_ptr(), // Base pointer to message
-                    buf.len() as u64, // Size of message
-                    header.as_ptr(), // Base pointer to additional data
-                    header.len() as u64, // Size of additional data
-                    nonce.as_ptr() as *const [u8; crypto_aead_chacha20poly1305_ietf_NPUBBYTES], // Base pointer to public nonce
-                    key.as_ptr() as *const [u8; crypto_aead_chacha20poly1305_ietf_KEYBYTES] // Base pointer to key
-                ) };
-                match res {
-                    0 => Ok(mlen as usize),
-                    _ => Err(Error::Crypto("Failed to decrypt"))
-                }
-            },
-            Crypto::AES256GCM{ref state, ..} => {
-                let mut mlen: u64 = buf.len() as u64;
-                let res = unsafe { crypto_aead_aes256gcm_decrypt_afternm(
-                    buf.as_mut_ptr(), // Base pointer to buffer
-                    &mut mlen, // Mutable size of buffer (will be set to used size)
-                    ptr::null_mut::<[u8; 0]>(), // Mutable base pointer to secret nonce (always NULL)
-                    buf.as_ptr(), // Base pointer to message
-                    buf.len() as u64, // Size of message
-                    header.as_ptr(), // Base pointer to additional data
-                    header.len() as u64, // Size of additional data
-                    nonce.as_ptr() as *const [u8; crypto_aead_aes256gcm_NPUBBYTES], // Base pointer to public nonce
-                    state.0 // Base pointer to state
-                ) };
-                match res {
-                    0 => Ok(mlen as usize),
-                    _ => Err(Error::Crypto("Failed to decrypt"))
-                }
+            Crypto::ChaCha20Poly1305(ref data) | Crypto::AES256GCM(ref data) => {
+                let plaintext = open_in_place(&data.opening_key, nonce, header, 0, buf).expect("error");
+                Ok(plaintext.len())
             }
         }
     }
@@ -288,49 +232,16 @@ impl Crypto {
     pub fn encrypt(&mut self, buf: &mut [u8], mlen: usize, nonce_bytes: &mut [u8], header: &[u8]) -> usize {
         match *self {
             Crypto::None => mlen,
-            Crypto::ChaCha20Poly1305{ref key, ref mut nonce} => {
-                inc_nonce_12(nonce);
-                let mut clen: u64 = buf.len() as u64;
-                assert_eq!(nonce_bytes.len(), nonce.len());
-                assert!(clen as usize >= mlen + crypto_aead_chacha20poly1305_ietf_ABYTES);
-                let res = unsafe { crypto_aead_chacha20poly1305_ietf_encrypt(
-                    buf.as_mut_ptr(), // Base pointer to buffer
-                    &mut clen, // Mutable size of buffer (will be set to used size)
-                    buf.as_ptr(), // Base pointer to message
-                    mlen as u64, // Size of message
-                    header.as_ptr(), // Base pointer to additional data
-                    header.len() as u64, // Size of additional data
-                    ptr::null::<[u8; 0]>(), // Base pointer to secret nonce (always NULL)
-                    nonce.as_ptr() as *const [u8; crypto_aead_chacha20poly1305_ietf_NPUBBYTES], // Base pointer to public nonce
-                    key.as_ptr() as *const [u8; crypto_aead_chacha20poly1305_ietf_KEYBYTES] // Base pointer to key
-                ) };
-                assert_eq!(res, 0);
+            Crypto::ChaCha20Poly1305(ref mut data) | Crypto::AES256GCM(ref mut data) => {
+                inc_nonce(&mut data.nonce);
+                let tag_len = data.sealing_key.algorithm().tag_len();
+                assert!(buf.len() - mlen >= tag_len);
+                let buf = &mut buf[.. mlen + tag_len];
+                let new_len = seal_in_place(&data.sealing_key, &data.nonce, header, buf, tag_len).expect("error");
                 unsafe {
-                    ptr::copy_nonoverlapping(nonce.as_ptr(), nonce_bytes.as_mut_ptr(), nonce.len());
+                    ptr::copy_nonoverlapping(data.nonce.as_ptr(), nonce_bytes.as_mut_ptr(), data.nonce.len());
                 }
-                clen as usize
-            },
-            Crypto::AES256GCM{ref state, ref mut nonce} => {
-                inc_nonce_12(nonce);
-                let mut clen: u64 = buf.len() as u64;
-                assert_eq!(nonce_bytes.len(), nonce.len());
-                assert!(clen as usize >= mlen + crypto_aead_aes256gcm_ABYTES);
-                let res = unsafe { crypto_aead_aes256gcm_encrypt_afternm(
-                    buf.as_mut_ptr(), // Base pointer to buffer
-                    &mut clen, // Mutable size of buffer (will be set to used size)
-                    buf.as_ptr(), // Base pointer to message
-                    mlen as u64, // Size of message
-                    header.as_ptr(), // Base pointer to additional data
-                    header.len() as u64, // Size of additional data
-                    ptr::null::<[u8; 0]>(), // Base pointer to secret nonce (always NULL)
-                    nonce.as_ptr() as *const [u8; crypto_aead_aes256gcm_NPUBBYTES], // Base pointer to public nonce
-                    state.0 // Base pointer to state
-                ) };
-                assert_eq!(res, 0);
-                unsafe {
-                    ptr::copy_nonoverlapping(nonce.as_ptr(), nonce_bytes.as_mut_ptr(), nonce.len());
-                }
-                clen as usize
+                new_len
             }
         }
     }
