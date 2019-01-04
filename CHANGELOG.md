@@ -2,6 +2,10 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### UNRELEASED
+
+- [fixed] Hashed magics now also consider first character (**incompatible**)
+
 ### v0.8.2 (2018-01-02)
 
 - [changed] Using serde instead of rustc_serialize

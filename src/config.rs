@@ -170,7 +170,7 @@ impl Config {
         if let Some(ref name) = self.magic {
             if name.starts_with("hash:") {
                 let mut s = SipHasher24::new();
-                name[6..].hash(&mut s);
+                name[5..].hash(&mut s);
                 let mut data = [0; 4];
                 Encoder::write_u32((s.finish() & 0xffff_ffff) as u32, &mut data);
                 data

@@ -20,7 +20,7 @@ use super::util::now as util_now;
 use super::poll::{Poll, Flags};
 
 #[bench]
-fn crypto_salsa20(b: &mut Bencher) {
+fn crypto_chacha20(b: &mut Bencher) {
     Crypto::init();
     let mut crypto = Crypto::from_shared_key(CryptoMethod::ChaCha20, "test");
     let mut payload = [0; 1500];
