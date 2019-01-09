@@ -31,6 +31,7 @@ pub struct Config {
     pub port_forwarding: bool,
     pub daemonize: bool,
     pub pid_file: Option<String>,
+    pub stats_file: Option<String>,
     pub user: Option<String>,
     pub group: Option<String>
 }
@@ -48,6 +49,7 @@ impl Default for Config {
             port_forwarding: true,
             daemonize: false,
             pid_file: None,
+            stats_file: None,
             user: None,
             group: None
         }
@@ -100,6 +102,9 @@ impl Config {
         }
         if let Some(val) = file.pid_file {
             self.pid_file = Some(val);
+        }
+        if let Some(val) = file.stats_file {
+            self.stats_file = Some(val);
         }
         if let Some(val) = file.user {
             self.user = Some(val);
@@ -158,6 +163,9 @@ impl Config {
         if let Some(val) = args.flag_pid_file {
             self.pid_file = Some(val);
         }
+        if let Some(val) = args.flag_stats_file {
+            self.stats_file = Some(val);
+        }
         if let Some(val) = args.flag_user {
             self.user = Some(val);
         }
@@ -204,6 +212,7 @@ pub struct ConfigFile {
     pub subnets: Option<Vec<String>>,
     pub port_forwarding: Option<bool>,
     pub pid_file: Option<String>,
+    pub stats_file: Option<String>,
     pub user: Option<String>,
     pub group: Option<String>,
 }

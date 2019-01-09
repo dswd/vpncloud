@@ -118,6 +118,11 @@ vpncloud(1) -- Peer-to-peer VPN
     If set, print logs also to the given file. The file will be created and
     truncated if is exists.
 
+  * `--stats-file <file>`:
+   
+    If set, periodically write statistics on peers and current traffic to the
+    given file. The file will be periodically overwritten with new data.
+
   * `--daemon`:
 
     Spawn a background process instead of running the process in the foreground.
@@ -280,6 +285,7 @@ detailed descriptions of the options.
 * `user`: The name of a user to run the background process under. See `--user`
 * `group`: The name of a group to run the background process under. See `--group`
 * `pid_file`: The path of the pid file to create. See `--pid-file`
+* `stats_file`: The path of the statistics file. See `--stats-file`
 
 
 ### Example
@@ -422,5 +428,5 @@ alive.
 
 ## COPYRIGHT
 
-Copyright (C) 2015-2016  Dennis Schwerdel
+Copyright (C) 2015-2019  Dennis Schwerdel
 This software is licensed under GPL-3 or newer (see LICENSE.md)

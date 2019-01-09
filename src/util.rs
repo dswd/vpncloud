@@ -136,3 +136,33 @@ pub fn resolve<Addr: ToSocketAddrs+fmt::Debug>(addr: Addr) -> Result<Vec<SocketA
     addrs.dedup();
     Ok(addrs)
 }
+
+
+pub struct Bytes(pub u64);
+
+impl fmt::Display for Bytes {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        let mut size = self.0 as f32;
+        if size >= 512.0 {
+            size /= 1024.0;
+        } else {
+            return write!(formatter, "{:.0} B", size);
+        }
+        if size >= 512.0 {
+            size /= 1024.0;
+        } else {
+            return write!(formatter, "{:.1} KiB", size);
+        }
+        if size >= 512.0 {
+            size /= 1024.0;
+        } else {
+            return write!(formatter, "{:.1} MiB", size);
+        }
+        if size >= 512.0 {
+            size /= 1024.0;
+        } else {
+            return write!(formatter, "{:.1} GiB", size);
+        }
+        write!(formatter, "{:.1} TiB", size)
+    }
+}

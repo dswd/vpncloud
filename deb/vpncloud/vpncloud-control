@@ -38,7 +38,7 @@ start() {
   #   2 if daemon could not be started
   for net in $NETWORKS; do
     [ -f "$NETCONFIGS/$net.net" ] || continue
-    start-stop-daemon --start --pidfile /run/$NAME-$net.pid --name $NAME -- "$DAEMON --daemon --config $NETCONFIGS/$net.net --pid-file /run/$NAME-$net.pid"
+    start-stop-daemon --start --pidfile /run/$NAME-$net.pid --name $NAME -- "$DAEMON --daemon --config $NETCONFIGS/$net.net --log-file /var/log/$NAME-$net.log --ststs-file /var/log/$NAME-$net.stats --pid-file /run/$NAME-$net.pid"
   done
   return 0
 }

@@ -5,13 +5,14 @@
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::collections::{HashMap, HashSet};
 use std::net::UdpSocket;
-use std::io;
+use std::io::{self, Write};
 use std::fmt;
 use std::os::unix::io::AsRawFd;
 use std::marker::PhantomData;
 use std::hash::BuildHasherDefault;
 use std::time::Instant;
 use std::cmp::min;
+use std::fs::File;
 
 use fnv::FnvHasher;
 use signal::{trap::Trap, Signal};
@@ -25,16 +26,24 @@ use super::crypto::Crypto;
 use super::port_forwarding::PortForwarding;
 use super::util::{now, Time, Duration, resolve};
 use super::poll::{Poll, Flags};
+use super::traffic::TrafficStats;
 
-type Hash = BuildHasherDefault<FnvHasher>;
+pub type Hash = BuildHasherDefault<FnvHasher>;
 
 const MAX_RECONNECT_INTERVAL: u16 = 3600;
 const RESOLVE_INTERVAL: Time = 300;
+pub const STATS_INTERVAL: Time = 60;
 
+
+struct PeerData {
+    timeout: Time,
+    node_id: NodeId,
+    alt_addrs: Vec<SocketAddr>,
+}
 
 struct PeerList {
     timeout: Duration,
-    peers: HashMap<SocketAddr, (Time, NodeId, Vec<SocketAddr>), Hash>,
+    peers: HashMap<SocketAddr, PeerData, Hash>,
     nodes: HashMap<NodeId, SocketAddr, Hash>,
     addresses: HashSet<SocketAddr, Hash>
 }
@@ -52,17 +61,17 @@ impl PeerList {
     fn timeout(&mut self) -> Vec<SocketAddr> {
         let now = now();
         let mut del: Vec<SocketAddr> = Vec::new();
-        for (&addr, &(timeout, _nodeid, ref _alt_addrs)) in &self.peers {
-            if timeout < now {
+        for (&addr, ref data) in &self.peers {
+            if data.timeout < now {
                 del.push(addr);
             }
         }
         for addr in &del {
             info!("Forgot peer: {}", addr);
-            if let Some((_timeout, nodeid, alt_addrs)) = self.peers.remove(addr) {
-                self.nodes.remove(&nodeid);
+            if let Some(data) = self.peers.remove(addr) {
+                self.nodes.remove(&data.node_id);
                 self.addresses.remove(addr);
-                for addr in &alt_addrs {
+                for addr in &data.alt_addrs {
                     self.addresses.remove(addr);
                 }
             }
@@ -95,23 +104,27 @@ impl PeerList {
     fn add(&mut self, node_id: NodeId, addr: SocketAddr) {
         if self.nodes.insert(node_id, addr).is_none() {
             info!("New peer: {}", addr);
-            self.peers.insert(addr, (now()+Time::from(self.timeout), node_id, vec![]));
+            self.peers.insert(addr, PeerData {
+                timeout: now() + Time::from(self.timeout),
+                node_id,
+                alt_addrs: vec![]
+            });
             self.addresses.insert(addr);
         }
     }
 
     #[inline]
     fn refresh(&mut self, addr: &SocketAddr) {
-        if let Some(&mut (ref mut timeout, _node_id, ref _alt_addrs)) = self.peers.get_mut(addr) {
-            *timeout = now()+Time::from(self.timeout);
+        if let Some(ref mut data) = self.peers.get_mut(addr) {
+            data.timeout = now()+Time::from(self.timeout);
         }
     }
 
     #[inline]
     fn add_alt_addr(&mut self, node_id: NodeId, addr: SocketAddr) {
         if let Some(main_addr) = self.nodes.get(&node_id) {
-            if let Some(&mut (_timeout, _node_id, ref mut alt_addrs)) = self.peers.get_mut(main_addr) {
-                alt_addrs.push(addr);
+            if let Some(ref mut data) = self.peers.get_mut(main_addr) {
+                data.alt_addrs.push(addr);
                 self.addresses.insert(addr);
             } else {
                 error!("Main address for node is not connected");
@@ -144,14 +157,23 @@ impl PeerList {
 
     #[inline]
     fn remove(&mut self, addr: &SocketAddr) {
-        if let Some((_timeout, node_id, alt_addrs)) = self.peers.remove(addr) {
+        if let Some(data) = self.peers.remove(addr) {
             info!("Removed peer: {}", addr);
-            self.nodes.remove(&node_id);
+            self.nodes.remove(&data.node_id);
             self.addresses.remove(addr);
-            for addr in alt_addrs {
+            for addr in data.alt_addrs {
                 self.addresses.remove(&addr);
             }
         }
+    }
+
+    #[inline]
+    fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error> {
+        try!(writeln!(out, "Peers:"));
+        for (addr, data) in &self.peers {
+            try!(writeln!(out, " - {} (ttl: {} s)", addr, data.timeout-now()));
+        }
+        Ok(())
     }
 }
 
@@ -184,7 +206,10 @@ pub struct GenericCloud<P: Protocol, T: Table> {
     update_freq: Duration,
     buffer_out: [u8; 64*1024],
     next_housekeep: Time,
+    next_stats_out: Time,
     port_forwarding: Option<PortForwarding>,
+    traffic: TrafficStats,
+    stats_file: Option<String>,
     _dummy_p: PhantomData<P>,
 }
 
@@ -192,7 +217,8 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
     #[allow(unknown_lints,clippy::too_many_arguments)]
     pub fn new(magic: HeaderMagic, device: Device, listen: u16, table: T,
         peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>,
-        crypto: Crypto, port_forwarding: Option<PortForwarding>) -> Self {
+        crypto: Crypto, port_forwarding: Option<PortForwarding>, stats_file: Option<String>
+    ) -> Self {
         let socket4 = match UdpBuilder::new_v4().expect("Failed to obtain ipv4 socket builder")
             .reuse_address(true).expect("Failed to set so_reuseaddr").bind(("0.0.0.0", listen)) {
             Ok(socket) => socket,
@@ -222,7 +248,10 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             update_freq: peer_timeout/2-60,
             buffer_out: [0; 64*1024],
             next_housekeep: now(),
+            next_stats_out: now() + STATS_INTERVAL,
             port_forwarding,
+            traffic: TrafficStats::new(),
+            stats_file,
             _dummy_p: PhantomData,
         }
     }
@@ -244,6 +273,7 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
         // Encrypt and encode once and send several times
         let msg_data = encode(msg, &mut self.buffer_out, self.magic, &mut self.crypto);
         for addr in self.peers.peers.keys() {
+            self.traffic.count_out_traffic(*addr, msg_data.len());
             let socket = match *addr {
                 SocketAddr::V4(_) => &self.socket4,
                 SocketAddr::V6(_) => &self.socket6
@@ -267,6 +297,7 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
         debug!("Sending {:?} to {}", msg, addr);
         // Encrypt and encode
         let msg_data = encode(msg, &mut self.buffer_out, self.magic, &mut self.crypto);
+        self.traffic.count_out_traffic(addr, msg_data.len());
         let socket = match addr {
             SocketAddr::V4(_) => &self.socket4,
             SocketAddr::V6(_) => &self.socket6
@@ -423,6 +454,26 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             // Schedule next connection attempt
             entry.next = now + Time::from(entry.timeout);
         }
+        if self.next_stats_out < now {
+            // Write out the statistics
+            try!(self.write_out_stats().map_err(|err| Error::File("Failed to write stats file", err)));
+            self.next_stats_out = now + STATS_INTERVAL;
+            self.traffic.period(Some(60));
+        }
+        Ok(())
+    }
+
+    /// Calculates, resets and writes out the statistics to a file
+    fn write_out_stats(&mut self) -> Result<(), io::Error> {
+        if self.stats_file.is_none() { return Ok(()) }
+        debug!("Writing out stats");
+        let mut f = try!(File::create(self.stats_file.as_ref().unwrap()));
+        try!(self.peers.write_out(&mut f));
+        try!(writeln!(&mut f));
+        try!(self.table.write_out(&mut f));
+        try!(writeln!(&mut f));
+        try!(self.traffic.write_out(&mut f));
+        try!(writeln!(&mut f));
         Ok(())
     }
 
@@ -445,12 +496,13 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
     pub fn handle_interface_data(&mut self, payload: &mut [u8], start: usize, end: usize) -> Result<(), Error> {
         let (src, dst) = try!(P::parse(&payload[start..end]));
         debug!("Read data from interface: src: {}, dst: {}, {} bytes", src, dst, end-start);
+        self.traffic.count_out_payload(dst, src, end-start);
         match self.table.lookup(&dst) {
             Some(addr) => { // Peer found for destination
                 debug!("Found destination for {} => {}", dst, addr);
                 try!(self.send_msg(addr, &mut Message::Data(payload, start, end)));
                 if !self.peers.contains_addr(&addr) {
-                    // If the peer is not actually conected, remove the entry in the table and try
+                    // If the peer is not actually connected, remove the entry in the table and try
                     // to reconnect.
                     warn!("Destination for {} not found in peers: {}", dst, addr);
                     self.table.remove(&dst);
@@ -507,8 +559,9 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
         debug!("Received {:?} from {}", msg, peer);
         match msg {
             Message::Data(payload, start, end) => {
-                let (src, _dst) = try!(P::parse(&payload[start..end]));
+                let (src, dst) = try!(P::parse(&payload[start..end]));
                 debug!("Writing data to device: {} bytes", end-start);
+                self.traffic.count_in_payload(src, dst, end-start);
                 if let Err(e) = self.device.write(&mut payload[..end], start) {
                     error!("Failed to send via device: {}", e);
                     return Err(e);
@@ -605,6 +658,7 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
                             fd if fd == socket6_fd => try_fail!(self.socket6.recv_from(&mut buffer), "Failed to read from ipv6 network socket: {}"),
                             _ => unreachable!()
                         };
+                        self.traffic.count_in_traffic(src, size);
                         if let Err(e) = decode(&mut buffer[..size], self.magic, &mut self.crypto).and_then(|msg| self.handle_net_message(src, msg)) {
                             error!("Error: {}, from: {}", e, src);
                         }

@@ -34,6 +34,7 @@ pub mod device;
 pub mod poll;
 pub mod config;
 pub mod port_forwarding;
+pub mod traffic;
 #[cfg(test)] mod tests;
 #[cfg(feature = "bench")] mod benches;
 
@@ -86,6 +87,7 @@ pub struct Args {
     flag_no_port_forwarding: bool,
     flag_daemon: bool,
     flag_pid_file: Option<String>,
+    flag_stats_file: Option<String>,
     flag_user: Option<String>,
     flag_group: Option<String>,
     flag_log_file: Option<String>
@@ -159,13 +161,13 @@ impl<P: Protocol> AnyCloud<P> {
     #[allow(unknown_lints,clippy::too_many_arguments)]
     fn new(magic: HeaderMagic, device: Device, listen: u16, table: AnyTable,
             peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>,
-            crypto: Crypto, port_forwarding: Option<PortForwarding>) -> Self {
+            crypto: Crypto, port_forwarding: Option<PortForwarding>, stats_file: Option<String>) -> Self {
         match table {
             AnyTable::Switch(t) => AnyCloud::Switch(GenericCloud::<P, SwitchTable>::new(
-                magic, device, listen, t, peer_timeout, learning, broadcast, addresses, crypto, port_forwarding
+                magic, device, listen, t, peer_timeout, learning, broadcast, addresses, crypto, port_forwarding, stats_file
             )),
             AnyTable::Routing(t) => AnyCloud::Routing(GenericCloud::<P, RoutingTable>::new(
-                magic, device, listen, t, peer_timeout, learning, broadcast, addresses, crypto, port_forwarding
+                magic, device, listen, t, peer_timeout, learning, broadcast, addresses, crypto, port_forwarding, stats_file
             ))
         }
     }
@@ -230,7 +232,7 @@ fn run<P: Protocol> (config: Config) {
     } else {
         None
     };
-    let mut cloud = AnyCloud::<P>::new(magic, device, config.port, table, peer_timeout, learning, broadcasting, ranges, crypto, port_forwarding);
+    let mut cloud = AnyCloud::<P>::new(magic, device, config.port, table, peer_timeout, learning, broadcasting, ranges, crypto, port_forwarding, config.stats_file);
     if let Some(script) = config.ifup {
         run_script(&script, cloud.ifname());
     }

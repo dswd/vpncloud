@@ -28,6 +28,7 @@ Options:
     --user <user>                   Run as other user when daemonizing.
     --group <group>                 Run as other group when daemonizing.
     --log-file <file>               Print logs also to this file.
+    --stats-file <file>             Print statistics to this file.
     --no-port-forwarding            Disable automatic port forward.
     --daemon                        Run the process in the background.
     -v, --verbose                   Print debug information.
