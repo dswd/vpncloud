@@ -6,7 +6,7 @@ use std::net::{SocketAddr, Ipv4Addr, Ipv6Addr};
 use std::fmt;
 use std::str::FromStr;
 use std::hash::{Hash, Hasher};
-use std::io;
+use std::io::{self, Write};
 
 use super::util::{bytes_to_hex, Encoder};
 
@@ -210,6 +210,7 @@ pub trait Table {
     fn learn(&mut self, Address, Option<u8>, SocketAddr);
     fn lookup(&mut self, &Address) -> Option<SocketAddr>;
     fn housekeep(&mut self);
+    fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error>;
     fn remove(&mut self, &Address) -> bool;
     fn remove_all(&mut self, &SocketAddr);
 }
@@ -225,7 +226,8 @@ pub enum Error {
     Socket(&'static str, io::Error),
     Name(String),
     TunTapDev(&'static str, io::Error),
-    Crypto(&'static str)
+    Crypto(&'static str),
+    File(&'static str, io::Error)
 }
 impl fmt::Display for Error {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -236,6 +238,7 @@ impl fmt::Display for Error {
             Error::Crypto(msg) => write!(formatter, "{}", msg),
             Error::Name(ref name) => write!(formatter, "failed to resolve name '{}'", name),
             Error::WrongHeaderMagic(net) => write!(formatter, "wrong header magic: {}", bytes_to_hex(&net)),
+            Error::File(msg, ref err) => write!(formatter, "{}: {:?}", msg, err)
         }
     }
 }

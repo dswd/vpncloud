@@ -5,6 +5,7 @@
 use std::net::SocketAddr;
 use std::collections::{hash_map, HashMap};
 use std::hash::BuildHasherDefault;
+use std::io::{self, Write};
 
 use fnv::FnvHasher;
 
@@ -53,7 +54,7 @@ impl Protocol for Packet {
 
 struct RoutingEntry {
     address: SocketAddr,
-    bytes: [u8; 16],
+    bytes: Address,
     prefix_len: u8
 }
 
@@ -90,7 +91,7 @@ impl Table for RoutingTable {
         let mut group_bytes = [0; 16];
         group_bytes[..group_len].copy_from_slice(&addr.data[..group_len]);
         // Create an entry
-        let routing_entry = RoutingEntry{address, bytes: addr.data, prefix_len};
+        let routing_entry = RoutingEntry{address, bytes: addr, prefix_len};
         // Add the entry to the routing table, creating a new list of the prefix group is empty.
         match self.0.entry(group_bytes) {
             hash_map::Entry::Occupied(mut entry) => entry.get_mut().push(routing_entry),
@@ -120,7 +121,7 @@ impl Table for RoutingTable {
                     // Calculate the match length of the address and the prefix
                     let mut match_len = 0;
                     for j in 0..addr.len as usize {
-                        let b = addr.data[j] ^ entry.bytes[j];
+                        let b = addr.data[j] ^ entry.bytes.data[j];
                         if b == 0 {
                             match_len += 8;
                         } else {
@@ -144,6 +145,17 @@ impl Table for RoutingTable {
     /// This method does not do anything.
     fn housekeep(&mut self) {
         //nothing to do
+    }
+
+    /// Write out the table
+    fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error> {
+        try!(writeln!(out, "Routing table:"));
+        for entries in self.0.values() {
+            for entry in entries {
+                try!(writeln!(out, " - {}/{} => {}", entry.bytes, entry.prefix_len, entry.address));
+            }
+        }
+        Ok(())
     }
 
     /// Removes an address from the map and returns whether something has been removed

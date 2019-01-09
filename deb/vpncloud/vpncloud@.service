@@ -4,7 +4,7 @@ Before=systemd-user-sessions.service
 
 [Service]
 Type=forking
-ExecStart=/usr/bin/vpncloud --config /etc/vpncloud/%i.net --daemon --log-file /var/log/vpncloud-%i.log --pid-file /run/vpncloud-%i.run
+ExecStart=/usr/bin/vpncloud --config /etc/vpncloud/%i.net --daemon --log-file /var/log/vpncloud-%i.log --stats-file /var/log/vpncloud-%i.stats --pid-file /run/vpncloud-%i.run
 WorkingDirectory=/etc/vpncloud
 PIDFile=/run/vpncloud-%i.run
 

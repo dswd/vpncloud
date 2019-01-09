@@ -6,6 +6,7 @@ use std::net::SocketAddr;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::hash::BuildHasherDefault;
+use std::io::{self, Write};
 
 use fnv::FnvHasher;
 
@@ -97,6 +98,16 @@ impl Table for SwitchTable {
             info!("Forgot address {}", key);
             self.table.remove(&key);
         }
+    }
+
+    /// Write out the table
+    fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error> {
+        let now = now();
+        try!(writeln!(out, "Switch table:"));
+        for (addr, val) in &self.table {
+            try!(writeln!(out, " - {} => {} (ttl: {} s)", addr, val.address, val.timeout - now));
+        }
+        Ok(())
     }
 
     /// Learns the given address, inserting it in the hash map
