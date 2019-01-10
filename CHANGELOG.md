@@ -2,11 +2,16 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### UNRELEASED
+### v0.9.0 (UNRELEASED)
 
+- [added] Added keepalive option for nodes behind NAT
+- [added] Added ability to write out statistics file with peers and traffic info
+- [added] Added dummy device type that does not allocate an interface
+- [changed] Using ring instead of libsodium
+- [changed] Using PBKDF2 for shared keys (**incompatible**)
 - [fixed] Hashed magics now also consider first character (**incompatible**)
 
-### v0.8.2 (2018-01-02)
+### v0.8.2 (2019-01-02)
 
 - [changed] Using serde instead of rustc_serialize
 - [changed] Updated libsodium to 1.0.16

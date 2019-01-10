@@ -78,6 +78,7 @@ pub struct Args {
     flag_magic: Option<String>,
     flag_connect: Vec<String>,
     flag_peer_timeout: Option<Duration>,
+    flag_keepalive: Option<Duration>,
     flag_dst_timeout: Option<Duration>,
     flag_verbose: bool,
     flag_quiet: bool,
@@ -159,15 +160,15 @@ enum AnyCloud<P: Protocol> {
 
 impl<P: Protocol> AnyCloud<P> {
     #[allow(unknown_lints,clippy::too_many_arguments)]
-    fn new(magic: HeaderMagic, device: Device, listen: u16, table: AnyTable,
-            peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>,
-            crypto: Crypto, port_forwarding: Option<PortForwarding>, stats_file: Option<String>) -> Self {
+    fn new(config: &Config, device: Device, table: AnyTable,
+            learning: bool, broadcast: bool, addresses: Vec<Range>,
+            crypto: Crypto, port_forwarding: Option<PortForwarding>) -> Self {
         match table {
             AnyTable::Switch(t) => AnyCloud::Switch(GenericCloud::<P, SwitchTable>::new(
-                magic, device, listen, t, peer_timeout, learning, broadcast, addresses, crypto, port_forwarding, stats_file
+                config, device,t, learning, broadcast, addresses, crypto, port_forwarding
             )),
             AnyTable::Routing(t) => AnyCloud::Routing(GenericCloud::<P, RoutingTable>::new(
-                magic, device, listen, t, peer_timeout, learning, broadcast, addresses, crypto, port_forwarding, stats_file
+                config, device,t, learning, broadcast, addresses, crypto, port_forwarding
             ))
         }
     }
@@ -211,20 +212,19 @@ fn run<P: Protocol> (config: Config) {
         ranges.push(try_fail!(Range::from_str(s), "Invalid subnet format: {} ({})", s));
     }
     let dst_timeout = config.dst_timeout;
-    let peer_timeout = config.peer_timeout;
     let (learning, broadcasting, table) = match config.mode {
         Mode::Normal => match config.device_type {
             Type::Tap => (true, true, AnyTable::Switch(SwitchTable::new(dst_timeout, 10))),
-            Type::Tun => (false, false, AnyTable::Routing(RoutingTable::new()))
+            Type::Tun => (false, false, AnyTable::Routing(RoutingTable::new())),
+            Type::Dummy => (false, false, AnyTable::Switch(SwitchTable::new(dst_timeout, 10)))
         },
         Mode::Router => (false, false, AnyTable::Routing(RoutingTable::new())),
         Mode::Switch => (true, true, AnyTable::Switch(SwitchTable::new(dst_timeout, 10))),
         Mode::Hub => (false, true, AnyTable::Switch(SwitchTable::new(dst_timeout, 10)))
     };
-    let magic = config.get_magic();
     Crypto::init();
     let crypto = match config.shared_key {
-        Some(key) => Crypto::from_shared_key(config.crypto, &key),
+        Some(ref key) => Crypto::from_shared_key(config.crypto, key),
         None => Crypto::None
     };
     let port_forwarding = if config.port_forwarding {
@@ -232,7 +232,7 @@ fn run<P: Protocol> (config: Config) {
     } else {
         None
     };
-    let mut cloud = AnyCloud::<P>::new(magic, device, config.port, table, peer_timeout, learning, broadcasting, ranges, crypto, port_forwarding, config.stats_file);
+    let mut cloud = AnyCloud::<P>::new(&config, device, table, learning,broadcasting,ranges, crypto, port_forwarding);
     if let Some(script) = config.ifup {
         run_script(&script, cloud.ifname());
     }
@@ -295,6 +295,7 @@ fn main() {
     debug!("Config: {:?}", config);
     match config.device_type {
         Type::Tap => run::<ethernet::Frame>(config),
-        Type::Tun => run::<ip::Packet>(config)
+        Type::Tun => run::<ip::Packet>(config),
+        Type::Dummy => run::<ethernet::Frame>(config)
     }
 }

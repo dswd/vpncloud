@@ -456,6 +456,7 @@ peers:
   - remote.machine.foo:3210
   - remote.machine.bar:3210
 peer_timeout: 1800
+keepalive: 840
 dst_timeout: 300
 mode: normal
 subnets:
@@ -464,6 +465,7 @@ port_forwarding: true
 user: nobody
 group: nogroup
 pid_file: /run/vpncloud.run
+stats_file: /var/log/vpncloud.stats
     ";
     assert_eq!(serde_yaml::from_str::<ConfigFile>(config_file).unwrap(), ConfigFile{
         device_type: Some(Type::Tun),
@@ -476,13 +478,15 @@ pid_file: /run/vpncloud.run
         port: Some(3210),
         peers: Some(vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()]),
         peer_timeout: Some(1800),
+        keepalive: Some(840),
         mode: Some(Mode::Normal),
         dst_timeout: Some(300),
         subnets: Some(vec!["10.0.1.0/24".to_string()]),
         port_forwarding: Some(true),
         user: Some("nobody".to_string()),
         group: Some("nogroup".to_string()),
-        pid_file: Some("/run/vpncloud.run".to_string())
+        pid_file: Some("/run/vpncloud.run".to_string()),
+        stats_file: Some("/var/log/vpncloud.stats".to_string())
     })
 }
 
@@ -500,13 +504,15 @@ fn config_merge() {
         port: Some(3210),
         peers: Some(vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()]),
         peer_timeout: Some(1800),
+        keepalive: Some(840),
         mode: Some(Mode::Normal),
         dst_timeout: Some(300),
         subnets: Some(vec!["10.0.1.0/24".to_string()]),
         port_forwarding: Some(true),
         user: Some("nobody".to_string()),
         group: Some("nogroup".to_string()),
-        pid_file: Some("/run/vpncloud.run".to_string())
+        pid_file: Some("/run/vpncloud.run".to_string()),
+        stats_file: Some("/var/log/vpncloud.stats".to_string())
     });
     assert_eq!(config, Config{
         device_type: Type::Tun,
@@ -519,6 +525,7 @@ fn config_merge() {
         port: 3210,
         peers: vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()],
         peer_timeout: 1800,
+        keepalive: Some(840),
         dst_timeout: 300,
         mode: Mode::Normal,
         port_forwarding: true,
@@ -526,6 +533,7 @@ fn config_merge() {
         user: Some("nobody".to_string()),
         group: Some("nogroup".to_string()),
         pid_file: Some("/run/vpncloud.run".to_string()),
+        stats_file: Some("/var/log/vpncloud.stats".to_string()),
         ..Default::default()
     });
     config.merge_args(Args{
@@ -538,6 +546,7 @@ fn config_merge() {
         flag_magic: Some("hash:mynet".to_string()),
         flag_listen: Some(3211),
         flag_peer_timeout: Some(1801),
+        flag_keepalive: Some(850),
         flag_dst_timeout: Some(301),
         flag_mode: Some(Mode::Switch),
         flag_subnet: vec![],
@@ -545,6 +554,7 @@ fn config_merge() {
         flag_no_port_forwarding: true,
         flag_daemon: true,
         flag_pid_file: Some("/run/vpncloud-mynet.run".to_string()),
+        flag_stats_file: Some("/var/log/vpncloud-mynet.stats".to_string()),
         flag_user: Some("root".to_string()),
         flag_group: Some("root".to_string()),
         ..Default::default()
@@ -560,6 +570,7 @@ fn config_merge() {
         port: 3211,
         peers: vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string(), "another:3210".to_string()],
         peer_timeout: 1801,
+        keepalive: Some(850),
         dst_timeout: 301,
         mode: Mode::Switch,
         port_forwarding: false,
@@ -567,6 +578,7 @@ fn config_merge() {
         user: Some("root".to_string()),
         group: Some("root".to_string()),
         pid_file: Some("/run/vpncloud-mynet.run".to_string()),
+        stats_file: Some("/var/log/vpncloud-mynet.stats".to_string()),
         daemonize: true,
         ..Default::default()
     });

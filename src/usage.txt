@@ -19,6 +19,8 @@ Options:
     --crypto <method>               The encryption method to use ("aes256", or
                                     "chacha20").
     --peer-timeout <secs>           Peer timeout in seconds.
+    --keepalive <secs>              Periodically send message to keep
+                                    connections alive.
     --dst-timeout <secs>            Switch table entry timeout in seconds.
     --ifup <command>                A command to setup the network interface.
     --ifdown <command>              A command to bring down the network

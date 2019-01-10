@@ -10,7 +10,7 @@ use ring::digest::*;
 use super::types::Error;
 
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
 pub enum CryptoMethod {
     #[serde(rename = "chacha20")]
     ChaCha20,

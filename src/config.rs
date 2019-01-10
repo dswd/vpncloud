@@ -13,7 +13,7 @@ use std::hash::{Hash, Hasher};
 use siphasher::sip::SipHasher24;
 
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Config {
     pub device_type: Type,
     pub device_name: String,
@@ -25,6 +25,7 @@ pub struct Config {
     pub port: u16,
     pub peers: Vec<String>,
     pub peer_timeout: Duration,
+    pub keepalive: Option<Duration>,
     pub mode: Mode,
     pub dst_timeout: Duration,
     pub subnets: Vec<String>,
@@ -43,7 +44,7 @@ impl Default for Config {
             ifup: None, ifdown: None,
             crypto: CryptoMethod::ChaCha20, shared_key: None,
             magic: None,
-            port: 3210, peers: vec![], peer_timeout: 1800,
+            port: 3210, peers: vec![], peer_timeout: 1800, keepalive: None,
             mode: Mode::Normal, dst_timeout: 300,
             subnets: vec![],
             port_forwarding: true,
@@ -87,6 +88,9 @@ impl Config {
         }
         if let Some(val) = file.peer_timeout {
             self.peer_timeout = val;
+        }
+        if let Some(val) = file.keepalive {
+            self.keepalive = Some(val);
         }
         if let Some(val) = file.mode {
             self.mode = val;
@@ -147,6 +151,9 @@ impl Config {
         if let Some(val) = args.flag_peer_timeout {
             self.peer_timeout = val;
         }
+        if let Some(val) = args.flag_keepalive {
+            self.keepalive = Some(val);
+        }
         if let Some(val) = args.flag_mode {
             self.mode = val;
         }
@@ -192,6 +199,13 @@ impl Config {
             MAGIC
         }
     }
+
+    pub fn get_keepalive(&self) -> Duration {
+        match self.keepalive {
+            Some(dur) => dur,
+            None => self.peer_timeout/2-60
+        }
+    }
 }
 
 
@@ -207,6 +221,7 @@ pub struct ConfigFile {
     pub port: Option<u16>,
     pub peers: Option<Vec<String>>,
     pub peer_timeout: Option<Duration>,
+    pub keepalive: Option<Duration>,
     pub mode: Option<Mode>,
     pub dst_timeout: Option<Duration>,
     pub subnets: Option<Vec<String>>,
