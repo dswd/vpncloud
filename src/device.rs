@@ -23,7 +23,10 @@ pub enum Type {
     Tun,
     /// Tap interface: This insterface transports Ethernet frames.
     #[serde(rename = "tap")]
-    Tap
+    Tap,
+    /// Dummy interface: This interface does nothing.
+    #[serde(rename = "dummy")]
+    Dummy
 }
 
 impl fmt::Display for Type {
@@ -31,6 +34,7 @@ impl fmt::Display for Type {
         match *self {
             Type::Tun => write!(formatter, "tun"),
             Type::Tap => write!(formatter, "tap"),
+            Type::Dummy => write!(formatter, "dummy")
         }
     }
 }
@@ -64,6 +68,9 @@ impl Device {
     /// # Panics
     /// This method panics if the interface name is longer than 31 bytes.
     pub fn new(ifname: &str, type_: Type) -> io::Result<Self> {
+        if type_ == Type::Dummy {
+            return Self::dummy(ifname, "/dev/null", type_);
+        }
         let fd = try!(fs::OpenOptions::new().read(true).write(true).open("/dev/net/tun"));
         // Add trailing \0 to interface name
         let mut ifname_string = String::with_capacity(32);
@@ -73,7 +80,8 @@ impl Device {
         let mut ifname_c = ifname_string.into_bytes();
         let res = match type_ {
             Type::Tun => unsafe { setup_tun_device(fd.as_raw_fd(), ifname_c.as_mut_ptr()) },
-            Type::Tap => unsafe { setup_tap_device(fd.as_raw_fd(), ifname_c.as_mut_ptr()) }
+            Type::Tap => unsafe { setup_tap_device(fd.as_raw_fd(), ifname_c.as_mut_ptr()) },
+            Type::Dummy => unreachable!()
         };
         match res {
             0 => {

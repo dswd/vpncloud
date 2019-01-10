@@ -19,8 +19,9 @@ use signal::{trap::Trap, Signal};
 use rand::{prelude::*, random, thread_rng};
 use net2::UdpBuilder;
 
+use super::config::Config;
 use super::types::{Table, Protocol, Range, Error, HeaderMagic, NodeId};
-use super::device::Device;
+use super::device::{Device, Type};
 use super::udpmessage::{encode, decode, Message};
 use super::crypto::Crypto;
 use super::port_forwarding::PortForwarding;
@@ -214,26 +215,25 @@ pub struct GenericCloud<P: Protocol, T: Table> {
 }
 
 impl<P: Protocol, T: Table> GenericCloud<P, T> {
-    #[allow(unknown_lints,clippy::too_many_arguments)]
-    pub fn new(magic: HeaderMagic, device: Device, listen: u16, table: T,
-        peer_timeout: Duration, learning: bool, broadcast: bool, addresses: Vec<Range>,
-        crypto: Crypto, port_forwarding: Option<PortForwarding>, stats_file: Option<String>
+    pub fn new(config: &Config, device: Device, table: T,
+        learning: bool, broadcast: bool, addresses: Vec<Range>,
+        crypto: Crypto, port_forwarding: Option<PortForwarding>
     ) -> Self {
         let socket4 = match UdpBuilder::new_v4().expect("Failed to obtain ipv4 socket builder")
-            .reuse_address(true).expect("Failed to set so_reuseaddr").bind(("0.0.0.0", listen)) {
+            .reuse_address(true).expect("Failed to set so_reuseaddr").bind(("0.0.0.0", config.port)) {
             Ok(socket) => socket,
-            Err(err) => fail!("Failed to open ipv4 address 0.0.0.0:{}: {}", listen, err)
+            Err(err) => fail!("Failed to open ipv4 address 0.0.0.0:{}: {}", config.port, err)
         };
         let socket6 = match UdpBuilder::new_v6().expect("Failed to obtain ipv6 socket builder")
             .only_v6(true).expect("Failed to set only_v6")
-            .reuse_address(true).expect("Failed to set so_reuseaddr").bind(("::", listen)) {
+            .reuse_address(true).expect("Failed to set so_reuseaddr").bind(("::", config.port)) {
             Ok(socket) => socket,
-            Err(err) => fail!("Failed to open ipv6 address ::{}: {}", listen, err)
+            Err(err) => fail!("Failed to open ipv6 address ::{}: {}", config.port, err)
         };
         GenericCloud{
-            magic,
+            magic: config.get_magic(),
             node_id: random(),
-            peers: PeerList::new(peer_timeout),
+            peers: PeerList::new(config.peer_timeout),
             addresses,
             learning,
             broadcast,
@@ -245,13 +245,13 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             device,
             crypto,
             next_peerlist: now(),
-            update_freq: peer_timeout/2-60,
+            update_freq: config.get_keepalive(),
             buffer_out: [0; 64*1024],
             next_housekeep: now(),
             next_stats_out: now() + STATS_INTERVAL,
             port_forwarding,
             traffic: TrafficStats::new(),
-            stats_file,
+            stats_file: config.stats_file.clone(),
             _dummy_p: PhantomData,
         }
     }
@@ -635,7 +635,13 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
         let device_fd = self.device.as_raw_fd();
         try_fail!(poll_handle.register(socket4_fd, Flags::READ), "Failed to add ipv4 socket to poll handle: {}");
         try_fail!(poll_handle.register(socket6_fd, Flags::READ), "Failed to add ipv6 socket to poll handle: {}");
-        try_fail!(poll_handle.register(device_fd, Flags::READ), "Failed to add device to poll handle: {}");
+        if let Err(err) = poll_handle.register(device_fd, Flags::READ) {
+            if self.device.get_type() != Type::Dummy {
+                fail!("Failed to add device to poll handle: {}", err);
+            } else {
+                warn!("Failed to add device to poll handle: {}", err);
+            } 
+        }
         let mut buffer = [0; 64*1024];
         let mut poll_error = false;
         loop {
@@ -658,8 +664,10 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
                             fd if fd == socket6_fd => try_fail!(self.socket6.recv_from(&mut buffer), "Failed to read from ipv6 network socket: {}"),
                             _ => unreachable!()
                         };
-                        self.traffic.count_in_traffic(src, size);
-                        if let Err(e) = decode(&mut buffer[..size], self.magic, &mut self.crypto).and_then(|msg| self.handle_net_message(src, msg)) {
+                        if let Err(e) = decode(&mut buffer[..size], self.magic, &mut self.crypto).and_then(|msg| {
+                            self.traffic.count_in_traffic(src, size);
+                            self.handle_net_message(src, msg)
+                        }) {
                             error!("Error: {}, from: {}", e, src);
                         }
                     },
