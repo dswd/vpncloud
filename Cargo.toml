@@ -5,8 +5,8 @@ authors = ["Dennis Schwerdel <schwerdel@googlemail.com>"]
 build = "build.rs"
 license = "GPL-3.0"
 description = "Peer-to-peer VPN"
-homepage = "https://github.com/dswd/vpncloud.rs"
-repository = "https://github.com/dswd/vpncloud.rs"
+homepage = "https://github.com/dswd/vpncloud"
+repository = "https://github.com/dswd/vpncloud"
 keywords = ["vpn", "p2p", "tun", "tap", "network"]
 readme = "README.md"
 

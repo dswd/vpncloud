@@ -577,6 +577,7 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
                 if !self.peers.contains_addr(&peer) {
                     try!(self.connect(&peer));
                 }
+                //TODO: make this address primary
                 // Connect to all peers in the message
                 for p in &peers {
                     if ! self.peers.contains_addr(p) && ! self.blacklist_peers.contains(p) {
@@ -594,6 +595,7 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
                 }
                 // Add sender as peer or as alternative address to existing peer
                 if self.peers.contains_node(&node_id) {
+                    //TODO: make this address primary
                     self.peers.add_alt_addr(node_id, peer);
                 } else {
                     self.peers.add(node_id, peer);
