@@ -17,6 +17,7 @@ use siphasher::sip::SipHasher24;
 pub struct Config {
     pub device_type: Type,
     pub device_name: String,
+    pub device_path: Option<String>,
     pub ifup: Option<String>,
     pub ifdown: Option<String>,
     pub crypto: CryptoMethod,
@@ -40,7 +41,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            device_type: Type::Tap, device_name: "vpncloud%d".to_string(),
+            device_type: Type::Tap, device_name: "vpncloud%d".to_string(), device_path: None,
             ifup: None, ifdown: None,
             crypto: CryptoMethod::ChaCha20, shared_key: None,
             magic: None,
@@ -64,6 +65,9 @@ impl Config {
         }
         if let Some(val) = file.device_name {
             self.device_name = val;
+        }
+        if let Some(val) = file.device_path {
+            self.device_path = Some(val);
         }
         if let Some(val) = file.ifup {
             self.ifup = Some(val);
@@ -124,6 +128,9 @@ impl Config {
         }
         if let Some(val) = args.flag_device {
             self.device_name = val;
+        }
+        if let Some(val) = args.flag_device_path {
+            self.device_path = Some(val);
         }
         if let Some(val) = args.flag_ifup {
             self.ifup = Some(val);
@@ -213,6 +220,7 @@ impl Config {
 pub struct ConfigFile {
     pub device_type: Option<Type>,
     pub device_name: Option<String>,
+    pub device_path: Option<String>,
     pub ifup: Option<String>,
     pub ifdown: Option<String>,
     pub crypto: Option<CryptoMethod>,

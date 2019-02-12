@@ -5,6 +5,7 @@ Options:
     --config <file>                 Read configuration options from the
                                     specified file.
     -t <type>, --type <type>        Set the type of network ("tap" or "tun").
+    --device-path <path>            Set the path of the base device.
     -d <name>, --device <name>      Name of the virtual device.
     -m <mode>, --mode <mode>        The mode of the VPN ("hub", "switch",
                                     "router", or "normal").

@@ -446,6 +446,7 @@ fn config_file() {
     let config_file = "
 device_type: tun
 device_name: vpncloud%d
+device_path: /dev/net/tun
 magic: 0123ABCD
 ifup: ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up
 ifdown: 'true'
@@ -470,6 +471,7 @@ stats_file: /var/log/vpncloud.stats
     assert_eq!(serde_yaml::from_str::<ConfigFile>(config_file).unwrap(), ConfigFile{
         device_type: Some(Type::Tun),
         device_name: Some("vpncloud%d".to_string()),
+        device_path: Some("/dev/net/tun".to_string()),
         ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
         ifdown: Some("true".to_string()),
         crypto: Some(CryptoMethod::AES256),
@@ -496,6 +498,7 @@ fn config_merge() {
     config.merge_file(ConfigFile{
         device_type: Some(Type::Tun),
         device_name: Some("vpncloud%d".to_string()),
+        device_path: None,
         ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
         ifdown: Some("true".to_string()),
         crypto: Some(CryptoMethod::AES256),
@@ -517,6 +520,7 @@ fn config_merge() {
     assert_eq!(config, Config{
         device_type: Type::Tun,
         device_name: "vpncloud%d".to_string(),
+        device_path: None,
         ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
         ifdown: Some("true".to_string()),
         magic: Some("0123ABCD".to_string()),
@@ -539,6 +543,7 @@ fn config_merge() {
     config.merge_args(Args{
         flag_type: Some(Type::Tap),
         flag_device: Some("vpncloud0".to_string()),
+        flag_device_path: Some("/dev/null".to_string()),
         flag_ifup: Some("ifconfig $IFNAME 10.0.1.2/16 mtu 1400 up".to_string()),
         flag_ifdown: Some("ifconfig $IFNAME down".to_string()),
         flag_crypto: Some(CryptoMethod::ChaCha20),
@@ -562,6 +567,7 @@ fn config_merge() {
     assert_eq!(config, Config{
         device_type: Type::Tap,
         device_name: "vpncloud0".to_string(),
+        device_path: Some("/dev/null".to_string()),
         ifup: Some("ifconfig $IFNAME 10.0.1.2/16 mtu 1400 up".to_string()),
         ifdown: Some("ifconfig $IFNAME down".to_string()),
         magic: Some("hash:mynet".to_string()),
