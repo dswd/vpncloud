@@ -47,6 +47,7 @@ pub struct Device {
     type_: Type,
 }
 
+
 impl Device {
     /// Creates a new tun/tap device
     ///
@@ -67,11 +68,12 @@ impl Device {
     ///
     /// # Panics
     /// This method panics if the interface name is longer than 31 bytes.
-    pub fn new(ifname: &str, type_: Type) -> io::Result<Self> {
+    pub fn new(ifname: &str, type_: Type, path: Option<&str>) -> io::Result<Self> {
+        let path = path.unwrap_or_else(|| Self::default_path(type_));
         if type_ == Type::Dummy {
-            return Self::dummy(ifname, "/dev/null", type_);
+            return Self::dummy(ifname, path, type_);
         }
-        let fd = try!(fs::OpenOptions::new().read(true).write(true).open("/dev/net/tun"));
+        let fd = try!(fs::OpenOptions::new().read(true).write(true).open(path));
         // Add trailing \0 to interface name
         let mut ifname_string = String::with_capacity(32);
         ifname_string.push_str(ifname);
@@ -92,6 +94,15 @@ impl Device {
                 Ok(Device{fd, ifname: String::from_utf8(ifname_c).unwrap(), type_})
             },
             _ => Err(IoError::last_os_error())
+        }
+    }
+
+    /// Returns the default device path for a given type
+    #[inline]
+    pub fn default_path(type_: Type) -> &'static str {
+        match type_ {
+            Type::Tun | Type::Tap => "/dev/net/tun",
+            Type::Dummy => "/dev/null"
         }
     }
 

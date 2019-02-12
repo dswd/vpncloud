@@ -68,6 +68,7 @@ static USAGE: &'static str = include_str!("usage.txt");
 pub struct Args {
     flag_config: Option<String>,
     flag_type: Option<Type>,
+    flag_device_path: Option<String>,
     flag_mode: Option<Mode>,
     flag_shared_key: Option<String>,
     flag_crypto: Option<CryptoMethod>,
@@ -204,7 +205,7 @@ impl<P: Protocol> AnyCloud<P> {
 
 
 fn run<P: Protocol> (config: Config) {
-    let device = try_fail!(Device::new(&config.device_name, config.device_type),
+    let device = try_fail!(Device::new(&config.device_name, config.device_type, config.device_path.as_ref().map(|s| s as &str)),
         "Failed to open virtual {} interface {}: {}", config.device_type, config.device_name);
     info!("Opened device {}", device.ifname());
     let mut ranges = Vec::with_capacity(config.subnets.len());

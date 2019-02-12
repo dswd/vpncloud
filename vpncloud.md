@@ -25,6 +25,10 @@ vpncloud(1) -- Peer-to-peer VPN
     Name of the virtual device. Any `%d` will be filled with a free number.
     [default: `vpncloud%d`]
 
+  * `--device-path <path>`:
+
+    The path of the base device inode, e.g. /dev/net/run.
+
   * `-m <mode>`, `--mode <mode>`:
 
     The mode of the VPN. The VPN can like a router, a switch or a hub. A **hub**
@@ -270,6 +274,7 @@ detailed descriptions of the options.
 
 * `device_type`: Set the type of network. Same as `--type`
 * `device_name`: Name of the virtual device. Same as `--device`
+* `device_path`: Set the path of the base device. Same as `--device-path`
 * `ifup`: A command to setup the network interface. Same as `--ifup`
 * `ifdown`: A command to bring down the network interface. Same as `--ifdown`
 * `crypto`: The encryption method to use. Same as `--crypto`
