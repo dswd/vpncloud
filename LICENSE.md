@@ -1,7 +1,7 @@
 # License: GPL-3
 
 VpnCloud - Peer-to-Peer VPN
-Copyright (C) 2015-2016  Dennis Schwerdel
+Copyright (C) 2015-2019  Dennis Schwerdel
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -14,9 +14,3 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 [Full license text](gpl-3.txt)
-
-
-## Included works
-
-This software contains the [libsodium](https://github.com/jedisct1/libsodium)
-library by Frank Denis which is licensed under the ISC license (similar to BSD).

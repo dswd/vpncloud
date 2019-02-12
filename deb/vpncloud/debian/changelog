@@ -1,3 +1,11 @@
+vpncloud (0.9.0) stable; urgency=medium
+
+  * [added] Added ability to write out statistics file with peers and traffic info
+  * [changed] Using ring instead of libsodium (**incompatible**)
+  * [fixed] Hashed magics now also consider first character (**incompatible**)
+
+ -- Dennis Schwerdel <schwerdel@informatik.uni-kl.de>  Wed, 09 Jan 2019 21:32:54 +0100
+
 vpncloud (0.8.2) stable; urgency=medium
 
   * [changed] Using serde instead of rustc_serialize

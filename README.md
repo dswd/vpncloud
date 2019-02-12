@@ -25,7 +25,7 @@ somewhat stable state. VpnCloud features the following functionality:
 * Setting up tunnels between two networks via Ethernet (TAP) and IP (TUN)
 * Connecting multiple networks with multiple forwarding behaviors (Hub, Switch,
   Router)
-* Encrypted connections using [libsodium](https://github.com/jedisct1/libsodium)
+* Encrypted connections
 * Automatic peer-to-peer meshing, no central servers
 * NAT and (limited) firewall traversal using hole punching
 * Automatic reconnecting when connections are lost
