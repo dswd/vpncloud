@@ -5,7 +5,7 @@ authors = ["Dennis Schwerdel <schwerdel@googlemail.com>"]
 build = "build.rs"
 license = "GPL-3.0"
 description = "Peer-to-peer VPN"
-homepage = "https://github.com/dswd/vpncloud"
+homepage = "https://vpncloud.ddswd.de"
 repository = "https://github.com/dswd/vpncloud"
 keywords = ["vpn", "p2p", "tun", "tap", "network"]
 readme = "README.md"
@@ -27,7 +27,7 @@ yaml-rust = "0.4"
 igd = "0.7"
 siphasher = "0.3"
 daemonize = "0.3"
-ring = "0.13"
+ring = "0.14"
 
 [build-dependencies]
 cc = "^1"

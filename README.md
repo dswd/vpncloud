@@ -10,15 +10,12 @@ establishes a fully-meshed VPN network in a peer-to-peer manner. It can work
 on TUN devices (IP based) and TAP devices (Ethernet based). Tunneling traffic
 between two nodes can be as easy as:
 
-```
-vpncloud -c REMOTE_HOST:PORT --ifup 'ifconfig $IFNAME 10.0.0.1/24 mtu 1400 up'
-```
+       $> vpncloud -c REMOTE_HOST:PORT --ifup 'ifconfig $IFNAME 10.0.0.1/24 mtu 1400 up'
 
 For more information, please see the [Website](https://vpncloud.ddswd.de).
 
 
 ### Project Status
-
 This project is still [under development](CHANGELOG.md) but has reached a
 somewhat stable state. VpnCloud features the following functionality:
 
