@@ -36,29 +36,46 @@ somewhat stable state. VpnCloud features the following functionality:
 
 ### Installing
 
-##### Compiling from source
-Prerequisites: Git, [Cargo](https://www.rust-lang.org/install.html),
-  Full C build environment including autotools (for building libsodium)
+#### Compiling from source
+Prerequisites: Git, [Cargo](https://www.rust-lang.org/install.html), Ronn
 
-The checked-out code can be compiled with ``make``.
-The binary could then be found in `target/release/vpncloud`.
+The checked-out code can be compiled with ``cargo build`` or ``cargo build --release`` (release version). The binary could then be found in `target/release/vpncloud`.
+
 The tests can be run via ``cargo test``.
 
 
-##### Debian / Ubuntu
+#### Cross-Compiling
+This software can be cross-compiled for a number of different architectures. 
+Please also see the [extended rust cross compilation docs](https://github.com/japaric/rust-cross).
+
+##### ARMv7 (e.g. Raspberry Pi)
+1. Install the Cargo target
+
+       $> rustup target add armv7-unknown-linux-gnueabihf
+
+2. Install the required build environment (on Ubuntu)
+
+       $> sudo apt-get install -qq gcc-arm-linux-gnueabihf
+
+3. Build the software
+
+       $> cargo build --release --target=armv7-unknown-linux-gnueabihf
+
+#### Debian / Ubuntu
 Deb packages for each release can be found in the
 [releases](https://github.com/dswd/vpncloud/releases) section. Currently only
 packages for amd64 are available (I am accepting help on building and packaging
 for other platforms).
 
+Debian packages can be built using [cargo-deb](https://github.com/mmstick/cargo-deb): ``cargo deb``
 
-##### Arch Linux (AUR)
+
+#### Arch Linux (AUR)
 There is a [VpnCloud package for Arch Linux](https://aur.archlinux.org/packages/vpncloud/)
 thanks to Oscar Rainford (fourbytes).
 
 
 ### Contributions welcome
-
 There are several areas in which still some work has to be done and where
 contributions are very welcome:
 
@@ -72,7 +89,6 @@ contributions are very welcome:
 
 
 ### Semantic Versioning
-
 This project uses [semantic versioning](http://semver.org). Currently that means
 that everything can change between versions before 1.0 is finally released.
 However I am considering to release 1.0 soon.

@@ -1,9 +1,0 @@
-vpncloud/debian/files
-vpncloud/debian/vpncloud
-vpncloud/debian/debhelper*
-vpncloud/vpncloud
-*.deb
-*.build
-*.changes
-*.debhelper*
-*.substvars

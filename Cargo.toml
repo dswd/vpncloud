@@ -46,3 +46,19 @@ lto = false
 
 [profile.test]
 lto = false
+
+[package.metadata.deb]
+extended-description = """\
+ VpnCloud is a simple VPN over UDP. It creates a virtual network interface on
+ the host and forwards all received data via UDP to the destination. VpnCloud
+ establishes a fully-meshed VPN network in a peer-to-peer manner. It can work
+ on TUN devices (IP based) and TAP devices (Ethernet based)."""
+license-file = ["LICENSE.md", "1"]
+changelog = "assets/changelog.txt"
+section = "net"
+assets = [
+  ["target/release/vpncloud", "/usr/bin/vpncloud", "755"],
+  ["assets/example.net.disabled", "/etc/vpncloud/example.net.disabled", "600"],
+  ["assets/vpncloud@.service", "/lib/systemd/system/vpncloud@.service", "644"],
+  ["target/vpncloud.1.gz", "/usr/share/man/man1/vpncloud.1.gz", "644"]
+]
