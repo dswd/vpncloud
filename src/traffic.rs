@@ -7,6 +7,7 @@ use super::cloud::Hash;
 use super::util::Bytes;
 
 
+#[derive(Default)]
 pub struct TrafficEntry {
     pub out_bytes_total: u64,
     pub out_packets_total: usize,
@@ -20,20 +21,6 @@ pub struct TrafficEntry {
 }
 
 impl TrafficEntry {
-    pub fn new() -> Self {
-        TrafficEntry {
-            out_bytes_total: 0,
-            out_packets_total: 0,
-            out_bytes: 0,
-            out_packets: 0,
-            in_bytes_total: 0,
-            in_packets_total: 0,
-            in_bytes: 0,
-            in_packets: 0,
-            idle_periods: 0
-        }
-    }
-
     #[inline]
     fn count_out(&mut self, bytes: usize) {
         self.out_packets += 1;
@@ -63,34 +50,32 @@ impl TrafficEntry {
     }
 }
 
+
+#[derive(Default)]
 pub struct TrafficStats {
     peers: HashMap<SocketAddr, TrafficEntry, Hash>,
     payload: HashMap<(Address, Address), TrafficEntry, Hash>
 }
 
 impl TrafficStats {
-    pub fn new() -> Self {
-        Self { peers: Default::default(), payload: Default::default() }
-    }
-
     #[inline]
     pub fn count_out_traffic(&mut self, peer: SocketAddr, bytes: usize) {
-        self.peers.entry(peer).or_insert_with(TrafficEntry::new).count_out(bytes);
+        self.peers.entry(peer).or_insert_with(TrafficEntry::default).count_out(bytes);
     }
 
     #[inline]
     pub fn count_in_traffic(&mut self, peer: SocketAddr, bytes: usize) {
-        self.peers.entry(peer).or_insert_with(TrafficEntry::new).count_in(bytes);
+        self.peers.entry(peer).or_insert_with(TrafficEntry::default).count_in(bytes);
     }
 
     #[inline]
     pub fn count_out_payload(&mut self, remote: Address, local: Address, bytes: usize) {
-        self.payload.entry((remote, local)).or_insert_with(TrafficEntry::new).count_out(bytes);
+        self.payload.entry((remote, local)).or_insert_with(TrafficEntry::default).count_out(bytes);
     }
 
     #[inline]
     pub fn count_in_payload(&mut self, remote: Address, local: Address, bytes: usize) {
-        self.payload.entry((remote, local)).or_insert_with(TrafficEntry::new).count_in(bytes);
+        self.payload.entry((remote, local)).or_insert_with(TrafficEntry::default).count_in(bytes);
     }
 
     pub fn period(&mut self, cleanup_idle: Option<usize>) {

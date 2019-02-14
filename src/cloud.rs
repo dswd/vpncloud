@@ -3,7 +3,7 @@
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 use std::net::{SocketAddr, ToSocketAddrs};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::io::{self, Write};
 use std::fmt;
@@ -12,7 +12,8 @@ use std::marker::PhantomData;
 use std::hash::BuildHasherDefault;
 use std::time::Instant;
 use std::cmp::min;
-use std::fs::File;
+use std::fs::{self, File, Permissions};
+use std::os::unix::fs::PermissionsExt;
 
 use fnv::FnvHasher;
 use signal::{trap::Trap, Signal};
@@ -46,7 +47,7 @@ struct PeerList {
     timeout: Duration,
     peers: HashMap<SocketAddr, PeerData, Hash>,
     nodes: HashMap<NodeId, SocketAddr, Hash>,
-    addresses: HashSet<SocketAddr, Hash>
+    addresses: HashMap<SocketAddr, NodeId, Hash>
 }
 
 impl PeerList {
@@ -55,7 +56,7 @@ impl PeerList {
             peers: HashMap::default(),
             timeout,
             nodes: HashMap::default(),
-            addresses: HashSet::default()
+            addresses: HashMap::default()
         }
     }
 
@@ -82,7 +83,7 @@ impl PeerList {
 
     #[inline]
     fn contains_addr(&self, addr: &SocketAddr) -> bool {
-        self.addresses.contains(addr)
+        self.addresses.contains_key(addr)
     }
 
     #[inline]
@@ -110,7 +111,7 @@ impl PeerList {
                 node_id,
                 alt_addrs: vec![]
             });
-            self.addresses.insert(addr);
+            self.addresses.insert(addr, node_id);
         }
     }
 
@@ -122,22 +123,27 @@ impl PeerList {
     }
 
     #[inline]
-    fn add_alt_addr(&mut self, node_id: NodeId, addr: SocketAddr) {
-        if let Some(main_addr) = self.nodes.get(&node_id) {
-            if let Some(ref mut data) = self.peers.get_mut(main_addr) {
-                data.alt_addrs.push(addr);
-                self.addresses.insert(addr);
-            } else {
-                error!("Main address for node is not connected");
-            }
-        } else {
-            error!("Node not connected");
+    fn make_primary(&mut self, node_id: NodeId, addr: SocketAddr) {
+        if self.peers.contains_key(&addr) {
+            return
         }
+        let old_addr = match self.nodes.remove(&node_id) {
+            Some(old_addr) => old_addr,
+            None => return error!("Node not connected")
+        };
+        self.nodes.insert(node_id, addr);
+        let mut peer = match self.peers.remove(&old_addr) {
+            Some(peer) => peer,
+            None => return error!("Main address for node is not connected")
+        };
+        peer.alt_addrs.retain(|i| i != &addr);
+        peer.alt_addrs.push(old_addr);
+        self.peers.insert(addr, peer);
     }
 
     #[inline]
     fn as_vec(&self) -> Vec<SocketAddr> {
-        self.addresses.iter().cloned().collect()
+        self.addresses.keys().cloned().collect()
     }
 
     #[inline]
@@ -153,7 +159,7 @@ impl PeerList {
 
     #[inline]
     fn subset(&self, size: usize) -> Vec<SocketAddr> {
-        self.addresses.iter().choose_multiple(&mut thread_rng(), size).into_iter().cloned().collect()
+        self.peers.keys().choose_multiple(&mut thread_rng(), size).into_iter().cloned().collect()
     }
 
     #[inline]
@@ -250,7 +256,7 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             next_housekeep: now(),
             next_stats_out: now() + STATS_INTERVAL,
             port_forwarding,
-            traffic: TrafficStats::new(),
+            traffic: TrafficStats::default(),
             stats_file: config.stats_file.clone(),
             _dummy_p: PhantomData,
         }
@@ -474,6 +480,7 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
         try!(writeln!(&mut f));
         try!(self.traffic.write_out(&mut f));
         try!(writeln!(&mut f));
+        try!(fs::set_permissions(self.stats_file.as_ref().unwrap(), Permissions::from_mode(0o644)));
         Ok(())
     }
 
@@ -595,8 +602,7 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
                 }
                 // Add sender as peer or as alternative address to existing peer
                 if self.peers.contains_node(&node_id) {
-                    //TODO: make this address primary
-                    self.peers.add_alt_addr(node_id, peer);
+                    self.peers.make_primary(node_id, peer);
                 } else {
                     self.peers.add(node_id, peer);
                     for range in ranges {
