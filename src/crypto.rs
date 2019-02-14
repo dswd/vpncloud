@@ -1,6 +1,8 @@
 // VpnCloud - Peer-to-Peer VPN
-// Copyright (C) 2015-2017  Dennis Schwerdel
+// Copyright (C) 2015-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
+
+use std::num::NonZeroU32;
 
 use ring::aead::*;
 use ring::pbkdf2;
@@ -96,7 +98,7 @@ impl Crypto {
             key.push(0);
         }
         let salt = b"vpncloudVPNCLOUDvpncl0udVpnCloud";
-        pbkdf2::derive(&SHA256, 4096, salt, password.as_bytes(), &mut key);
+        pbkdf2::derive(&SHA256, NonZeroU32::new(4096).unwrap(), salt, password.as_bytes(), &mut key);
         let sealing_key = SealingKey::new(algo, &key[..algo.key_len()]).expect("Failed to create key");
         let opening_key = OpeningKey::new(algo, &key[..algo.key_len()]).expect("Failed to create key");
         let mut nonce: Vec<u8> = Vec::with_capacity(algo.nonce_len());
@@ -117,7 +119,8 @@ impl Crypto {
         match *self {
             Crypto::None => Ok(buf.len()),
             Crypto::ChaCha20Poly1305(ref data) | Crypto::AES256GCM(ref data) => {
-                match open_in_place(&data.opening_key, nonce, header, 0, buf) {
+                let nonce = Nonce::try_assume_unique_for_key(nonce).unwrap();
+                match open_in_place(&data.opening_key, nonce, Aad::from(header), 0, buf) {
                    Ok(plaintext) => Ok(plaintext.len()),
                    Err(_) => Err(Error::Crypto("Failed to decrypt"))
                 }
@@ -133,7 +136,8 @@ impl Crypto {
                 inc_nonce(&mut data.nonce);
                 assert!(buf.len() - mlen >= tag_len);
                 let buf = &mut buf[.. mlen + tag_len];
-                let new_len = seal_in_place(&data.sealing_key, &data.nonce, header, buf, tag_len).expect("Failed to encrypt");
+                let nonce = Nonce::try_assume_unique_for_key(&data.nonce).unwrap();
+                let new_len = seal_in_place(&data.sealing_key, nonce, Aad::from(header), buf, tag_len).expect("Failed to encrypt");
                 nonce_bytes.clone_from_slice(&data.nonce);
                 new_len
             }
