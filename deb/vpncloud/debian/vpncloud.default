@@ -1,4 +1,0 @@
-# Warning: This file is ignored on systemd systems
-# Please use instantiated services (vpncloud@NAME) instead
-
-NETWORKS="default"
