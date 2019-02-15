@@ -2,7 +2,7 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### v0.9.0 (UNRELEASED)
+### v0.9.0 (2019-02-15)
 
 - [added] Added support for cross-compilation
 - [added] Added keepalive option for nodes behind NAT
