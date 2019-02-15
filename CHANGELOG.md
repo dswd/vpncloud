@@ -4,11 +4,14 @@ This project follows [semantic versioning](http://semver.org).
 
 ### v0.9.0 (UNRELEASED)
 
+- [added] Added support for cross-compilation
 - [added] Added keepalive option for nodes behind NAT
 - [added] Added ability to write out statistics file with peers and traffic info
 - [added] Added dummy device type that does not allocate an interface
+- [added] Added ability to change /dev/tun path
 - [changed] Using ring instead of libsodium
 - [changed] Using PBKDF2 for shared keys (**incompatible**)
+- [changed] Updated dependencies
 - [fixed] Hashed magics now also consider first character (**incompatible**)
 
 ### v0.8.2 (2019-01-02)

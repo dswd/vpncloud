@@ -12,6 +12,10 @@ use ring::digest::*;
 use super::types::Error;
 
 
+const SALT: &[u8; 32] = b"vpncloudVPNCLOUDvpncl0udVpnCloud";
+const HEX_PREFIX: &str = "hex:";
+const HASH_PREFIX: &str = "hash:";
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
 pub enum CryptoMethod {
     #[serde(rename = "chacha20")]
@@ -97,15 +101,30 @@ impl Crypto {
         for _ in 0..algo.key_len() {
             key.push(0);
         }
-        let salt = b"vpncloudVPNCLOUDvpncl0udVpnCloud";
-        pbkdf2::derive(&SHA256, NonZeroU32::new(4096).unwrap(), salt, password.as_bytes(), &mut key);
+        if password.starts_with(HEX_PREFIX) {
+            let password = &password[HEX_PREFIX.len()..];
+            if password.len() != 2 * algo.key_len() {
+                fail!("Raw secret key must be exactly {} bytes long", algo.key_len());
+            }
+            for i in 0..algo.key_len() {
+                key[i] = try_fail!(u8::from_str_radix(&password[2*i..2*i+1], 16), "Failed to parse raw secret key: {}");
+            }
+        } else {
+            let password = if password.starts_with(HASH_PREFIX) {
+                &password[HASH_PREFIX.len()..]
+            } else {
+                password
+            };
+            pbkdf2::derive(&SHA256, NonZeroU32::new(4096).unwrap(), SALT, password.as_bytes(), &mut key);
+        }
         let sealing_key = SealingKey::new(algo, &key[..algo.key_len()]).expect("Failed to create key");
         let opening_key = OpeningKey::new(algo, &key[..algo.key_len()]).expect("Failed to create key");
         let mut nonce: Vec<u8> = Vec::with_capacity(algo.nonce_len());
         for _ in 0..algo.nonce_len() {
             nonce.push(0);
         }
-        if SystemRandom::new().fill(&mut nonce).is_err() {
+        // leave the highest byte of the nonce 0 so it will not overflow
+        if SystemRandom::new().fill(&mut nonce[1..]).is_err() {
             fail!("Randomizing nonce failed");
         }
         let data = CryptoData { sealing_key, opening_key, nonce };
