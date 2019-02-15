@@ -13,6 +13,9 @@ use std::hash::{Hash, Hasher};
 use siphasher::sip::SipHasher24;
 
 
+const HASH_PREFIX: &str = "hash:";
+
+
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Config {
     pub device_type: Type,
@@ -190,9 +193,9 @@ impl Config {
 
     pub fn get_magic(&self) -> HeaderMagic {
         if let Some(ref name) = self.magic {
-            if name.starts_with("hash:") {
+            if name.starts_with(HASH_PREFIX) {
                 let mut s = SipHasher24::new();
-                name[5..].hash(&mut s);
+                name[HASH_PREFIX.len()..].hash(&mut s);
                 let mut data = [0; 4];
                 Encoder::write_u32((s.finish() & 0xffff_ffff) as u32, &mut data);
                 data

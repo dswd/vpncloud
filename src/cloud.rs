@@ -142,6 +142,11 @@ impl PeerList {
     }
 
     #[inline]
+    fn get_node_id(&self, addr: &SocketAddr) -> Option<NodeId> {
+        self.addresses.get(addr).map(|n| *n)
+    }
+
+    #[inline]
     fn as_vec(&self) -> Vec<SocketAddr> {
         self.addresses.keys().cloned().collect()
     }
@@ -584,7 +589,9 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
                 if !self.peers.contains_addr(&peer) {
                     try!(self.connect(&peer));
                 }
-                //TODO: make this address primary
+                if let Some(node_id) = self.peers.get_node_id(&peer) {
+                    self.peers.make_primary(node_id, peer);
+                }
                 // Connect to all peers in the message
                 for p in &peers {
                     if ! self.peers.contains_addr(p) && ! self.blacklist_peers.contains(p) {
