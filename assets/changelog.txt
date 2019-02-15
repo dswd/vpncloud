@@ -1,10 +1,16 @@
 vpncloud (0.9.0) stable; urgency=medium
 
+  * [added] Added support for cross-compilation
+  * [added] Added keepalive option for nodes behind NAT
   * [added] Added ability to write out statistics file with peers and traffic info
-  * [changed] Using ring instead of libsodium (**incompatible**)
+  * [added] Added dummy device type that does not allocate an interface
+  * [added] Added ability to change /dev/tun path
+  * [changed] Using ring instead of libsodium
+  * [changed] Using PBKDF2 for shared keys (**incompatible**)
+  * [changed] Updated dependencies
   * [fixed] Hashed magics now also consider first character (**incompatible**)
 
- -- Dennis Schwerdel <schwerdel@informatik.uni-kl.de>  Wed, 09 Jan 2019 21:32:54 +0100
+ -- Dennis Schwerdel <schwerdel@googlemail.com>  Fri, 15 Jan 2019 23:44:54 +0100
 
 vpncloud (0.8.2) stable; urgency=medium
 
