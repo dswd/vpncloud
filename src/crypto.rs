@@ -107,7 +107,7 @@ impl Crypto {
                 fail!("Raw secret key must be exactly {} bytes long", algo.key_len());
             }
             for i in 0..algo.key_len() {
-                key[i] = try_fail!(u8::from_str_radix(&password[2*i..2*i+1], 16), "Failed to parse raw secret key: {}");
+                key[i] = try_fail!(u8::from_str_radix(&password[2*i..=2*i+1], 16), "Failed to parse raw secret key: {}");
             }
         } else {
             let password = if password.starts_with(HASH_PREFIX) {
