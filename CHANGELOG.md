@@ -2,6 +2,10 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### v0.9.1 (2019-02-16)
+
+-[fixed] Fixed bug in new hex secret key functionality
+
 ### v0.9.0 (2019-02-15)
 
 - [added] Added support for cross-compilation
