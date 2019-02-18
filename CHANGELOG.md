@@ -2,9 +2,13 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### UNRELEASED
+
+- [changed] Allow to build binary without manpage
+
 ### v0.9.1 (2019-02-16)
 
--[fixed] Fixed bug in new hex secret key functionality
+- [fixed] Fixed bug in new hex secret key functionality
 
 ### v0.9.0 (2019-02-15)
 
