@@ -188,7 +188,7 @@ pub fn encode<'a>(msg: &'a mut Message, mut buf: &'a mut [u8], magic: HeaderMagi
                     SocketAddr::V4(addr) => v4addrs.push(addr),
                     SocketAddr::V6(addr) => v6addrs.push(addr)
                 }
-            };
+            }
             assert!(v4addrs.len() <= 255);
             assert!(v6addrs.len() <= 255);
             let mut pos = start;

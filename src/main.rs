@@ -21,6 +21,7 @@ extern crate igd;
 extern crate siphasher;
 extern crate daemonize;
 extern crate ring;
+extern crate bs58;
 #[cfg(feature = "bench")] extern crate test;
 
 #[macro_use] pub mod util;
@@ -35,6 +36,7 @@ pub mod poll;
 pub mod config;
 pub mod port_forwarding;
 pub mod traffic;
+pub mod beacon;
 #[cfg(test)] mod tests;
 #[cfg(feature = "bench")] mod benches;
 
@@ -262,6 +264,8 @@ fn run<P: Protocol> (config: Config) {
 }
 
 fn main() {
+    beacon::test();
+    return;
     let args: Args = Docopt::new(USAGE).and_then(|d| d.deserialize()).unwrap_or_else(|e| e.exit());
     if args.flag_version {
         Crypto::init();
