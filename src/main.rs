@@ -269,11 +269,9 @@ fn main() {
     let args: Args = Docopt::new(USAGE).and_then(|d| d.deserialize()).unwrap_or_else(|e| e.exit());
     if args.flag_version {
         Crypto::init();
-        println!("VpnCloud v{}, protocol version {}, libsodium {} (AES256: {})",
+        println!("VpnCloud v{}, protocol version {}",
             env!("CARGO_PKG_VERSION"),
-            VERSION,
-            Crypto::sodium_version(),
-            Crypto::aes256_available()
+            VERSION
         );
         return;
     }

@@ -57,16 +57,6 @@ impl Crypto {
     }
 
     #[inline]
-    pub fn sodium_version() -> String {
-        "0".to_string()
-    }
-
-    #[inline]
-    pub fn aes256_available() -> bool {
-        true
-    }
-
-    #[inline]
     pub fn method(&self) -> u8 {
         match *self {
             Crypto::None => 0,
