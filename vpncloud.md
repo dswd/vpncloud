@@ -86,6 +86,32 @@ vpncloud(1) -- Peer-to-peer VPN
     mode. Addresses that have not been seen for the given period of time  will
     be forgotten. [default: `300`]
 
+  * `--beacon-store <path|command>`:
+   
+    Periodically store beacons containing the address of this node in the given
+    file or via the given command. If the parameter value starts with a pipe
+    character (`|`), the rest of the value is interpreted as a shell command.
+    Otherwise the value is interpreted as a file to write the beacon to.
+    If this parameter is not given, beacon storage is disabled.
+    Please see the section **BEACONS** for more information.
+    
+  * `--beacon-load <path|command>`:
+  
+    Periodically load beacons containing the addresses of other nodes from the
+    given file or via the given command. If the parameter value starts with a 
+    pipe character (`|`), the rest of the value is interpreted as a shell 
+    command. Otherwise the value is interpreted as a file to read the beacon 
+    from. 
+    If this parameter is not given, beacon loading is disabled.
+    Please see the section **BEACONS** for more information.    
+
+  * `--beacon-interval <secs>`:
+  
+    Beacon storage/loading interval in seconds. If configured to do so via
+    `--beacon-store` and `--beacon-load`, the node will periodically store its
+    beacon and load beacons of other nodes. This parameter defines the interval
+    in seconds. [default: `3600`]  
+
   * `--ifup <command>`:
 
     A command to setup the network interface. The command will be run (as
@@ -283,6 +309,9 @@ detailed descriptions of the options.
 * `port`: The port number on which to listen for data. Same as `--listen`
 * `peers`: A list of addresses to connect to. See `--connect`
 * `peer_timeout`: Peer timeout in seconds. Same as`--peer-timeout`
+* `beacon_store`: Path or command to store beacons. Same as `--beacon-store`
+* `beacon_load`: Path or command to load beacons. Same as `--beacon-load`
+* `beacon_interval`: Interval for loading and storing beacons in seconds. Same as `--beacon-interval` 
 * `mode`: The mode of the VPN. Same as `--mode`
 * `dst_timeout`: Switch table entry timeout in seconds. Same as `--dst-timeout`
 * `subnets`: A list of local subnets to use. See `--subnet`
@@ -312,6 +341,38 @@ port_forwarding: true
 user: nobody
 group: nogroup
 pid_file: /run/vpncloud.pid
+
+
+## BEACONS
+
+Beacons are short character sequences that contain a timestamp and a list of
+addresses. They can be published and retrieved by other nodes to find peers
+without the need for static addresses.
+
+The beacons are short (less than 100 characters), encrypted and encoded with
+printable characters to allow publishing them in various places on the 
+internet, e.g.:
+- On shared drives or synchronized folders (e.g. on Dropbox)
+- Via a dedicated database
+- Via a general purpose message board of message service (e.g. Twitter)    
+
+The beacons are very robust. They only consist of alphanumeric characters
+and can be interleaved with non-alphanumeric characters (e.g. whitespace).
+Also the beacons contain a prefix and suffix that depends on the configured
+network magic and secret key (if set) so that all nodes can find beacons in
+a long text.
+
+When beacons are stored or loaded via a command (using the pipe character `|`),
+the command is interpreted using the configured shell `sh`. This command has 
+access to the following environment variables:
+* `$begin`: The prefix of the beacon.
+* `$end`: The suffix of the beacon.
+* `$data` (only on store): The middle part of the beacon. Do not use this 
+  without prefix and suffix!
+* `$beacon` (only on store): The full beacon consisting of prefix, data and 
+  suffix.
+The commands are called in separate threads, so even longer running commands 
+will not block the node.
 
 
 ## NETWORK PROTOCOL

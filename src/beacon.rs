@@ -1,7 +1,20 @@
+// VpnCloud - Peer-to-Peer VPN
+// Copyright (C) 2019-2019  Dennis Schwerdel
+// This software is licensed under GPL-3 or newer (see LICENSE.md)
+
 use base_62;
 use ring::digest;
 
 use std::num::Wrapping;
+use std::path::Path;
+use std::io::{self, Write, Read};
+use std::fs::{self, Permissions, File};
+use std::os::unix::fs::PermissionsExt;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::mem;
+use std::thread;
+use std::process::{Command, Stdio};
 
 use super::util::{now, Encoder};
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr, SocketAddrV6, Ipv6Addr};
@@ -19,16 +32,27 @@ fn now_hour_16() -> u16 {
     ((now() / 3600) & 0xffff) as u16
 }
 
+struct FutureResult<T> {
+    has_result: AtomicBool,
+    result: Mutex<T>
+}
+
+#[derive(Clone)]
 pub struct BeaconSerializer {
     magic: Vec<u8>,
-    shared_key: Vec<u8>
+    shared_key: Vec<u8>,
+    future_peers: Arc<FutureResult<Vec<SocketAddr>>>,
 }
 
 impl BeaconSerializer {
     pub fn new(magic: &[u8], shared_key: &[u8]) -> Self {
         BeaconSerializer {
             magic: magic.to_owned(),
-            shared_key: shared_key.to_owned()
+            shared_key: shared_key.to_owned(),
+            future_peers: Arc::new(FutureResult {
+                has_result: AtomicBool::new(false),
+                result: Mutex::new(Vec::new())
+            })
         }
     }
 
@@ -162,6 +186,35 @@ impl BeaconSerializer {
         self.encode_internal(peers, now_hour_16())
     }
 
+    pub fn write_to_file<P: AsRef<Path>>(&self, peers: &[SocketAddr], path: P) -> Result<(), io::Error> {
+        let beacon = self.encode(peers);
+        debug!("Beacon: {}", beacon);
+        let mut f = try!(File::create(&path));
+        try!(writeln!(&mut f, "{}", beacon));
+        try!(fs::set_permissions(&path, Permissions::from_mode(0o644)));
+        Ok(())
+    }
+
+    pub fn write_to_cmd(&self, peers: &[SocketAddr], cmd: &str) -> Result<(), io::Error> {
+        let begin = self.begin();
+        let data = self.peerlist_encode(peers, now_hour_16());
+        let end = self.end();
+        let beacon = format!("{}{}{}", begin, data, end);
+        debug!("Calling beacon command: {}", cmd);
+        let process = try!(Command::new("sh").args(&["-c", cmd])
+            .env("begin", begin).env("data", data).env("end", end).env("beacon", beacon)
+            .stdout(Stdio::piped()).stderr(Stdio::piped()).spawn());
+        thread::spawn(move || {
+            let output = process.wait_with_output().expect("Failed to wait on child");
+            if !output.status.success() {
+                error!("Beacon command failed: {}", String::from_utf8_lossy(&output.stderr));
+            } else {
+                debug!("Beacon command succeeded");
+            }
+        });
+        Ok(())
+    }
+
     fn decode_internal(&self, data: &str, ttl_hours: Option<u16>, now_hour: u16) -> Vec<SocketAddr> {
         let data = base_62_sanitize(data);
         let mut peers = Vec::new();
@@ -184,6 +237,48 @@ impl BeaconSerializer {
 
     pub fn decode(&self, data: &str, ttl_hours: Option<u16>) -> Vec<SocketAddr> {
         self.decode_internal(data, ttl_hours, now_hour_16())
+    }
+
+    pub fn read_from_file<P: AsRef<Path>>(&self, path: P, ttl_hours: Option<u16>) -> Result<Vec<SocketAddr>, io::Error> {
+        let mut f = try!(File::open(&path));
+        let mut contents = String::new();
+        try!(f.read_to_string(&mut contents));
+        Ok(self.decode(&contents, ttl_hours))
+    }
+
+    pub fn read_from_cmd(&self, cmd: &str, ttl_hours: Option<u16>) -> Result<(), io::Error> {
+        let begin = self.begin();
+        let end = self.end();
+        debug!("Calling beacon command: {}", cmd);
+        let process = try!(Command::new("sh").args(&["-c", cmd])
+            .env("begin", begin).env("end", end)
+            .stdout(Stdio::piped()).stderr(Stdio::piped()).spawn());
+        let this = self.clone();
+        thread::spawn(move || {
+            let output = process.wait_with_output().expect("Failed to wait on child");
+            if output.status.success() {
+                let data = String::from_utf8_lossy(&output.stdout);
+                let mut peers = this.decode(&data, ttl_hours);
+                debug!("Beacon command succeeded with {} peers", peers.len());
+                mem::swap(&mut peers, &mut this.future_peers.result.lock().expect("Lock poisoned"));
+                this.future_peers.has_result.store(true, Ordering::Relaxed);
+            } else {
+                error!("Beacon command failed: {}", String::from_utf8_lossy(&output.stderr));
+            }
+        });
+        //TODO: implement
+        Ok(())
+    }
+
+    pub fn get_cmd_results(&self) -> Option<Vec<SocketAddr>> {
+        if self.future_peers.has_result.load(Ordering::Relaxed) {
+            let mut peers = Vec::new();
+            mem::swap(&mut peers, &mut self.future_peers.result.lock().expect("Lock poisoned"));
+            self.future_peers.has_result.store(false, Ordering::Relaxed);
+            Some(peers)
+        } else {
+            None
+        }
     }
 }
 

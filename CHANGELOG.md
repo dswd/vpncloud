@@ -4,7 +4,9 @@ This project follows [semantic versioning](http://semver.org).
 
 ### UNRELEASED
 
+- [added] Added ability to publish small beacons for rendezvous
 - [changed] Allow to build binary without manpage
+- [fixed] Fixed bug that could cause repeated initialization messages
 
 ### v0.9.1 (2019-02-16)
 

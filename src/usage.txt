@@ -23,6 +23,9 @@ Options:
     --keepalive <secs>              Periodically send message to keep
                                     connections alive.
     --dst-timeout <secs>            Switch table entry timeout in seconds.
+    --beacon-store <path|command>   The file or command to store the beacon.
+    --beacon-load <path|command>    The file or command to load the beacon.
+    --beacon-interval <secs>        Beacon store/load interval in seconds.
     --ifup <command>                A command to setup the network interface.
     --ifdown <command>              A command to bring down the network
                                     interface.

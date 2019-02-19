@@ -1,5 +1,5 @@
 // VpnCloud - Peer-to-Peer VPN
-// Copyright (C) 2015-2017  Dennis Schwerdel
+// Copyright (C) 2015-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 use std::net::{SocketAddr, ToSocketAddrs};
@@ -140,6 +140,7 @@ impl PeerList {
         peer.alt_addrs.retain(|i| i != &addr);
         peer.alt_addrs.push(old_addr);
         self.peers.insert(addr, peer);
+        self.addresses.insert(addr, node_id);
     }
 
     #[inline]
@@ -202,6 +203,7 @@ pub struct ReconnectEntry {
 
 
 pub struct GenericCloud<P: Protocol, T: Table> {
+    config: Config,
     magic: HeaderMagic,
     node_id: NodeId,
     peers: PeerList,
@@ -209,7 +211,7 @@ pub struct GenericCloud<P: Protocol, T: Table> {
     learning: bool,
     broadcast: bool,
     reconnect_peers: Vec<ReconnectEntry>,
-    blacklist_peers: Vec<SocketAddr>,
+    own_addresses: Vec<SocketAddr>,
     table: T,
     socket4: UdpSocket,
     socket6: UdpSocket,
@@ -220,9 +222,9 @@ pub struct GenericCloud<P: Protocol, T: Table> {
     buffer_out: [u8; 64*1024],
     next_housekeep: Time,
     next_stats_out: Time,
+    next_beacon: Time,
     port_forwarding: Option<PortForwarding>,
     traffic: TrafficStats,
-    stats_file: Option<String>,
     beacon_serializer: BeaconSerializer,
     _dummy_p: PhantomData<P>,
 }
@@ -251,7 +253,7 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             learning,
             broadcast,
             reconnect_peers: Vec::new(),
-            blacklist_peers: Vec::new(),
+            own_addresses: Vec::new(),
             table,
             socket4,
             socket6,
@@ -261,11 +263,12 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             buffer_out: [0; 64*1024],
             next_housekeep: now(),
             next_stats_out: now() + STATS_INTERVAL,
+            next_beacon: now(),
             port_forwarding,
             traffic: TrafficStats::default(),
-            stats_file: config.stats_file.clone(),
             beacon_serializer: BeaconSerializer::new(&config.get_magic(), crypto.get_key()),
             crypto,
+            config: config.clone(),
             _dummy_p: PhantomData,
         }
     }
@@ -356,14 +359,14 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
         })
     }
 
-    /// Returns whether the address  is blacklisted
+    /// Returns whether the address is of this node
     ///
     /// # Errors
     /// Returns an `Error::SocketError` if the given address is a name that failed to resolve to
     /// actual addresses.
-    fn is_blacklisted<Addr: ToSocketAddrs+fmt::Debug>(&self, addr: Addr) -> Result<bool, Error> {
+    fn is_own_address<Addr: ToSocketAddrs+fmt::Debug>(&self, addr: Addr) -> Result<bool, Error> {
         for addr in try!(resolve(&addr)) {
-            if self.blacklist_peers.contains(&addr) {
+            if self.own_addresses.contains(&addr) {
                 return Ok(true);
             }
         }
@@ -379,7 +382,7 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
     /// # Errors
     /// This method returns `Error::NameError` if the address is a name that fails to resolve.
     pub fn connect<Addr: ToSocketAddrs+fmt::Debug+Clone>(&mut self, addr: Addr) -> Result<(), Error> {
-        if try!(self.peers.is_connected(addr.clone())) || try!(self.is_blacklisted(addr.clone())) {
+        if try!(self.peers.is_connected(addr.clone())) || try!(self.is_own_address(addr.clone())) {
             return Ok(())
         }
         debug!("Connecting to {:?}", addr);
@@ -392,6 +395,25 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             self.send_msg(a, &mut msg).ok();
         }
         Ok(())
+    }
+
+    /// Connects to a node given by its address
+    ///
+    /// This method connects to node by sending a `Message::Init` to it. If `addr` is a name that
+    /// resolves to multiple addresses, one message is sent to each of them.
+    /// If the node is already a connected peer or the address is blacklisted, no message is sent.
+    ///
+    /// # Errors
+    /// This method returns `Error::NameError` if the address is a name that fails to resolve.
+    fn connect_sock(&mut self, addr: SocketAddr) -> Result<(), Error> {
+        if self.peers.contains_addr(&addr) || self.own_addresses.contains(&addr) {
+            return Ok(())
+        }
+        debug!("Connecting to {:?}", addr);
+        let subnets = self.addresses.clone();
+        let node_id = self.node_id;
+        let mut msg = Message::Init(0, node_id, subnets.clone());
+        self.send_msg(addr, &mut msg)
     }
 
     /// Run all periodic housekeeping tasks
@@ -426,10 +448,6 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             // ...and send them to all peers
             let mut msg = Message::Peers(peers);
             try!(self.broadcast_msg(&mut msg));
-            // Output beacon
-            let beacon = self.beacon_serializer.encode(&self.peers.subset(3));
-            //TODO: publish beacon
-            debug!("Beacon: {}", beacon);
             // Reschedule for next update
             self.next_peerlist = now + Time::from(self.update_freq);
         }
@@ -478,21 +496,65 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             self.next_stats_out = now + STATS_INTERVAL;
             self.traffic.period(Some(60));
         }
+        if let Some(peers) = self.beacon_serializer.get_cmd_results() {
+            debug!("Loaded beacon with peers: {:?}", peers);
+            for peer in peers {
+                try!(self.connect_sock(peer));
+            }
+        }
+        if self.next_beacon < now {
+            try!(self.store_beacon());
+            try!(self.load_beacon());
+            self.next_beacon = now + Time::from(self.config.beacon_interval);
+        }
+        Ok(())
+    }
+
+    /// Stores the beacon
+    fn store_beacon(&mut self) -> Result<(), Error> {
+        if let Some(ref path) = self.config.beacon_store {
+            let peers: Vec<_> = self.own_addresses.choose_multiple(&mut thread_rng(),3).cloned().collect();
+            if path.starts_with('|') {
+                try!(self.beacon_serializer.write_to_cmd(&peers, &path[1..]).map_err(|e| Error::Beacon("Failed to call beacon command", e)));
+            } else {
+                try!(self.beacon_serializer.write_to_file(&peers, &path).map_err(|e| Error::Beacon("Failed to write beacon to file", e)));
+            }
+        }
+        Ok(())
+    }
+
+    /// Loads the beacon
+    fn load_beacon(&mut self) -> Result<(), Error> {
+        let peers;
+        if let Some(ref path) = self.config.beacon_load {
+            if path.starts_with('|') {
+                try!(self.beacon_serializer.read_from_cmd(&path[1..], Some(50)).map_err(|e| Error::Beacon("Failed to call beacon command", e)));
+                return Ok(())
+            } else {
+                peers = try!(self.beacon_serializer.read_from_file(&path, Some(50)).map_err(|e| Error::Beacon("Failed to read beacon from file", e)));
+            }
+        } else {
+            return Ok(())
+        }
+        debug!("Loaded beacon with peers: {:?}", peers);
+        for peer in peers {
+            try!(self.connect_sock(peer));
+        }
         Ok(())
     }
 
     /// Calculates, resets and writes out the statistics to a file
     fn write_out_stats(&mut self) -> Result<(), io::Error> {
-        if self.stats_file.is_none() { return Ok(()) }
+        if self.config.stats_file.is_none() { return Ok(()) }
         debug!("Writing out stats");
-        let mut f = try!(File::create(self.stats_file.as_ref().unwrap()));
+        let mut f = try!(File::create(self.config.stats_file.as_ref().unwrap()));
         try!(self.peers.write_out(&mut f));
         try!(writeln!(&mut f));
         try!(self.table.write_out(&mut f));
         try!(writeln!(&mut f));
         try!(self.traffic.write_out(&mut f));
         try!(writeln!(&mut f));
-        try!(fs::set_permissions(self.stats_file.as_ref().unwrap(), Permissions::from_mode(0o644)));
+        try!(fs::set_permissions(self.config.stats_file.as_ref().unwrap(), Permissions::from_mode(0o644)));
         Ok(())
     }
 
@@ -525,7 +587,7 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
                     // to reconnect.
                     warn!("Destination for {} not found in peers: {}", dst, addr);
                     self.table.remove(&dst);
-                    try!(self.connect(&addr));
+                    try!(self.connect_sock(addr));
                 }
             },
             None => {
@@ -594,16 +656,14 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             Message::Peers(peers) => {
                 // Connect to sender if not connected
                 if !self.peers.contains_addr(&peer) {
-                    try!(self.connect(&peer));
+                    try!(self.connect_sock(peer));
                 }
                 if let Some(node_id) = self.peers.get_node_id(&peer) {
                     self.peers.make_primary(node_id, peer);
                 }
                 // Connect to all peers in the message
                 for p in &peers {
-                    if ! self.peers.contains_addr(p) && ! self.blacklist_peers.contains(p) {
-                        try!(self.connect(p));
-                    }
+                    try!(self.connect_sock(*p));
                 }
                 // Refresh peer
                 self.peers.refresh(&peer);
@@ -611,7 +671,7 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             Message::Init(stage, node_id, ranges) => {
                 // Avoid connecting to self
                 if node_id == self.node_id {
-                    self.blacklist_peers.push(peer);
+                    self.own_addresses.push(peer);
                     return Ok(())
                 }
                 // Add sender as peer or as alternative address to existing peer
@@ -647,8 +707,15 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
     /// `handle_net_message` method. It will also read from the device and call
     /// `handle_interface_data` for each packet read.
     /// Also, this method will call `housekeep` every second.
-    #[allow(unknown_lints,clippy::cyclomatic_complexity)]
+    #[allow(unknown_lints, clippy::cyclomatic_complexity)]
     pub fn run(&mut self) {
+        match self.address() {
+            Err(err) => error!("Failed to obtain local addresses: {}", err),
+            Ok((v4, v6)) => {
+                self.own_addresses.push(v4);
+                self.own_addresses.push(v6);
+            }
+        }
         let dummy_time = Instant::now();
         let trap = Trap::trap(&[Signal::SIGINT, Signal::SIGTERM, Signal::SIGQUIT]);
         let mut poll_handle = try_fail!(Poll::new(3), "Failed to create poll handle: {}");

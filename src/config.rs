@@ -1,5 +1,5 @@
 // VpnCloud - Peer-to-Peer VPN
-// Copyright (C) 2015-2017  Dennis Schwerdel
+// Copyright (C) 2015-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 use super::{MAGIC, Args};
@@ -30,6 +30,9 @@ pub struct Config {
     pub peers: Vec<String>,
     pub peer_timeout: Duration,
     pub keepalive: Option<Duration>,
+    pub beacon_store: Option<String>,
+    pub beacon_load: Option<String>,
+    pub beacon_interval: Duration,
     pub mode: Mode,
     pub dst_timeout: Duration,
     pub subnets: Vec<String>,
@@ -49,6 +52,7 @@ impl Default for Config {
             crypto: CryptoMethod::ChaCha20, shared_key: None,
             magic: None,
             port: 3210, peers: vec![], peer_timeout: 1800, keepalive: None,
+            beacon_store: None, beacon_load: None, beacon_interval: 3600,
             mode: Mode::Normal, dst_timeout: 300,
             subnets: vec![],
             port_forwarding: true,
@@ -98,6 +102,15 @@ impl Config {
         }
         if let Some(val) = file.keepalive {
             self.keepalive = Some(val);
+        }
+        if let Some(val) = file.beacon_store {
+            self.beacon_store = Some(val);
+        }
+        if let Some(val) = file.beacon_load {
+            self.beacon_load = Some(val);
+        }
+        if let Some(val) = file.beacon_interval {
+            self.beacon_interval = val;
         }
         if let Some(val) = file.mode {
             self.mode = val;
@@ -163,6 +176,15 @@ impl Config {
         }
         if let Some(val) = args.flag_keepalive {
             self.keepalive = Some(val);
+        }
+        if let Some(val) = args.flag_beacon_store {
+            self.beacon_store = Some(val);
+        }
+        if let Some(val) = args.flag_beacon_load {
+            self.beacon_load = Some(val);
+        }
+        if let Some(val) = args.flag_beacon_interval {
+            self.beacon_interval = val;
         }
         if let Some(val) = args.flag_mode {
             self.mode = val;
@@ -233,6 +255,9 @@ pub struct ConfigFile {
     pub peers: Option<Vec<String>>,
     pub peer_timeout: Option<Duration>,
     pub keepalive: Option<Duration>,
+    pub beacon_store: Option<String>,
+    pub beacon_load: Option<String>,
+    pub beacon_interval: Option<Duration>,
     pub mode: Option<Mode>,
     pub dst_timeout: Option<Duration>,
     pub subnets: Option<Vec<String>>,
@@ -262,6 +287,9 @@ peers:
 peer_timeout: 1800
 keepalive: 840
 dst_timeout: 300
+beacon_store: /run/vpncloud.beacon.out
+beacon_load: /run/vpncloud.beacon.in
+beacon_interval: 3600
 mode: normal
 subnets:
   - 10.0.1.0/24
@@ -284,6 +312,9 @@ stats_file: /var/log/vpncloud.stats
         peers: Some(vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()]),
         peer_timeout: Some(1800),
         keepalive: Some(840),
+        beacon_store: Some("/run/vpncloud.beacon.out".to_string()),
+        beacon_load: Some("/run/vpncloud.beacon.in".to_string()),
+        beacon_interval: Some(3600),
         mode: Some(Mode::Normal),
         dst_timeout: Some(300),
         subnets: Some(vec!["10.0.1.0/24".to_string()]),
@@ -311,6 +342,9 @@ fn config_merge() {
         peers: Some(vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()]),
         peer_timeout: Some(1800),
         keepalive: Some(840),
+        beacon_store: Some("/run/vpncloud.beacon.out".to_string()),
+        beacon_load: Some("/run/vpncloud.beacon.in".to_string()),
+        beacon_interval: Some(7200),
         mode: Some(Mode::Normal),
         dst_timeout: Some(300),
         subnets: Some(vec!["10.0.1.0/24".to_string()]),
@@ -334,6 +368,9 @@ fn config_merge() {
         peer_timeout: 1800,
         keepalive: Some(840),
         dst_timeout: 300,
+        beacon_store: Some("/run/vpncloud.beacon.out".to_string()),
+        beacon_load: Some("/run/vpncloud.beacon.in".to_string()),
+        beacon_interval: 7200,
         mode: Mode::Normal,
         port_forwarding: true,
         subnets: vec!["10.0.1.0/24".to_string()],
@@ -356,6 +393,9 @@ fn config_merge() {
         flag_peer_timeout: Some(1801),
         flag_keepalive: Some(850),
         flag_dst_timeout: Some(301),
+        flag_beacon_store: Some("/run/vpncloud.beacon.out2".to_string()),
+        flag_beacon_load: Some("/run/vpncloud.beacon.in2".to_string()),
+        flag_beacon_interval: Some(3600),
         flag_mode: Some(Mode::Switch),
         flag_subnet: vec![],
         flag_connect: vec!["another:3210".to_string()],
@@ -381,6 +421,9 @@ fn config_merge() {
         peer_timeout: 1801,
         keepalive: Some(850),
         dst_timeout: 301,
+        beacon_store: Some("/run/vpncloud.beacon.out2".to_string()),
+        beacon_load: Some("/run/vpncloud.beacon.in2".to_string()),
+        beacon_interval: 3600,
         mode: Mode::Switch,
         port_forwarding: false,
         subnets: vec!["10.0.1.0/24".to_string()],

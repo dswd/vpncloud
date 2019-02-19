@@ -1,8 +1,8 @@
 VpnCloud - Peer-to-Peer VPN
 ---------------------------
 
-[![Build Status](https://travis-ci.org/dswd/vpncloud.rs.svg?branch=master)](https://travis-ci.org/dswd/vpncloud.rs)
-[![Coverage Status](https://coveralls.io/repos/dswd/vpncloud.rs/badge.svg?branch=master&service=github)](https://coveralls.io/github/dswd/vpncloud.rs?branch=master)
+[![Build Status](https://travis-ci.org/dswd/vpncloud.svg?branch=master)](https://travis-ci.org/dswd/vpncloud)
+[![Coverage Status](https://coveralls.io/repos/dswd/vpncloud/badge.svg?branch=master&service=github)](https://coveralls.io/github/dswd/vpncloud?branch=master)
 
 **VpnCloud** is a simple VPN over UDP. It creates a virtual network interface on
 the host and forwards all received data via UDP to the destination. VpnCloud

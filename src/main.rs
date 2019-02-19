@@ -1,5 +1,5 @@
 // VpnCloud - Peer-to-Peer VPN
-// Copyright (C) 2015-2017  Dennis Schwerdel
+// Copyright (C) 2015-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 #![cfg_attr(feature = "bench", feature(test))]
@@ -82,6 +82,9 @@ pub struct Args {
     flag_peer_timeout: Option<Duration>,
     flag_keepalive: Option<Duration>,
     flag_dst_timeout: Option<Duration>,
+    flag_beacon_store: Option<String>,
+    flag_beacon_load: Option<String>,
+    flag_beacon_interval: Option<Duration>,
     flag_verbose: bool,
     flag_quiet: bool,
     flag_ifup: Option<String>,

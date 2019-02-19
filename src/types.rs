@@ -1,5 +1,5 @@
 // VpnCloud - Peer-to-Peer VPN
-// Copyright (C) 2015-2017  Dennis Schwerdel
+// Copyright (C) 2015-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 use std::net::{SocketAddr, Ipv4Addr, Ipv6Addr};
@@ -227,7 +227,8 @@ pub enum Error {
     Name(String),
     TunTapDev(&'static str, io::Error),
     Crypto(&'static str),
-    File(&'static str, io::Error)
+    File(&'static str, io::Error),
+    Beacon(&'static str, io::Error)
 }
 impl fmt::Display for Error {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -238,7 +239,8 @@ impl fmt::Display for Error {
             Error::Crypto(msg) => write!(formatter, "{}", msg),
             Error::Name(ref name) => write!(formatter, "failed to resolve name '{}'", name),
             Error::WrongHeaderMagic(net) => write!(formatter, "wrong header magic: {}", bytes_to_hex(&net)),
-            Error::File(msg, ref err) => write!(formatter, "{}: {:?}", msg, err)
+            Error::File(msg, ref err) => write!(formatter, "{}: {:?}", msg, err),
+            Error::Beacon(msg, ref err) => write!(formatter, "{}: {:?}", msg, err)
         }
     }
 }
