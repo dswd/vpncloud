@@ -22,7 +22,6 @@ use super::poll::{Poll, Flags};
 
 #[bench]
 fn crypto_chacha20(b: &mut Bencher) {
-    Crypto::init();
     let mut crypto = Crypto::from_shared_key(CryptoMethod::ChaCha20, "test");
     let mut payload = [0; 1500];
     let header = [0; 8];
@@ -36,10 +35,6 @@ fn crypto_chacha20(b: &mut Bencher) {
 
 #[bench]
 fn crypto_aes256(b: &mut Bencher) {
-    Crypto::init();
-    if !Crypto::aes256_available() {
-        return
-    }
     let mut crypto = Crypto::from_shared_key(CryptoMethod::AES256, "test");
     let mut payload = [0; 1500];
     let header = [0; 8];

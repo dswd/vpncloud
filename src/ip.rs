@@ -172,3 +172,109 @@ impl Table for RoutingTable {
         }
     }
 }
+
+
+#[cfg(test)] use std::str::FromStr;
+#[cfg(test)] use std::net::ToSocketAddrs;
+
+
+#[test]
+fn decode_ipv4_packet() {
+    let data = [0x40,0,0,0,0,0,0,0,0,0,0,0,192,168,1,1,192,168,1,2];
+    let (src, dst) = Packet::parse(&data).unwrap();
+    assert_eq!(src, Address{data: [192,168,1,1,0,0,0,0,0,0,0,0,0,0,0,0], len: 4});
+    assert_eq!(dst, Address{data: [192,168,1,2,0,0,0,0,0,0,0,0,0,0,0,0], len: 4});
+}
+
+#[test]
+fn decode_ipv6_packet() {
+    let data = [0x60,0,0,0,0,0,0,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,0,9,8,7,6,5,4,3,2,1,6,5,4,3,2,1];
+    let (src, dst) = Packet::parse(&data).unwrap();
+    assert_eq!(src, Address{data: [1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6], len: 16});
+    assert_eq!(dst, Address{data: [0,9,8,7,6,5,4,3,2,1,6,5,4,3,2,1], len: 16});
+}
+
+#[test]
+fn decode_invalid_packet() {
+    assert!(Packet::parse(&[0x40,0,0,0,0,0,0,0,0,0,0,0,192,168,1,1,192,168,1,2]).is_ok());
+    assert!(Packet::parse(&[0x60,0,0,0,0,0,0,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,0,9,8,7,6,5,4,3,2,1,6,5,4,3,2,1]).is_ok());
+    // no data
+    assert!(Packet::parse(&[]).is_err());
+    // wrong version
+    assert!(Packet::parse(&[0x20]).is_err());
+    // truncated ipv4
+    assert!(Packet::parse(&[0x40,0,0,0,0,0,0,0,0,0,0,0,192,168,1,1,192,168,1]).is_err());
+    // truncated ipv6
+    assert!(Packet::parse(&[0x60,0,0,0,0,0,0,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,0,9,8,7,6,5,4,3,2,1,6,5,4,3,2]).is_err());
+}
+
+
+#[test]
+fn routing_table_ipv4() {
+    let mut table = RoutingTable::new();
+    let peer1 = "1.2.3.4:1".to_socket_addrs().unwrap().next().unwrap();
+    let peer2 = "1.2.3.4:2".to_socket_addrs().unwrap().next().unwrap();
+    let peer3 = "1.2.3.4:3".to_socket_addrs().unwrap().next().unwrap();
+    assert!(table.lookup(&Address::from_str("192.168.1.1").unwrap()).is_none());
+    table.learn(Address::from_str("192.168.1.1").unwrap(), Some(32), peer1.clone());
+    assert_eq!(table.lookup(&Address::from_str("192.168.1.1").unwrap()), Some(peer1));
+    table.learn(Address::from_str("192.168.1.2").unwrap(), None, peer2.clone());
+    assert_eq!(table.lookup(&Address::from_str("192.168.1.1").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("192.168.1.2").unwrap()), Some(peer2));
+    table.learn(Address::from_str("192.168.1.0").unwrap(), Some(24), peer3.clone());
+    assert_eq!(table.lookup(&Address::from_str("192.168.1.1").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("192.168.1.2").unwrap()), Some(peer2));
+    assert_eq!(table.lookup(&Address::from_str("192.168.1.3").unwrap()), Some(peer3));
+    table.learn(Address::from_str("192.168.0.0").unwrap(), Some(16), peer1.clone());
+    assert_eq!(table.lookup(&Address::from_str("192.168.2.1").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("192.168.1.1").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("192.168.1.2").unwrap()), Some(peer2));
+    assert_eq!(table.lookup(&Address::from_str("192.168.1.3").unwrap()), Some(peer3));
+    table.learn(Address::from_str("0.0.0.0").unwrap(), Some(0), peer2.clone());
+    assert_eq!(table.lookup(&Address::from_str("192.168.2.1").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("192.168.1.1").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("192.168.1.2").unwrap()), Some(peer2));
+    assert_eq!(table.lookup(&Address::from_str("192.168.1.3").unwrap()), Some(peer3));
+    assert_eq!(table.lookup(&Address::from_str("1.2.3.4").unwrap()), Some(peer2));
+    table.learn(Address::from_str("192.168.2.0").unwrap(), Some(27), peer3.clone());
+    assert_eq!(table.lookup(&Address::from_str("192.168.2.31").unwrap()), Some(peer3));
+    assert_eq!(table.lookup(&Address::from_str("192.168.2.32").unwrap()), Some(peer1));
+    table.learn(Address::from_str("192.168.2.0").unwrap(), Some(28), peer3.clone());
+    assert_eq!(table.lookup(&Address::from_str("192.168.2.1").unwrap()), Some(peer3));
+}
+
+#[test]
+fn routing_table_ipv6() {
+    let mut table = RoutingTable::new();
+    let peer1 = "::1:1".to_socket_addrs().unwrap().next().unwrap();
+    let peer2 = "::1:2".to_socket_addrs().unwrap().next().unwrap();
+    let peer3 = "::1:3".to_socket_addrs().unwrap().next().unwrap();
+    assert!(table.lookup(&Address::from_str("::1").unwrap()).is_none());
+    table.learn(Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap(), Some(128), peer1.clone());
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap()), Some(peer1));
+    table.learn(Address::from_str("dead:beef:dead:beef:dead:beef:dead:2").unwrap(), None, peer2.clone());
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:2").unwrap()), Some(peer2));
+    table.learn(Address::from_str("dead:beef:dead:beef::").unwrap(), Some(64), peer3.clone());
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:2").unwrap()), Some(peer2));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:3").unwrap()), Some(peer3));
+    table.learn(Address::from_str("dead:beef:dead:be00::").unwrap(), Some(56), peer1.clone());
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:1::").unwrap()), Some(peer3));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:be01::").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:2").unwrap()), Some(peer2));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:3").unwrap()), Some(peer3));
+    table.learn(Address::from_str("::").unwrap(), Some(0), peer2.clone());
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:1::").unwrap()), Some(peer3));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:be01::").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap()), Some(peer1));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:2").unwrap()), Some(peer2));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:3").unwrap()), Some(peer3));
+    assert_eq!(table.lookup(&Address::from_str("::1").unwrap()), Some(peer2));
+    table.learn(Address::from_str("dead:beef:dead:beef:dead:beef:dead:be00").unwrap(), Some(123), peer2.clone());
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:be1f").unwrap()), Some(peer2));
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:be20").unwrap()), Some(peer3));
+    table.learn(Address::from_str("dead:beef:dead:beef:dead:beef:dead:be00").unwrap(), Some(124), peer3.clone());
+    assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:be01").unwrap()), Some(peer3));
+}

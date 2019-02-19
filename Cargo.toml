@@ -28,7 +28,7 @@ igd = "0.6" # Do not update, 0.7 has problems with exit by ctrl-c
 siphasher = "0.3"
 daemonize = "0.3"
 ring = "0.14"
-bs58 = "*"
+base-62 = "0.1"
 
 [build-dependencies]
 cc = "^1"

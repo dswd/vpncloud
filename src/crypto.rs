@@ -27,7 +27,8 @@ pub enum CryptoMethod {
 pub struct CryptoData {
     sealing_key: SealingKey,
     opening_key: OpeningKey,
-    nonce: Vec<u8>
+    nonce: Vec<u8>,
+    key: Vec<u8>
 }
 
 #[allow(unknown_lints, clippy::large_enum_variant)]
@@ -53,10 +54,6 @@ fn inc_nonce(nonce: &mut [u8]) {
 
 impl Crypto {
     #[inline]
-    pub fn init() {
-    }
-
-    #[inline]
     pub fn method(&self) -> u8 {
         match *self {
             Crypto::None => 0,
@@ -70,6 +67,14 @@ impl Crypto {
         match *self {
             Crypto::None => 0,
             Crypto::ChaCha20Poly1305(ref data) | Crypto::AES256GCM(ref data) => data.sealing_key.algorithm().nonce_len()
+        }
+    }
+
+    #[inline]
+    pub fn get_key(&self) -> &[u8] {
+        match *self {
+            Crypto::None => &[],
+            Crypto::ChaCha20Poly1305(ref data) | Crypto::AES256GCM(ref data) => &data.key
         }
     }
 
@@ -117,7 +122,7 @@ impl Crypto {
         if SystemRandom::new().fill(&mut nonce[1..]).is_err() {
             fail!("Randomizing nonce failed");
         }
-        let data = CryptoData { sealing_key, opening_key, nonce };
+        let data = CryptoData { sealing_key, opening_key, nonce, key };
         match method {
             CryptoMethod::ChaCha20 => Crypto::ChaCha20Poly1305(data),
             CryptoMethod::AES256 => Crypto::AES256GCM(data)
@@ -152,4 +157,54 @@ impl Crypto {
             }
         }
     }
+}
+
+
+
+#[test]
+fn encrypt_decrypt_chacha20poly1305() {
+    let mut sender = Crypto::from_shared_key(CryptoMethod::ChaCha20, "test");
+    let receiver = Crypto::from_shared_key(CryptoMethod::ChaCha20, "test");
+    let msg = "HelloWorld0123456789";
+    let msg_bytes = msg.as_bytes();
+    let mut buffer = [0u8; 1024];
+    let header = [0u8; 8];
+    for i in 0..msg_bytes.len() {
+        buffer[i] = msg_bytes[i];
+    }
+    let mut nonce1 = [0u8; 12];
+    let size = sender.encrypt(&mut buffer, msg_bytes.len(), &mut nonce1, &header);
+    assert_eq!(size, msg_bytes.len() + sender.additional_bytes());
+    assert!(msg_bytes != &buffer[..msg_bytes.len()] as &[u8]);
+    receiver.decrypt(&mut buffer[..size], &nonce1, &header).unwrap();
+    assert_eq!(msg_bytes, &buffer[..msg_bytes.len()] as &[u8]);
+    let mut nonce2 = [0u8; 12];
+    let size = sender.encrypt(&mut buffer, msg_bytes.len(), &mut nonce2, &header);
+    assert!(nonce1 != nonce2);
+    receiver.decrypt(&mut buffer[..size], &nonce2, &header).unwrap();
+    assert_eq!(msg_bytes, &buffer[..msg_bytes.len()] as &[u8]);
+}
+
+#[test]
+fn encrypt_decrypt_aes256() {
+    let mut sender = Crypto::from_shared_key(CryptoMethod::AES256, "test");
+    let receiver = Crypto::from_shared_key(CryptoMethod::AES256, "test");
+    let msg = "HelloWorld0123456789";
+    let msg_bytes = msg.as_bytes();
+    let mut buffer = [0u8; 1024];
+    let header = [0u8; 8];
+    for i in 0..msg_bytes.len() {
+        buffer[i] = msg_bytes[i];
+    }
+    let mut nonce1 = [0u8; 12];
+    let size = sender.encrypt(&mut buffer, msg_bytes.len(), &mut nonce1, &header);
+    assert_eq!(size, msg_bytes.len() + sender.additional_bytes());
+    assert!(msg_bytes != &buffer[..msg_bytes.len()] as &[u8]);
+    receiver.decrypt(&mut buffer[..size], &nonce1, &header).unwrap();
+    assert_eq!(msg_bytes, &buffer[..msg_bytes.len()] as &[u8]);
+    let mut nonce2 = [0u8; 12];
+    let size = sender.encrypt(&mut buffer, msg_bytes.len(), &mut nonce2, &header);
+    assert!(nonce1 != nonce2);
+    receiver.decrypt(&mut buffer[..size], &nonce2, &header).unwrap();
+    assert_eq!(msg_bytes, &buffer[..msg_bytes.len()] as &[u8]);
 }

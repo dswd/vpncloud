@@ -242,3 +242,54 @@ impl fmt::Display for Error {
         }
     }
 }
+
+
+#[test]
+fn address_parse_fmt() {
+    assert_eq!(format!("{}", Address::from_str("120.45.22.5").unwrap()), "120.45.22.5");
+    assert_eq!(format!("{}", Address::from_str("78:2d:16:05:01:02").unwrap()), "78:2d:16:05:01:02");
+    assert_eq!(format!("{}", Address{data: [3,56,120,45,22,5,1,2,0,0,0,0,0,0,0,0], len: 8}), "vlan824/78:2d:16:05:01:02");
+    assert_eq!(format!("{}", Address::from_str("0001:0203:0405:0607:0809:0a0b:0c0d:0e0f").unwrap()), "0001:0203:0405:0607:0809:0a0b:0c0d:0e0f");
+    assert_eq!(format!("{:?}", Address{data: [1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0], len: 2}), "0102");
+    assert!(Address::from_str("").is_err()); // Failed to parse address
+}
+
+#[test]
+fn address_decode_encode() {
+    let mut buf = [0; 32];
+    let addr = Address::from_str("120.45.22.5").unwrap();
+    assert_eq!(addr.write_to(&mut buf), 5);
+    assert_eq!(&buf[0..5], &[4, 120, 45, 22, 5]);
+    assert_eq!((addr, 5), Address::read_from(&buf).unwrap());
+    assert_eq!(addr, Address::read_from_fixed(&buf[1..], 4).unwrap());
+    let addr = Address::from_str("78:2d:16:05:01:02").unwrap();
+    assert_eq!(addr.write_to(&mut buf), 7);
+    assert_eq!(&buf[0..7], &[6, 0x78, 0x2d, 0x16, 0x05, 0x01, 0x02]);
+    assert_eq!((addr, 7), Address::read_from(&buf).unwrap());
+    assert_eq!(addr, Address::read_from_fixed(&buf[1..], 6).unwrap());
+    assert!(Address::read_from(&buf[0..0]).is_err()); // Address too short
+    buf[0] = 100;
+    assert!(Address::read_from(&buf).is_err()); // Invalid address, too long
+    buf[0] = 5;
+    assert!(Address::read_from(&buf[0..4]).is_err()); // Address too short
+}
+
+#[test]
+fn address_eq() {
+    assert!(Address::read_from_fixed(&[1,2,3,4], 4).unwrap() == Address::read_from_fixed(&[1,2,3,4], 4).unwrap());
+    assert!(Address::read_from_fixed(&[1,2,3,4], 4).unwrap() != Address::read_from_fixed(&[1,2,3,5], 4).unwrap());
+    assert!(Address::read_from_fixed(&[1,2,3,4], 3).unwrap() == Address::read_from_fixed(&[1,2,3,5], 3).unwrap());
+    assert!(Address::read_from_fixed(&[1,2,3,4], 3).unwrap() != Address::read_from_fixed(&[1,2,3,4], 4).unwrap());
+}
+
+#[test]
+fn address_range_decode_encode() {
+    let mut buf = [0; 32];
+    let range = Range{base: Address{data: [0,1,2,3,0,0,0,0,0,0,0,0,0,0,0,0], len: 4}, prefix_len: 24};
+    assert_eq!(range.write_to(&mut buf), 6);
+    assert_eq!(&buf[0..6], &[4, 0, 1, 2, 3, 24]);
+    assert_eq!((range, 6), Range::read_from(&buf).unwrap());
+    assert!(Range::read_from(&buf[..5]).is_err()); // Missing prefix length
+    buf[0] = 17;
+    assert!(Range::read_from(&buf).is_err());
+}

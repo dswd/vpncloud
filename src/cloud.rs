@@ -29,6 +29,7 @@ use super::port_forwarding::PortForwarding;
 use super::util::{now, Time, Duration, resolve};
 use super::poll::{Poll, Flags};
 use super::traffic::TrafficStats;
+use super::beacon::BeaconSerializer;
 
 pub type Hash = BuildHasherDefault<FnvHasher>;
 
@@ -222,6 +223,7 @@ pub struct GenericCloud<P: Protocol, T: Table> {
     port_forwarding: Option<PortForwarding>,
     traffic: TrafficStats,
     stats_file: Option<String>,
+    beacon_serializer: BeaconSerializer,
     _dummy_p: PhantomData<P>,
 }
 
@@ -254,7 +256,6 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             socket4,
             socket6,
             device,
-            crypto,
             next_peerlist: now(),
             update_freq: config.get_keepalive(),
             buffer_out: [0; 64*1024],
@@ -263,6 +264,8 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             port_forwarding,
             traffic: TrafficStats::default(),
             stats_file: config.stats_file.clone(),
+            beacon_serializer: BeaconSerializer::new(&config.get_magic(), crypto.get_key()),
+            crypto,
             _dummy_p: PhantomData,
         }
     }
@@ -423,6 +426,10 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             // ...and send them to all peers
             let mut msg = Message::Peers(peers);
             try!(self.broadcast_msg(&mut msg));
+            // Output beacon
+            let beacon = self.beacon_serializer.encode(&self.peers.subset(3));
+            //TODO: publish beacon
+            debug!("Beacon: {}", beacon);
             // Reschedule for next update
             self.next_peerlist = now + Time::from(self.update_freq);
         }

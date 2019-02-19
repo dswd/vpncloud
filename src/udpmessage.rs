@@ -258,3 +258,185 @@ pub fn encode<'a>(msg: &'a mut Message, mut buf: &'a mut [u8], magic: HeaderMagi
     }
     &mut buf[start..end]
 }
+
+
+impl<'a> PartialEq for Message<'a> {
+    fn eq(&self, other: &Message) -> bool {
+        match self {
+            &Message::Data(ref data1, start1, end1) => if let &Message::Data(ref data2, start2, end2) = other {
+                data1[start1..end1] == data2[start2..end2]
+            } else { false },
+            &Message::Peers(ref peers1) => if let &Message::Peers(ref peers2) = other {
+                peers1 == peers2
+            } else { false },
+            &Message::Init(step1, node_id1, ref ranges1) => if let &Message::Init(step2, node_id2, ref ranges2) = other {
+                step1 == step2 && node_id1 == node_id2 && ranges1 == ranges2
+            } else { false },
+            &Message::Close => if let &Message::Close = other {
+                true
+            } else { false }
+        }
+    }
+}
+
+
+#[cfg(test)] use std::str::FromStr;
+#[cfg(test)] use super::MAGIC;
+#[cfg(test)] use super::types::Address;
+#[cfg(test)] use super::crypto::CryptoMethod;
+
+#[test]
+#[allow(unused_assignments)]
+fn udpmessage_packet() {
+    let mut crypto = Crypto::None;
+    let mut payload = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        1,2,3,4,5,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+    let mut msg = Message::Data(&mut payload, 64, 69);
+    let mut buf = [0; 1024];
+    let mut len = 0;
+    {
+        let res = encode(&mut msg, &mut [], MAGIC, &mut crypto);
+        assert_eq!(res.len(), 13);
+        assert_eq!(&res[..8], &[118,112,110,1,0,0,0,0]);
+        for i in 0..res.len() {
+            buf[i] = res[i];
+        }
+        len = res.len();
+    }
+    let msg2 = decode(&mut buf[..len], MAGIC, &mut crypto).unwrap();
+    assert_eq!(msg, msg2);
+}
+
+#[test]
+#[allow(unused_assignments)]
+fn udpmessage_encrypted() {
+    let mut crypto = Crypto::from_shared_key(CryptoMethod::ChaCha20, "test");
+    let mut payload = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        1,2,3,4,5,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+    let mut orig_payload = [0; 133];
+    for i in 0..payload.len() {
+        orig_payload[i] = payload[i];
+    }
+    let orig_msg = Message::Data(&mut orig_payload, 64, 69);
+    let mut msg = Message::Data(&mut payload, 64, 69);
+    let mut buf = [0; 1024];
+    let mut len = 0;
+    {
+        let res = encode(&mut msg, &mut [], MAGIC, &mut crypto);
+        assert_eq!(res.len(), 41);
+        assert_eq!(&res[..8], &[118,112,110,1,1,0,0,0]);
+        for i in 0..res.len() {
+            buf[i] = res[i];
+        }
+        len = res.len();
+    }
+    let msg2 = decode(&mut buf[..len], MAGIC, &mut crypto).unwrap();
+    assert_eq!(orig_msg, msg2);
+}
+
+#[test]
+fn udpmessage_peers() {
+    use std::str::FromStr;
+    let mut crypto = Crypto::None;
+    let mut msg = Message::Peers(vec![SocketAddr::from_str("1.2.3.4:123").unwrap(), SocketAddr::from_str("5.6.7.8:12345").unwrap(), SocketAddr::from_str("[0001:0203:0405:0607:0809:0a0b:0c0d:0e0f]:6789").unwrap()]);
+    let mut should = [118,112,110,1,0,0,0,1,2,1,2,3,4,0,123,5,6,7,8,48,57,1,0,1,2,3,4,5,6,7,
+        8,9,10,11,12,13,14,15,26,133];
+    {
+        let mut buf = [0; 1024];
+        let res = encode(&mut msg, &mut buf[..], MAGIC, &mut crypto);
+        assert_eq!(res.len(), 40);
+        for i in 0..res.len() {
+            assert_eq!(res[i], should[i]);
+        }
+    }
+    let msg2 = decode(&mut should, MAGIC, &mut crypto).unwrap();
+    assert_eq!(msg, msg2);
+    // Missing IPv4 count
+    assert!(decode(&mut[118,112,110,1,0,0,0,1], MAGIC, &mut crypto).is_err());
+    // Truncated IPv4
+    assert!(decode(&mut[118,112,110,1,0,0,0,1,1], MAGIC, &mut crypto).is_err());
+    // Missing IPv6 count
+    assert!(decode(&mut[118,112,110,1,0,0,0,1,1,1,2,3,4,0,0], MAGIC, &mut crypto).is_err());
+    // Truncated IPv6
+    assert!(decode(&mut[118,112,110,1,0,0,0,1,1,1,2,3,4,0,0,1], MAGIC, &mut crypto).is_err());
+}
+
+#[test]
+fn udpmessage_init() {
+    use super::types::Address;
+    let mut crypto = Crypto::None;
+    let addrs = vec![Range{base: Address{data: [0,1,2,3,0,0,0,0,0,0,0,0,0,0,0,0], len: 4}, prefix_len: 24},
+        Range{base: Address{data: [0,1,2,3,4,5,0,0,0,0,0,0,0,0,0,0], len: 6}, prefix_len: 16}];
+    let node_id = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
+    let mut msg = Message::Init(0, node_id, addrs);
+    let mut should = [118,112,110,1,0,0,0,2,0,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,2,4,0,1,2,3,24,6,0,1,2,3,4,5,16];
+    {
+        let mut buf = [0; 1024];
+        let res = encode(&mut msg, &mut buf[..], MAGIC, &mut crypto);
+        assert_eq!(res.len(), 40);
+        for i in 0..res.len() {
+            assert_eq!(res[i], should[i]);
+        }
+    }
+    let msg2 = decode(&mut should, MAGIC, &mut crypto).unwrap();
+    assert_eq!(msg, msg2);
+}
+
+#[test]
+fn udpmessage_close() {
+    let mut crypto = Crypto::None;
+    let mut msg = Message::Close;
+    let mut should = [118,112,110,1,0,0,0,3];
+    {
+        let mut buf = [0; 1024];
+        let res = encode(&mut msg, &mut buf[..], MAGIC, &mut crypto);
+        assert_eq!(res.len(), 8);
+        assert_eq!(&res, &should);
+    }
+    let msg2 = decode(&mut should, MAGIC, &mut crypto).unwrap();
+    assert_eq!(msg, msg2);
+}
+
+#[test]
+fn udpmessage_invalid() {
+    let mut crypto = Crypto::None;
+    assert!(decode(&mut [0x76,0x70,0x6e,1,0,0,0,0], MAGIC, &mut crypto).is_ok());
+    // too short
+    assert!(decode(&mut [], MAGIC, &mut crypto).is_err());
+    // invalid protocol
+    assert!(decode(&mut [0,1,2,0,0,0,0,0], MAGIC, &mut crypto).is_err());
+    // invalid version
+    assert!(decode(&mut [0x76,0x70,0x6e,0xaa,0,0,0,0], MAGIC, &mut crypto).is_err());
+    // invalid crypto
+    assert!(decode(&mut [0x76,0x70,0x6e,1,0xaa,0,0,0], MAGIC, &mut crypto).is_err());
+    // invalid msg type
+    assert!(decode(&mut [0x76,0x70,0x6e,1,0,0,0,0xaa], MAGIC, &mut crypto).is_err());
+}
+
+#[test]
+fn udpmessage_invalid_crypto() {
+    let mut crypto = Crypto::from_shared_key(CryptoMethod::ChaCha20, "test");
+    // truncated crypto
+    assert!(decode(&mut [0x76,0x70,0x6e,1,1,0,0,0], MAGIC, &mut crypto).is_err());
+}
+
+
+#[test]
+fn message_fmt() {
+    assert_eq!(format!("{:?}", Message::Data(&mut [1,2,3,4,5], 0, 5)), "Data(5 bytes)");
+    assert_eq!(format!("{:?}", Message::Peers(vec![SocketAddr::from_str("1.2.3.4:123").unwrap(),
+        SocketAddr::from_str("5.6.7.8:12345").unwrap(),
+        SocketAddr::from_str("[0001:0203:0405:0607:0809:0a0b:0c0d:0e0f]:6789").unwrap()])),
+        "Peers [1.2.3.4:123, 5.6.7.8:12345, [1:203:405:607:809:a0b:c0d:e0f]:6789]");
+    assert_eq!(format!("{:?}", Message::Init(0, [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15], vec![
+        Range{base: Address{data: [0,1,2,3,0,0,0,0,0,0,0,0,0,0,0,0], len: 4}, prefix_len: 24},
+        Range{base: Address{data: [0,1,2,3,4,5,0,0,0,0,0,0,0,0,0,0], len: 6}, prefix_len: 16}
+    ])), "Init(stage=0, node_id=000102030405060708090a0b0c0d0e0f, [0.1.2.3/24, 00:01:02:03:04:05/16])");
+    assert_eq!(format!("{:?}", Message::Close), "Close");
+}

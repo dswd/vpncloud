@@ -159,3 +159,50 @@ impl Table for SwitchTable {
         }
     }
 }
+
+
+#[cfg(test)] use std::str::FromStr;
+#[cfg(test)] use std::net::ToSocketAddrs;
+#[cfg(test)] use std::thread;
+
+#[test]
+fn decode_frame_without_vlan() {
+    let data = [6,5,4,3,2,1,1,2,3,4,5,6,1,2,3,4,5,6,7,8];
+    let (src, dst) = Frame::parse(&data).unwrap();
+    assert_eq!(src, Address{data: [1,2,3,4,5,6,0,0,0,0,0,0,0,0,0,0], len: 6});
+    assert_eq!(dst, Address{data: [6,5,4,3,2,1,0,0,0,0,0,0,0,0,0,0], len: 6});
+}
+
+#[test]
+fn decode_frame_with_vlan() {
+    let data = [6,5,4,3,2,1,1,2,3,4,5,6,0x81,0,4,210,1,2,3,4,5,6,7,8];
+    let (src, dst) = Frame::parse(&data).unwrap();
+    assert_eq!(src, Address{data: [4,210,1,2,3,4,5,6,0,0,0,0,0,0,0,0], len: 8});
+    assert_eq!(dst, Address{data: [4,210,6,5,4,3,2,1,0,0,0,0,0,0,0,0], len: 8});
+}
+
+#[test]
+fn decode_invalid_frame() {
+    assert!(Frame::parse(&[6,5,4,3,2,1,1,2,3,4,5,6,1,2,3,4,5,6,7,8]).is_ok());
+    // truncated frame
+    assert!(Frame::parse(&[]).is_err());
+    // truncated vlan frame
+    assert!(Frame::parse(&[6,5,4,3,2,1,1,2,3,4,5,6,0x81,0x00]).is_err());
+}
+
+#[test]
+fn switch() {
+    let mut table = SwitchTable::new(10, 1);
+    let addr = Address::from_str("12:34:56:78:90:ab").unwrap();
+    let peer = "1.2.3.4:5678".to_socket_addrs().unwrap().next().unwrap();
+    let peer2 = "1.2.3.5:7890".to_socket_addrs().unwrap().next().unwrap();
+    assert!(table.lookup(&addr).is_none());
+    table.learn(addr.clone(), None, peer.clone());
+    assert_eq!(table.lookup(&addr), Some(peer));
+    // Do not override within 1 seconds
+    table.learn(addr.clone(), None, peer2.clone());
+    assert_eq!(table.lookup(&addr), Some(peer));
+    thread::sleep(std::time::Duration::from_secs(1));
+    table.learn(addr.clone(), None, peer2.clone());
+    assert_eq!(table.lookup(&addr), Some(peer2));
+}
