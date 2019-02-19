@@ -1,41 +1,37 @@
-sudo: true
+dist: xenial
+sudo: required
 language: rust
+cache: cargo
 rust:
-- nightly
-- beta
-- stable
+  - nightly
+  - beta
+  - stable
 matrix:
   allow_failures:
-  - rust: nightly
-before_script:
-- ! ' set -e ;
-  pip install ''travis-cargo<0.2'' --user ;
-  export PATH=$HOME/.local/bin:$PATH ;
-'
-script:
-- ! ' set -e ;
-  travis-cargo build ;
-  travis-cargo test ;
-  travis-cargo bench ;
-  travis-cargo coverage || true ;
-'
+    - rust: nightly
 addons:
   apt:
     packages:
-    - libcurl4-openssl-dev
-    - libelf-dev
-    - libdw-dev
-    - binutils-dev
+      - libcurl4-openssl-dev
+      - libelf-dev
+      - libdw-dev
+      - binutils-dev
+      - cmake
+      - ruby-ronn
+before_script:
+  - export PATH=$HOME/.cargo/bin:$PATH
+  - cargo install cargo-update || echo "cargo-update already installed"
+  - cargo install cargo-travis || echo "cargo-travis already installed"
+  - cargo install-update -a # update outdated cached binaries
+script:
+  - |
+      cargo build && cargo test
 after_success:
-- ! ' set -e ;
-  rm -rf target/kcov ;
-  rm target/debug/vpncloud-* ;
-  cargo test --no-run ;
-  kcov/build/src/kcov --verify --exclude-pattern=/libsodium/,/x86_64-linux-gnu/,/.cargo --coveralls-id=$TRAVIS_JOB_ID target/kcov target/debug/vpncloud-* || true ;
-'
+  - cargo coveralls
+env:
+  global:
+    - TRAVIS_CARGO_NIGHTLY_FEATURE=""
 notifications:
   email:
     on_success: never
-env:
-  global:
-  - TRAVIS_CARGO_NIGHTLY_FEATURE=""
+
