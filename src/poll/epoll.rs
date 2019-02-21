@@ -6,103 +6,77 @@ use libc;
 
 use std::os::unix::io::RawFd;
 use std::io;
-use std::ops::{Deref, DerefMut};
+use device::Device;
+use std::os::unix::io::AsRawFd;
 
-bitflags!{
-    pub struct Flags: u32 {
-        const READ = libc::EPOLLIN as u32;
-        const WRITE = libc::EPOLLOUT as u32;
-        const ERROR = libc::EPOLLERR as u32;
-    }
+use super::WaitResult;
+use ::device::Type;
+use net::Socket;
+
+pub struct EpollWait {
+    poll_fd: RawFd,
+    event: libc::epoll_event,
+    socketv4: RawFd,
+    socketv6: RawFd,
+    device: RawFd,
+    timeout: u32,
 }
 
-#[derive(Clone, Copy)]
-pub struct Event(libc::epoll_event);
-
-impl Event {
-    #[inline]
-    pub fn fd(&self) -> RawFd {
-        self.0.u64 as RawFd
-    }
-
-    #[inline]
-    pub fn flags(&self) -> Flags {
-        Flags::from_bits(self.0.events).expect("Invalid flags set")
-    }
-
-    #[inline]
-    fn new(fd: RawFd, flags: Flags) -> Self {
-        Event(libc::epoll_event{u64: fd as u64, events: flags.bits})
-    }
-}
-
-impl Deref for Event {
-    type Target = libc::epoll_event;
-
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Event {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-
-pub struct Poll {
-    fd: RawFd,
-    events: Vec<Event>
-}
-
-impl Poll {
-    #[inline]
-    pub fn new(max_events: usize) -> io::Result<Self> {
-        let mut events = Vec::with_capacity(max_events);
-        events.resize(max_events, Event::new(0, Flags::empty()));
-        let fd = unsafe { libc::epoll_create(max_events as i32) };
-        if fd == -1 {
+impl EpollWait {
+    pub fn new<S: Socket>(socketv4: &S, socketv6: &S, device: &Device, timeout: u32) -> io::Result<Self> {
+        let mut event = libc::epoll_event{u64: 0, events: 0};
+        let poll_fd =  unsafe { libc::epoll_create(3) };
+        if poll_fd == -1 {
             return Err(io::Error::last_os_error());
         }
-        Ok(Poll{fd, events})
-    }
-
-    #[inline]
-    pub fn register(&mut self, fd: RawFd, flags: Flags) -> io::Result<()> {
-        let mut ev = Event::new(fd, flags);
-        let res = unsafe { libc::epoll_ctl(self.fd, libc::EPOLL_CTL_ADD, fd, &mut ev as &mut libc::epoll_event) };
-        if res == -1 {
-            return Err(io::Error::last_os_error());
+        let raw_fds = if device.get_type() != Type::Dummy {
+            vec![socketv4.as_raw_fd(), socketv6.as_raw_fd(), device.as_raw_fd()]
+        } else {
+            vec![socketv4.as_raw_fd(), socketv6.as_raw_fd()]
+        };
+        for fd in raw_fds {
+            event.u64 = fd as u64;
+            event.events = libc::EPOLLIN as u32;
+            let res = unsafe { libc::epoll_ctl(poll_fd, libc::EPOLL_CTL_ADD, fd, &mut event) };
+            if res == -1 {
+                return Err(io::Error::last_os_error());
+            }
         }
-        Ok(())
-    }
-
-    #[inline]
-    pub fn unregister(&mut self, fd: RawFd) -> io::Result<()> {
-        let mut ev = Event::new(fd, Flags::empty());
-        let res = unsafe { libc::epoll_ctl(self.fd, libc::EPOLL_CTL_DEL, fd, &mut ev as &mut libc::epoll_event) };
-        if res == -1 {
-            return Err(io::Error::last_os_error());
-        }
-        Ok(())
-    }
-
-    #[inline]
-    pub fn wait(&mut self, timeout_millis: u32) -> io::Result<&[Event]> {
-        let res = unsafe { libc::epoll_wait(self.fd, &mut self.events[0] as &mut libc::epoll_event, self.events.len() as i32, timeout_millis as i32) };
-        if res == -1 {
-            return Err(io::Error::last_os_error());
-        }
-        Ok(&self.events[0..res as usize])
+        Ok(Self {
+            poll_fd,
+            event,
+            socketv4: socketv4.as_raw_fd(),
+            socketv6: socketv6.as_raw_fd(),
+            device: device.as_raw_fd(),
+            timeout
+        })
     }
 }
 
-impl Drop for Poll {
-    #[inline]
+impl Drop for EpollWait {
     fn drop(&mut self) {
-        unsafe { libc::close(self.fd) };
+        unsafe { libc::close(self.poll_fd) };
     }
 }
+
+impl Iterator for EpollWait {
+    type Item = WaitResult;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(match unsafe { libc::epoll_wait(self.poll_fd, &mut self.event, 1, self.timeout as i32) } {
+            -1 => WaitResult::Error(io::Error::last_os_error()),
+            0 => WaitResult::Timeout,
+            1 => if self.event.u64 == self.socketv4 as u64 {
+                WaitResult::SocketV4
+            } else if self.event.u64 == self.socketv6 as u64 {
+                WaitResult::SocketV6
+            } else if self.event.u64 == self.device as u64 {
+                WaitResult::Device
+            } else {
+                unreachable!()
+            },
+            _ => unreachable!()
+        })
+    }
+}
+

@@ -22,7 +22,6 @@ libc = "0.2"
 rand = "0.6"
 fnv = "1"
 net2 = "0.2"
-bitflags = "^1"
 yaml-rust = "0.4"
 igd = "0.6" # Do not update, 0.7 has problems with exit by ctrl-c
 siphasher = "0.3"

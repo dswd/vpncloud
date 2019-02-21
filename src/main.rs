@@ -5,7 +5,6 @@
 #![cfg_attr(feature = "bench", feature(test))]
 
 #[macro_use] extern crate log;
-#[macro_use] extern crate bitflags;
 extern crate time;
 extern crate docopt;
 #[macro_use] extern crate serde_derive;
@@ -38,6 +37,7 @@ pub mod config;
 pub mod port_forwarding;
 pub mod traffic;
 pub mod beacon;
+pub mod net;
 #[cfg(feature = "bench")] mod benches;
 
 use docopt::Docopt;
@@ -58,6 +58,7 @@ use crypto::{Crypto, CryptoMethod};
 use port_forwarding::PortForwarding;
 use util::Duration;
 use config::Config;
+use std::net::UdpSocket;
 
 
 const VERSION: u8 = 1;
@@ -160,8 +161,8 @@ enum AnyTable {
 }
 
 enum AnyCloud<P: Protocol> {
-    Switch(GenericCloud<P, SwitchTable>),
-    Routing(GenericCloud<P, RoutingTable>)
+    Switch(GenericCloud<P, SwitchTable, UdpSocket>),
+    Routing(GenericCloud<P, RoutingTable, UdpSocket>)
 }
 
 impl<P: Protocol> AnyCloud<P> {
@@ -170,10 +171,10 @@ impl<P: Protocol> AnyCloud<P> {
             learning: bool, broadcast: bool, addresses: Vec<Range>,
             crypto: Crypto, port_forwarding: Option<PortForwarding>) -> Self {
         match table {
-            AnyTable::Switch(t) => AnyCloud::Switch(GenericCloud::<P, SwitchTable>::new(
+            AnyTable::Switch(t) => AnyCloud::Switch(GenericCloud::<P, SwitchTable, UdpSocket>::new(
                 config, device,t, learning, broadcast, addresses, crypto, port_forwarding
             )),
-            AnyTable::Routing(t) => AnyCloud::Routing(GenericCloud::<P, RoutingTable>::new(
+            AnyTable::Routing(t) => AnyCloud::Routing(GenericCloud::<P, RoutingTable, UdpSocket>::new(
                 config, device,t, learning, broadcast, addresses, crypto, port_forwarding
             ))
         }

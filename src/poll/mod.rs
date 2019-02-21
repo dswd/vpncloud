@@ -6,4 +6,15 @@
 mod epoll;
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-pub use self::epoll::*;
+pub use self::epoll::EpollWait as WaitImpl;
+
+
+use std::io;
+
+pub enum WaitResult {
+    Timeout,
+    SocketV4,
+    SocketV6,
+    Device,
+    Error(io::Error)
+}

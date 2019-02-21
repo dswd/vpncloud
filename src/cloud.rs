@@ -4,32 +4,28 @@
 
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::collections::HashMap;
-use std::net::UdpSocket;
 use std::io::{self, Write};
 use std::fmt;
-use std::os::unix::io::AsRawFd;
 use std::marker::PhantomData;
 use std::hash::BuildHasherDefault;
-use std::time::Instant;
 use std::cmp::min;
 use std::fs::{self, File, Permissions};
 use std::os::unix::fs::PermissionsExt;
 
 use fnv::FnvHasher;
-use signal::{trap::Trap, Signal};
 use rand::{prelude::*, random, thread_rng};
-use net2::UdpBuilder;
 
 use super::config::Config;
 use super::types::{Table, Protocol, Range, Error, HeaderMagic, NodeId};
-use super::device::{Device, Type};
+use super::device::Device;
 use super::udpmessage::{encode, decode, Message};
 use super::crypto::Crypto;
 use super::port_forwarding::PortForwarding;
-use super::util::{now, Time, Duration, resolve};
-use super::poll::{Poll, Flags};
+use super::util::{now, Time, Duration, resolve, CtrlC};
+use super::poll::{WaitImpl, WaitResult};
 use super::traffic::TrafficStats;
 use super::beacon::BeaconSerializer;
+use super::net::Socket;
 
 pub type Hash = BuildHasherDefault<FnvHasher>;
 
@@ -202,7 +198,7 @@ pub struct ReconnectEntry {
 }
 
 
-pub struct GenericCloud<P: Protocol, T: Table> {
+pub struct GenericCloud<P: Protocol, T: Table, S: Socket> {
     config: Config,
     magic: HeaderMagic,
     node_id: NodeId,
@@ -213,8 +209,8 @@ pub struct GenericCloud<P: Protocol, T: Table> {
     reconnect_peers: Vec<ReconnectEntry>,
     own_addresses: Vec<SocketAddr>,
     table: T,
-    socket4: UdpSocket,
-    socket6: UdpSocket,
+    socket4: S,
+    socket6: S,
     device: Device,
     crypto: Crypto,
     next_peerlist: Time,
@@ -229,23 +225,20 @@ pub struct GenericCloud<P: Protocol, T: Table> {
     _dummy_p: PhantomData<P>,
 }
 
-impl<P: Protocol, T: Table> GenericCloud<P, T> {
+impl<P: Protocol, T: Table, S: Socket> GenericCloud<P, T, S> {
     pub fn new(config: &Config, device: Device, table: T,
         learning: bool, broadcast: bool, addresses: Vec<Range>,
         crypto: Crypto, port_forwarding: Option<PortForwarding>
     ) -> Self {
-        let socket4 = match UdpBuilder::new_v4().expect("Failed to obtain ipv4 socket builder")
-            .reuse_address(true).expect("Failed to set so_reuseaddr").bind(("0.0.0.0", config.port)) {
+        let socket4 = match S::listen_v4("0.0.0.0", config.port) {
             Ok(socket) => socket,
             Err(err) => fail!("Failed to open ipv4 address 0.0.0.0:{}: {}", config.port, err)
         };
-        let socket6 = match UdpBuilder::new_v6().expect("Failed to obtain ipv6 socket builder")
-            .only_v6(true).expect("Failed to set only_v6")
-            .reuse_address(true).expect("Failed to set so_reuseaddr").bind(("::", config.port)) {
+        let socket6 = match S::listen_v6("::", config.port) {
             Ok(socket) => socket,
             Err(err) => fail!("Failed to open ipv6 address ::{}: {}", config.port, err)
         };
-        GenericCloud{
+        let mut res = GenericCloud{
             magic: config.get_magic(),
             node_id: random(),
             peers: PeerList::new(config.peer_timeout),
@@ -270,7 +263,9 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
             crypto,
             config: config.clone(),
             _dummy_p: PhantomData,
-        }
+        };
+        res.initialize();
+        return res
     }
 
     #[inline]
@@ -291,11 +286,11 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
         let msg_data = encode(msg, &mut self.buffer_out, self.magic, &mut self.crypto);
         for addr in self.peers.peers.keys() {
             self.traffic.count_out_traffic(*addr, msg_data.len());
-            let socket = match *addr {
-                SocketAddr::V4(_) => &self.socket4,
-                SocketAddr::V6(_) => &self.socket6
+            let mut socket = match *addr {
+                SocketAddr::V4(_) => &mut self.socket4,
+                SocketAddr::V6(_) => &mut self.socket6
             };
-            try!(match socket.send_to(msg_data, addr) {
+            try!(match socket.send(msg_data, *addr) {
                 Ok(written) if written == msg_data.len() => Ok(()),
                 Ok(_) => Err(Error::Socket("Sent out truncated packet", io::Error::new(io::ErrorKind::Other, "truncated"))),
                 Err(e) => Err(Error::Socket("IOError when sending", e))
@@ -316,10 +311,10 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
         let msg_data = encode(msg, &mut self.buffer_out, self.magic, &mut self.crypto);
         self.traffic.count_out_traffic(addr, msg_data.len());
         let socket = match addr {
-            SocketAddr::V4(_) => &self.socket4,
-            SocketAddr::V6(_) => &self.socket6
+            SocketAddr::V4(_) => &mut self.socket4,
+            SocketAddr::V6(_) => &mut self.socket6
         };
-        match socket.send_to(msg_data, addr) {
+        match socket.send(msg_data, addr) {
             Ok(written) if written == msg_data.len() => Ok(()),
             Ok(_) => Err(Error::Socket("Sent out truncated packet", io::Error::new(io::ErrorKind::Other, "truncated"))),
             Err(e) => Err(Error::Socket("IOError when sending", e))
@@ -335,7 +330,7 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
     /// Returns an IOError if the underlying system call fails
     #[allow(dead_code)]
     pub fn address(&self) -> io::Result<(SocketAddr, SocketAddr)> {
-        Ok((try!(self.socket4.local_addr()), try!(self.socket6.local_addr())))
+        Ok((try!(self.socket4.address()), try!(self.socket6.address())))
     }
 
     /// Returns the number of peers
@@ -700,15 +695,7 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
         Ok(())
     }
 
-    /// The main method of the node
-    ///
-    /// This method will use epoll to wait in the sockets and the device at the same time.
-    /// It will read from the sockets, decode and decrypt the message and then call the
-    /// `handle_net_message` method. It will also read from the device and call
-    /// `handle_interface_data` for each packet read.
-    /// Also, this method will call `housekeep` every second.
-    #[allow(unknown_lints, clippy::cyclomatic_complexity)]
-    pub fn run(&mut self) {
+    fn initialize(&mut self) {
         match self.address() {
             Err(err) => error!("Failed to obtain local addresses: {}", err),
             Ok((v4, v6)) => {
@@ -716,68 +703,68 @@ impl<P: Protocol, T: Table> GenericCloud<P, T> {
                 self.own_addresses.push(v6);
             }
         }
-        let dummy_time = Instant::now();
-        let trap = Trap::trap(&[Signal::SIGINT, Signal::SIGTERM, Signal::SIGQUIT]);
-        let mut poll_handle = try_fail!(Poll::new(3), "Failed to create poll handle: {}");
-        let socket4_fd = self.socket4.as_raw_fd();
-        let socket6_fd = self.socket6.as_raw_fd();
-        let device_fd = self.device.as_raw_fd();
-        try_fail!(poll_handle.register(socket4_fd, Flags::READ), "Failed to add ipv4 socket to poll handle: {}");
-        try_fail!(poll_handle.register(socket6_fd, Flags::READ), "Failed to add ipv6 socket to poll handle: {}");
-        if let Err(err) = poll_handle.register(device_fd, Flags::READ) {
-            if self.device.get_type() != Type::Dummy {
-                fail!("Failed to add device to poll handle: {}", err);
-            } else {
-                warn!("Failed to add device to poll handle: {}", err);
-            } 
+    }
+
+    fn handle_socket_data(&mut self, src: SocketAddr, data: &mut [u8]) {
+        let size = data.len();
+        if let Err(e) = decode(data, self.magic, &mut self.crypto).and_then(|msg| {
+            self.traffic.count_in_traffic(src, size);
+            self.handle_net_message(src, msg)
+        }) {
+            error!("Error: {}, from: {}", e, src);
         }
+    }
+
+    fn handle_socket_v4_event(&mut self, buffer: &mut [u8]) {
+        let (size, src) = try_fail!(self.socket4.receive(buffer), "Failed to read from ipv4 network socket: {}");
+        self.handle_socket_data(src, &mut buffer[..size])
+    }
+
+    fn handle_socket_v6_event(&mut self, buffer: &mut [u8]) {
+        let (size, src) = try_fail!(self.socket6.receive(buffer), "Failed to read from ipv6 network socket: {}");
+        self.handle_socket_data(src, &mut buffer[..size])
+    }
+
+    fn handle_device_event(&mut self, buffer: &mut [u8]) {
+        let mut start = 64;
+        let (offset, size) = try_fail!(self.device.read(&mut buffer[start..]), "Failed to read from tap device: {}");
+        start += offset;
+        if let Err(e) = self.handle_interface_data(buffer, start, start+size) {
+            error!("Error: {}", e);
+        }
+    }
+
+    /// The main method of the node
+    ///
+    /// This method will use epoll to wait in the sockets and the device at the same time.
+    /// It will read from the sockets, decode and decrypt the message and then call the
+    /// `handle_net_message` method. It will also read from the device and call
+    /// `handle_interface_data` for each packet read.
+    /// Also, this method will call `housekeep` every second.
+    pub fn run(&mut self) {
+        let ctrlc = CtrlC::new();
+        let waiter = try_fail!(WaitImpl::new(&self.socket4, &self.socket6, &self.device, 1000), "Failed to setup poll: {}");
         let mut buffer = [0; 64*1024];
         let mut poll_error = false;
-        loop {
-            let evts = match poll_handle.wait(1000) {
-                Ok(evts) => evts,
-                Err(err) => {
+        for evt in waiter {
+            match evt {
+                WaitResult::Error(err) => {
                     if poll_error {
                         fail!("Poll wait failed again: {}", err);
                     }
                     error!("Poll wait failed: {}, retrying...", err);
                     poll_error = true;
-                    continue
-                }
-            };
-            for evt in evts {
-                match evt.fd() {
-                    fd if (fd == socket4_fd || fd == socket6_fd) => {
-                        let (size, src) = match evt.fd() {
-                            fd if fd == socket4_fd => try_fail!(self.socket4.recv_from(&mut buffer), "Failed to read from ipv4 network socket: {}"),
-                            fd if fd == socket6_fd => try_fail!(self.socket6.recv_from(&mut buffer), "Failed to read from ipv6 network socket: {}"),
-                            _ => unreachable!()
-                        };
-                        if let Err(e) = decode(&mut buffer[..size], self.magic, &mut self.crypto).and_then(|msg| {
-                            self.traffic.count_in_traffic(src, size);
-                            self.handle_net_message(src, msg)
-                        }) {
-                            error!("Error: {}, from: {}", e, src);
-                        }
-                    },
-                    fd if (fd == device_fd) => {
-                        let mut start = 64;
-                        let (offset, size) = try_fail!(self.device.read(&mut buffer[start..]), "Failed to read from tap device: {}");
-                        start += offset;
-                        if let Err(e) = self.handle_interface_data(&mut buffer, start, start+size) {
-                            error!("Error: {}", e);
-                        }
-                    },
-                    _ => unreachable!()
-                }
+                },
+                WaitResult::Timeout => {},
+                WaitResult::SocketV4 => self.handle_socket_v4_event(&mut buffer),
+                WaitResult::SocketV6 => self.handle_socket_v6_event(&mut buffer),
+                WaitResult::Device => self.handle_device_event(&mut buffer)
             }
             if self.next_housekeep < now() {
                 poll_error = false;
-                // Check for signals
-                if trap.wait(dummy_time).is_some() {
-                    break;
+                if ctrlc.was_pressed() {
+                    break
                 }
-                // Do the housekeeping
                 if let Err(e) = self.housekeep() {
                     error!("Error: {}", e)
                 }
