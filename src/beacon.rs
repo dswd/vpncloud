@@ -397,10 +397,10 @@ fn encode_decode_cmd() {
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
     let file = tempfile::NamedTempFile::new().expect("Failed to create temp file");
     assert!(ser.write_to_cmd(&peers, &format!("echo $beacon > {}", file.path().display())).is_ok());
-    thread::sleep(Duration::from_millis(10));
+    thread::sleep(Duration::from_millis(100));
     let res = ser.read_from_cmd(&format!("cat {}", file.path().display()), None);
     assert!(res.is_ok());
-    thread::sleep(Duration::from_millis(10));
+    thread::sleep(Duration::from_millis(100));
     let peers2 = ser.get_cmd_results();
     assert!(peers2.is_some());
     assert_eq!(format!("{:?}", peers), format!("{:?}", peers2.unwrap()));
