@@ -22,6 +22,7 @@ extern crate siphasher;
 extern crate daemonize;
 extern crate ring;
 extern crate base_62;
+#[cfg(test)] extern crate tempfile;
 #[cfg(feature = "bench")] extern crate test;
 
 #[macro_use] pub mod util;

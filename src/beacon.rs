@@ -266,7 +266,6 @@ impl BeaconSerializer {
                 error!("Beacon command failed: {}", String::from_utf8_lossy(&output.stderr));
             }
         });
-        //TODO: implement
         Ok(())
     }
 
@@ -284,6 +283,8 @@ impl BeaconSerializer {
 
 
 #[cfg(test)] use std::str::FromStr;
+#[cfg(test)] use std::time::Duration;
+#[cfg(test)] use tempfile;
 
 #[test]
 fn encode() {
@@ -362,4 +363,45 @@ fn decode_invalid() {
     assert_eq!(0, ser.decode_internal("JHEiLpSFTn8R4PIQ1nuDy5tY3lESGriv", None, 2000).len());
     assert_eq!(2, ser.decode_internal("SGrivJHEiLpSFTn8R4PIQ1muDy5tY3lESGrivJHEiL", None, 2000).len());
     assert_eq!(2, ser.decode_internal("JHEiLJHEiLpSFTn8R4PIQ1muDy5tY3lESGriv", None, 2000).len());
+}
+
+#[test]
+fn encode_decode() {
+    let ser = BeaconSerializer::new(b"vpnc", b"mysecretkey");
+    let mut peers = Vec::new();
+    peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
+    peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
+    let data = ser.encode(&peers);
+    let peers2 = ser.decode(&data, None);
+    assert_eq!(format!("{:?}", peers), format!("{:?}", peers2));
+}
+
+#[test]
+fn encode_decode_file() {
+    let ser = BeaconSerializer::new(b"vpnc", b"mysecretkey");
+    let mut peers = Vec::new();
+    peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
+    peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
+    let file = tempfile::NamedTempFile::new().expect("Failed to create temp file");
+    assert!(ser.write_to_file(&peers, file.path()).is_ok());
+    let peers2 = ser.read_from_file(file.path(), None);
+    assert!(peers2.is_ok());
+    assert_eq!(format!("{:?}", peers), format!("{:?}", peers2.unwrap()));
+}
+
+#[test]
+fn encode_decode_cmd() {
+    let ser = BeaconSerializer::new(b"vpnc", b"mysecretkey");
+    let mut peers = Vec::new();
+    peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
+    peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
+    let file = tempfile::NamedTempFile::new().expect("Failed to create temp file");
+    assert!(ser.write_to_cmd(&peers, &format!("echo $beacon > {}", file.path().display())).is_ok());
+    thread::sleep(Duration::from_millis(10));
+    let res = ser.read_from_cmd(&format!("cat {}", file.path().display()), None);
+    assert!(res.is_ok());
+    thread::sleep(Duration::from_millis(10));
+    let peers2 = ser.get_cmd_results();
+    assert!(peers2.is_some());
+    assert_eq!(format!("{:?}", peers), format!("{:?}", peers2.unwrap()));
 }
