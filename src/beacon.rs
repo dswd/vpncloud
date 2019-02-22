@@ -93,6 +93,9 @@ impl BeaconSerializer {
     }
     
     fn encrypt_data(&self, data: &mut Vec<u8>) {
+        // Note: the 1 byte seed is only meant to protect from random changes,
+        // not malicious ones. For full protection, at least 8 bytes (~12 
+        // characters) would be needed.
         let seed = sha512(data as &[u8])[0];
         self.mask_with_keystream(data as &mut [u8], TYPE_DATA, seed);
         data.push(seed ^ self.get_keystream(TYPE_SEED, 0, 0)[0]);
@@ -386,6 +389,7 @@ fn decode_invalid() {
     assert_eq!(2, ser.decode_internal("SGrivjuWwKhjVTYjbwJjtYAZlMfEj7IDO55LNjuWwK", None, 2000).len());
     assert_eq!(2, ser.decode_internal("juWwKjuWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", None, 2000).len());
 }
+
 
 #[test]
 fn encode_decode() {
