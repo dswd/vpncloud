@@ -20,6 +20,11 @@ use super::util::{now, Encoder};
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr, SocketAddrV6, Ipv6Addr};
 
 
+const TYPE_BEGIN: u8 = 0;
+const TYPE_END: u8 = 1;
+const TYPE_DATA: u8 = 2;
+const TYPE_SEED: u8 = 3;
+
 fn base_62_sanitize(data: &str) -> String {
     data.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
 }
@@ -56,35 +61,56 @@ impl BeaconSerializer {
         }
     }
 
-    fn seed(&self, key: &str) -> Vec<u8> {
+    fn get_keystream(&self, type_: u8, seed: u8, iter: u8) -> Vec<u8> {
         let mut data = Vec::new();
-        data.extend_from_slice(key.as_bytes());
+        data.extend_from_slice(&[type_, seed, iter]);
         data.extend_from_slice(&self.magic);
         data.extend_from_slice(&self.shared_key);
         sha512(&data)
     }
 
-    fn mask_with_seed(&self, data: &[u8], key: &str) -> Vec<u8> {
-        let mask = self.seed(key);
-        let mut output = Vec::with_capacity(data.len());
+    fn mask_with_keystream(&self, data: &mut [u8], type_: u8, seed: u8) {
+        let mut iter = 0;
+        let mut mask = self.get_keystream(type_, seed, iter);
+        let mut pos = 0;
         for i in 0..data.len() {
-            output.push(data[i] ^ mask[i]);
+            data[i] ^= mask[pos];
+            pos += 1;
+            if pos == 16 {
+                pos = 0;
+                iter += 1;
+                mask = self.get_keystream(type_, seed, iter);
+            }
         }
-        output
     }
 
     fn begin(&self) -> String {
-        base_62::encode(&self.seed("begin"))[0..5].to_string()
+        base_62::encode(&self.get_keystream(TYPE_BEGIN, 0, 0))[0..5].to_string()
     }
 
     fn end(&self) -> String {
-        base_62::encode(&self.seed("end"))[0..5].to_string()
+        base_62::encode(&self.get_keystream(TYPE_END, 0, 0))[0..5].to_string()
+    }
+    
+    fn encrypt_data(&self, data: &mut Vec<u8>) {
+        let seed = sha512(data as &[u8])[0];
+        self.mask_with_keystream(data as &mut [u8], TYPE_DATA, seed);
+        data.push(seed ^ self.get_keystream(TYPE_SEED, 0, 0)[0]);
+    }
+
+    fn decrypt_data(&self, data: &mut Vec<u8>) -> bool {
+        if data.is_empty() {
+            return false
+        }
+        let seed = data.pop().unwrap() ^ self.get_keystream(TYPE_SEED, 0, 0)[0];
+        self.mask_with_keystream(data as &mut [u8], TYPE_DATA, seed);
+        seed == sha512(data as &[u8])[0]
     }
 
     fn peerlist_encode(&self, peers: &[SocketAddr], now_hour: u16) -> String {
         let mut data = Vec::new();
         // Add timestamp
-        data.append(&mut self.mask_with_seed(&now_hour.to_be_bytes(), "time"));
+        data.extend_from_slice(&now_hour.to_be_bytes());
         // Split addresses into v4 and v6
         let mut v4addrs = Vec::new();
         let mut v6addrs = Vec::new();
@@ -95,13 +121,13 @@ impl BeaconSerializer {
             }
         }
         // Add count of v4 addresses
-        data.append(&mut self.mask_with_seed(&[v4addrs.len() as u8], "v4count"));
+        data.push(v4addrs.len() as u8);
         // Add v4 addresses
         for addr in v4addrs {
             let mut dat = [0u8; 6];
             dat[0..4].copy_from_slice(&addr.ip().octets());
             Encoder::write_u16(addr.port(), &mut dat[4..]);
-            data.append(&mut self.mask_with_seed(&dat, "peer"));
+            data.extend_from_slice(&dat);
         }
         // Add v6 addresses
         for addr in v6addrs {
@@ -116,13 +142,9 @@ impl BeaconSerializer {
             Encoder::write_u16(ip[6], &mut dat[12..]);
             Encoder::write_u16(ip[7], &mut dat[14..]);
             Encoder::write_u16(addr.port(), &mut dat[16..]);
-            data.append(&mut self.mask_with_seed(&dat, "peer"));
+            data.extend_from_slice(&dat);
         }
-        let mut parity = 0;
-        for b in &data {
-            parity ^= b;
-        }
-        data.push(parity);
+        self.encrypt_data(&mut data);
         base_62::encode(&data)
     }
 
@@ -133,14 +155,10 @@ impl BeaconSerializer {
         if data.len() < 4 {
             return peers
         }
-        let mut parity = data.pop().unwrap();
-        for b in &data {
-            parity ^= b;
+        if !self.decrypt_data(&mut data) {
+            return peers        
         }
-        if parity != 0 {
-            return peers
-        }
-        let then = Wrapping(Encoder::read_u16(&self.mask_with_seed(&data[pos..=pos+1], "time")));
+        let then = Wrapping(Encoder::read_u16(&data[pos..=pos+1]));
         if let Some(ttl) = ttl_hours {
             let now = Wrapping(now_hour);
             if now - then > Wrapping(ttl) && then - now > Wrapping(ttl) {
@@ -148,14 +166,14 @@ impl BeaconSerializer {
             }
         }
         pos += 2;
-        let v4count = self.mask_with_seed(&[data[pos]], "v4count")[0] as usize;
+        let v4count = data[pos] as usize;
         pos += 1;
         if v4count * 6 > data.len() - pos || (data.len() - pos - v4count * 6) % 18 > 0 {
             return peers
         }
         for _ in 0..v4count {
             assert!(data.len() >= pos + 6);
-            let dat = self.mask_with_seed(&data[pos..pos+6], "peer");
+            let dat = &data[pos..pos+6];
             pos += 6;
             let port = Encoder::read_u16(&dat[4..]);
             let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(dat[0], dat[1], dat[2], dat[3]), port));
@@ -164,7 +182,7 @@ impl BeaconSerializer {
         let v6count = (data.len() - pos)/18;
         for _ in 0..v6count {
             assert!(data.len() >= pos + 18);
-            let dat = self.mask_with_seed(&data[pos..pos+18], "peer");
+            let dat = &data[pos..pos+18];
             pos += 18;
             let mut ip = [0u16; 8];
             for i in 0..8 {
@@ -292,9 +310,13 @@ fn encode() {
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
-    assert_eq!("JHEiLpSFTn8R4PIQ1muDy5tY3lESGriv", ser.encode_internal(&peers, 2000));
+    assert_eq!("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", ser.encode_internal(&peers, 2000));
     peers.push(SocketAddr::from_str("[::1]:5678").unwrap());
-    assert_eq!("JHEiL4gZk5Jq5R3IRnwJiIqgGzBPgXJrhO1hrmeSRCNLaw26VcVSGriv", ser.encode_internal(&peers, 2000));
+    assert_eq!("juWwKjF5qZG7PE5imnpi5XARaXnP3UsMsGBLxM4FNFDzvjlKt1SO55LN", ser.encode_internal(&peers, 2000));
+    let mut peers = Vec::new();
+    peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
+    peers.push(SocketAddr::from_str("6.6.6.6:54").unwrap());
+    assert_eq!("juWwKIgSqTammVFRNoIVzLPO0BEO55LN", ser.encode_internal(&peers, 2000));
 }
 
 #[test]
@@ -303,9 +325,9 @@ fn decode() {
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
-    assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode_internal("JHEiLpSFTn8R4PIQ1muDy5tY3lESGriv", None, 2000)));
+    assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode_internal("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", None, 2000)));
     peers.push(SocketAddr::from_str("[::1]:5678").unwrap());
-    assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode_internal("JHEiL4gZk5Jq5R3IRnwJiIqgGzBPgXJrhO1hrmeSRCNLaw26VcVSGriv", None, 2000)));
+    assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode_internal("juWwKjF5qZG7PE5imnpi5XARaXnP3UsMsGBLxM4FNFDzvjlKt1SO55LN", None, 2000)));
 }
 
 #[test]
@@ -314,8 +336,8 @@ fn decode_split() {
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
-    assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode_internal("JHEiL-pS.FT:n8 R4\tPI\nQ1(mu)Dy[5t]Y3ülEäSGriv", None, 2000)));
-    assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode_internal("J -, \nHE--iLpSFTn8R4PIQ1muDy5tY3lES(G}rÖÄÜ\niv", None, 2000)));
+    assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode_internal("juWwK-hj.VT:Yj bw\tJj\ntY(AZ)lM[fE]j7üIDäO55LN", None, 2000)));
+    assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode_internal("j -, \nuW--wKhjVTYjbwJjtYAZlMfEj7IDO(5}5ÖÄÜ\nLN", None, 2000)));
 }
 
 #[test]
@@ -324,7 +346,7 @@ fn decode_offset() {
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
-    assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode_internal("Hello World: JHEiLpSFTn8R4PIQ1muDy5tY3lESGriv! End of the World", None, 2000)));
+    assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode_internal("Hello World: juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN! End of the World", None, 2000)));
 }
 
 #[test]
@@ -333,7 +355,7 @@ fn decode_multiple() {
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
-    assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode_internal("JHEiL4dGxY6nwSaDoRBSGriv JHEiL7c3Y6ptTMaDoRBSGriv", None, 2000)));
+    assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode_internal("juWwKkBEVBp9SsDiN3BO55LN juWwKtGGPQz1gXIBd68O55LN", None, 2000)));
 }
 
 #[test]
@@ -342,27 +364,27 @@ fn decode_ttl() {
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
-    assert_eq!(2, ser.decode_internal("JHEiLpSFTn8R4PIQ1muDy5tY3lESGriv", None, 2000).len());
-    assert_eq!(2, ser.decode_internal("JHEiLpSFTn8R4PIQ1muDy5tY3lESGriv", None, 2100).len());
-    assert_eq!(2, ser.decode_internal("JHEiLpSFTn8R4PIQ1muDy5tY3lESGriv", None, 2005).len());
-    assert_eq!(2, ser.decode_internal("JHEiLpSFTn8R4PIQ1muDy5tY3lESGriv", None, 1995).len());
-    assert_eq!(2, ser.decode_internal("JHEiLpSFTn8R4PIQ1muDy5tY3lESGriv", Some(24), 2000).len());
-    assert_eq!(2, ser.decode_internal("JHEiLpSFTn8R4PIQ1muDy5tY3lESGriv", Some(24), 1995).len());
-    assert_eq!(2, ser.decode_internal("JHEiLpSFTn8R4PIQ1muDy5tY3lESGriv", Some(24), 2005).len());
-    assert_eq!(0, ser.decode_internal("JHEiLpSFTn8R4PIQ1muDy5tY3lESGriv", Some(24), 2100).len());
-    assert_eq!(0, ser.decode_internal("JHEiLpSFTn8R4PIQ1muDy5tY3lESGriv", Some(24), 1900).len());
+    assert_eq!(2, ser.decode_internal("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", None, 2000).len());
+    assert_eq!(2, ser.decode_internal("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", None, 2100).len());
+    assert_eq!(2, ser.decode_internal("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", None, 2005).len());
+    assert_eq!(2, ser.decode_internal("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", None, 1995).len());
+    assert_eq!(2, ser.decode_internal("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", Some(24), 2000).len());
+    assert_eq!(2, ser.decode_internal("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", Some(24), 1995).len());
+    assert_eq!(2, ser.decode_internal("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", Some(24), 2005).len());
+    assert_eq!(0, ser.decode_internal("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", Some(24), 2100).len());
+    assert_eq!(0, ser.decode_internal("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", Some(24), 1900).len());
 }
 
 #[test]
 fn decode_invalid() {
     let ser = BeaconSerializer::new(b"vpnc", b"mysecretkey");
     assert_eq!(0, ser.decode_internal("", None, 2000).len());
-    assert_eq!(0, ser.decode_internal("JHEiLSGriv", None, 2000).len());
-    assert_eq!(0, ser.decode_internal("JHEiL--", None, 2000).len());
-    assert_eq!(0, ser.decode_internal("--SGriv", None, 2000).len());
-    assert_eq!(0, ser.decode_internal("JHEiLpSFTn8R4PIQ1nuDy5tY3lESGriv", None, 2000).len());
-    assert_eq!(2, ser.decode_internal("SGrivJHEiLpSFTn8R4PIQ1muDy5tY3lESGrivJHEiL", None, 2000).len());
-    assert_eq!(2, ser.decode_internal("JHEiLJHEiLpSFTn8R4PIQ1muDy5tY3lESGriv", None, 2000).len());
+    assert_eq!(0, ser.decode_internal("juWwKO55LN", None, 2000).len());
+    assert_eq!(0, ser.decode_internal("juWwK--", None, 2000).len());
+    assert_eq!(0, ser.decode_internal("--O55LN", None, 2000).len());
+    assert_eq!(0, ser.decode_internal("juWwKhjVTYjbwJjtYAZXMfEj7IDO55LN", None, 2000).len());
+    assert_eq!(2, ser.decode_internal("SGrivjuWwKhjVTYjbwJjtYAZlMfEj7IDO55LNjuWwK", None, 2000).len());
+    assert_eq!(2, ser.decode_internal("juWwKjuWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", None, 2000).len());
 }
 
 #[test]
