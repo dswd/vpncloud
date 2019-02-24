@@ -21,7 +21,7 @@ use super::device::Device;
 use super::udpmessage::{encode, decode, Message};
 use super::crypto::Crypto;
 use super::port_forwarding::PortForwarding;
-use super::util::{now, Time, Duration, resolve, CtrlC};
+use super::util::{TimeSource, Time, Duration, resolve, CtrlC};
 use super::poll::{WaitImpl, WaitResult};
 use super::traffic::TrafficStats;
 use super::beacon::BeaconSerializer;
@@ -40,25 +40,27 @@ struct PeerData {
     alt_addrs: Vec<SocketAddr>,
 }
 
-struct PeerList {
+struct PeerList<TS: TimeSource> {
     timeout: Duration,
     peers: HashMap<SocketAddr, PeerData, Hash>,
     nodes: HashMap<NodeId, SocketAddr, Hash>,
-    addresses: HashMap<SocketAddr, NodeId, Hash>
+    addresses: HashMap<SocketAddr, NodeId, Hash>,
+    _dummy_ts: PhantomData<TS>
 }
 
-impl PeerList {
-    fn new(timeout: Duration) -> PeerList {
+impl<TS: TimeSource> PeerList<TS> {
+    fn new(timeout: Duration) -> PeerList<TS> {
         PeerList{
             peers: HashMap::default(),
             timeout,
             nodes: HashMap::default(),
-            addresses: HashMap::default()
+            addresses: HashMap::default(),
+            _dummy_ts: PhantomData
         }
     }
 
     fn timeout(&mut self) -> Vec<SocketAddr> {
-        let now = now();
+        let now = TS::now();
         let mut del: Vec<SocketAddr> = Vec::new();
         for (&addr, ref data) in &self.peers {
             if data.timeout < now {
@@ -104,7 +106,7 @@ impl PeerList {
         if self.nodes.insert(node_id, addr).is_none() {
             info!("New peer: {}", addr);
             self.peers.insert(addr, PeerData {
-                timeout: now() + Time::from(self.timeout),
+                timeout: TS::now() + Time::from(self.timeout),
                 node_id,
                 alt_addrs: vec![]
             });
@@ -115,7 +117,7 @@ impl PeerList {
     #[inline]
     fn refresh(&mut self, addr: &SocketAddr) {
         if let Some(ref mut data) = self.peers.get_mut(addr) {
-            data.timeout = now()+Time::from(self.timeout);
+            data.timeout = TS::now()+Time::from(self.timeout);
         }
     }
 
@@ -180,8 +182,9 @@ impl PeerList {
     #[inline]
     fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error> {
         try!(writeln!(out, "Peers:"));
+        let now = TS::now();
         for (addr, data) in &self.peers {
-            try!(writeln!(out, " - {} (ttl: {} s)", addr, data.timeout-now()));
+            try!(writeln!(out, " - {} (ttl: {} s)", addr, data.timeout-now));
         }
         Ok(())
     }
@@ -198,11 +201,11 @@ pub struct ReconnectEntry {
 }
 
 
-pub struct GenericCloud<P: Protocol, T: Table, S: Socket> {
+pub struct GenericCloud<P: Protocol, T: Table, S: Socket, TS: TimeSource> {
     config: Config,
     magic: HeaderMagic,
     node_id: NodeId,
-    peers: PeerList,
+    peers: PeerList<TS>,
     addresses: Vec<Range>,
     learning: bool,
     broadcast: bool,
@@ -221,11 +224,12 @@ pub struct GenericCloud<P: Protocol, T: Table, S: Socket> {
     next_beacon: Time,
     port_forwarding: Option<PortForwarding>,
     traffic: TrafficStats,
-    beacon_serializer: BeaconSerializer,
+    beacon_serializer: BeaconSerializer<TS>,
     _dummy_p: PhantomData<P>,
+    _dummy_ts: PhantomData<TS>
 }
 
-impl<P: Protocol, T: Table, S: Socket> GenericCloud<P, T, S> {
+impl<P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<P, T, S, TS> {
     pub fn new(config: &Config, device: Device, table: T,
         learning: bool, broadcast: bool, addresses: Vec<Range>,
         crypto: Crypto, port_forwarding: Option<PortForwarding>
@@ -238,6 +242,7 @@ impl<P: Protocol, T: Table, S: Socket> GenericCloud<P, T, S> {
             Ok(socket) => socket,
             Err(err) => fail!("Failed to open ipv6 address ::{}: {}", config.port, err)
         };
+        let now = TS::now();
         let mut res = GenericCloud{
             magic: config.get_magic(),
             node_id: random(),
@@ -251,18 +256,19 @@ impl<P: Protocol, T: Table, S: Socket> GenericCloud<P, T, S> {
             socket4,
             socket6,
             device,
-            next_peerlist: now(),
+            next_peerlist: now,
             update_freq: config.get_keepalive(),
             buffer_out: [0; 64*1024],
-            next_housekeep: now(),
-            next_stats_out: now() + STATS_INTERVAL,
-            next_beacon: now(),
+            next_housekeep: now,
+            next_stats_out: now + STATS_INTERVAL,
+            next_beacon: now,
             port_forwarding,
             traffic: TrafficStats::default(),
             beacon_serializer: BeaconSerializer::new(&config.get_magic(), crypto.get_key()),
             crypto,
             config: config.clone(),
             _dummy_p: PhantomData,
+            _dummy_ts: PhantomData
         };
         res.initialize();
         return res
@@ -344,13 +350,14 @@ impl<P: Protocol, T: Table, S: Socket> GenericCloud<P, T, S> {
     /// This method adds a peer to the list of nodes to reconnect to. A periodic task will try to
     /// connect to the peer if it is not already connected.
     pub fn add_reconnect_peer(&mut self, add: String) {
+        let now = TS::now();
         self.reconnect_peers.push(ReconnectEntry {
             address: add,
             tries: 0,
             timeout: 1,
             resolved: vec![],
-            next_resolve: now(),
-            next: now()
+            next_resolve: now,
+            next: now
         })
     }
 
@@ -431,7 +438,7 @@ impl<P: Protocol, T: Table, S: Socket> GenericCloud<P, T, S> {
             pfw.check_extend();
         }
         // Periodically send peer list to peers
-        let now = now();
+        let now = TS::now();
         if self.next_peerlist <= now {
             debug!("Send peer list to all peers");
             let mut peer_num = self.peers.len();
@@ -760,7 +767,7 @@ impl<P: Protocol, T: Table, S: Socket> GenericCloud<P, T, S> {
                 WaitResult::SocketV6 => self.handle_socket_v6_event(&mut buffer),
                 WaitResult::Device => self.handle_device_event(&mut buffer)
             }
-            if self.next_housekeep < now() {
+            if self.next_housekeep < TS::now() {
                 poll_error = false;
                 if ctrlc.was_pressed() {
                     break
@@ -768,7 +775,7 @@ impl<P: Protocol, T: Table, S: Socket> GenericCloud<P, T, S> {
                 if let Err(e) = self.housekeep() {
                     error!("Error: {}", e)
                 }
-                self.next_housekeep = now() + 1
+                self.next_housekeep = TS::now() + 1
             }
         }
         info!("Shutting down...");

@@ -7,7 +7,7 @@ use std::io;
 
 use igd::*;
 
-use super::util::{Time, now};
+use super::util::{SystemTimeSource, Time, TimeSource};
 
 const LEASE_TIME: u32 = 300;
 const DESCRIPTION: &str = "VpnCloud";
@@ -90,7 +90,7 @@ impl PortForwarding {
         };
         info!("Port-forwarding: sucessfully activated port forward on {}, timeout: {}", external_addr, timeout);
         let next_extension = if timeout > 0 {
-            Some(now() + Time::from(timeout) - 60)
+            Some(SystemTimeSource::now() + Time::from(timeout) - 60)
         } else {
             None
         };
@@ -104,7 +104,7 @@ impl PortForwarding {
 
     pub fn check_extend(&mut self) {
         if let Some(deadline) = self.next_extension {
-            if deadline > now() {
+            if deadline > SystemTimeSource::now() {
                 return
             }
         } else {
@@ -114,7 +114,7 @@ impl PortForwarding {
             Ok(()) => debug!("Port-forwarding: extended port forwarding"),
             Err(err) => error!("Port-forwarding: failed to extend port forwarding: {}", err)
         };
-        self.next_extension = Some(now() + Time::from(LEASE_TIME) - 60);
+        self.next_extension = Some(SystemTimeSource::now() + Time::from(LEASE_TIME) - 60);
     }
 
     fn deactivate(&self) {

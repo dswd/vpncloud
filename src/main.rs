@@ -48,6 +48,7 @@ use std::process::Command;
 use std::fs::File;
 use std::path::Path;
 use std::io::{self, Write};
+use std::net::UdpSocket;
 
 use device::{Device, Type};
 use ethernet::SwitchTable;
@@ -56,9 +57,8 @@ use types::{Mode, Range, Protocol, HeaderMagic, Error};
 use cloud::GenericCloud;
 use crypto::{Crypto, CryptoMethod};
 use port_forwarding::PortForwarding;
-use util::Duration;
+use util::{Duration, SystemTimeSource};
 use config::Config;
-use std::net::UdpSocket;
 
 
 const VERSION: u8 = 1;
@@ -156,25 +156,25 @@ fn run_script(script: &str, ifname: &str) {
 }
 
 enum AnyTable {
-    Switch(SwitchTable),
+    Switch(SwitchTable<SystemTimeSource>),
     Routing(RoutingTable)
 }
 
 enum AnyCloud<P: Protocol> {
-    Switch(GenericCloud<P, SwitchTable, UdpSocket>),
-    Routing(GenericCloud<P, RoutingTable, UdpSocket>)
+    Switch(GenericCloud<P, SwitchTable<SystemTimeSource>, UdpSocket, SystemTimeSource>),
+    Routing(GenericCloud<P, RoutingTable, UdpSocket, SystemTimeSource>)
 }
 
 impl<P: Protocol> AnyCloud<P> {
-    #[allow(unknown_lints,clippy::too_many_arguments)]
+    #[allow(unknown_lints, clippy::too_many_arguments)]
     fn new(config: &Config, device: Device, table: AnyTable,
             learning: bool, broadcast: bool, addresses: Vec<Range>,
             crypto: Crypto, port_forwarding: Option<PortForwarding>) -> Self {
         match table {
-            AnyTable::Switch(t) => AnyCloud::Switch(GenericCloud::<P, SwitchTable, UdpSocket>::new(
+            AnyTable::Switch(t) => AnyCloud::Switch(GenericCloud::<P, SwitchTable<SystemTimeSource>, UdpSocket, SystemTimeSource>::new(
                 config, device,t, learning, broadcast, addresses, crypto, port_forwarding
             )),
-            AnyTable::Routing(t) => AnyCloud::Routing(GenericCloud::<P, RoutingTable, UdpSocket>::new(
+            AnyTable::Routing(t) => AnyCloud::Routing(GenericCloud::<P, RoutingTable, UdpSocket, SystemTimeSource>::new(
                 config, device,t, learning, broadcast, addresses, crypto, port_forwarding
             ))
         }

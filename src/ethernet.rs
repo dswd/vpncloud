@@ -7,11 +7,12 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::hash::BuildHasherDefault;
 use std::io::{self, Write};
+use std::marker::PhantomData;
 
 use fnv::FnvHasher;
 
 use super::types::{Error, Table, Protocol, Address};
-use super::util::{now, Time, Duration};
+use super::util::{TimeSource, Time, Duration, MockTimeSource};
 
 /// An ethernet frame dissector
 ///
@@ -68,26 +69,27 @@ type Hash = BuildHasherDefault<FnvHasher>;
 ///
 /// This table is a simple hash map between an address and the destination peer. It learns
 /// addresses as they are seen and forgets them after some time.
-pub struct SwitchTable {
+pub struct SwitchTable<TS> {
     /// The table storing the actual mapping
     table: HashMap<Address, SwitchTableValue, Hash>,
     /// Timeout period for forgetting learnt addresses
     timeout: Duration,
     // Timeout period for not overwriting learnt addresses
     protection_period: Duration,
+    _dummy_ts: PhantomData<TS>
 }
 
-impl SwitchTable {
+impl<TS: TimeSource> SwitchTable<TS> {
     /// Creates a new switch table
     pub fn new(timeout: Duration, protection_period: Duration) -> Self {
-        SwitchTable{table: HashMap::default(), timeout, protection_period}
+        Self{table: HashMap::default(), timeout, protection_period, _dummy_ts: PhantomData}
     }
 }
 
-impl Table for SwitchTable {
+impl<TS: TimeSource> Table for SwitchTable<TS> {
     /// Forget addresses that have not been seen for the configured timeout
     fn housekeep(&mut self) {
-        let now = now();
+        let now = TS::now();
         let mut del: Vec<Address> = Vec::new();
         for (key, val) in &self.table {
             if val.timeout < now {
@@ -102,7 +104,7 @@ impl Table for SwitchTable {
 
     /// Write out the table
     fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error> {
-        let now = now();
+        let now = TS::now();
         try!(writeln!(out, "Switch table:"));
         for (addr, val) in &self.table {
             try!(writeln!(out, " - {} => {} (ttl: {} s)", addr, val.address, val.timeout - now));
@@ -113,7 +115,7 @@ impl Table for SwitchTable {
     /// Learns the given address, inserting it in the hash map
     #[inline]
     fn learn(&mut self, key: Address, _prefix_len: Option<u8>, addr: SocketAddr) {
-        let deadline = now() + Time::from(self.timeout);
+        let deadline = TS::now() + Time::from(self.timeout);
         match self.table.entry(key) {
             Entry::Vacant(entry) => {
                 entry.insert(SwitchTableValue{address: addr, timeout: deadline});
@@ -163,7 +165,6 @@ impl Table for SwitchTable {
 
 #[cfg(test)] use std::str::FromStr;
 #[cfg(test)] use std::net::ToSocketAddrs;
-#[cfg(test)] use std::thread;
 
 #[test]
 fn decode_frame_without_vlan() {
@@ -192,17 +193,19 @@ fn decode_invalid_frame() {
 
 #[test]
 fn switch() {
-    let mut table = SwitchTable::new(10, 1);
+    MockTimeSource::set_time(1000);
+    let mut table = SwitchTable::<MockTimeSource>::new(10, 1);
     let addr = Address::from_str("12:34:56:78:90:ab").unwrap();
     let peer = "1.2.3.4:5678".to_socket_addrs().unwrap().next().unwrap();
     let peer2 = "1.2.3.5:7890".to_socket_addrs().unwrap().next().unwrap();
     assert!(table.lookup(&addr).is_none());
+    MockTimeSource::set_time(1000);
     table.learn(addr.clone(), None, peer.clone());
     assert_eq!(table.lookup(&addr), Some(peer));
-    // Do not override within 1 seconds
+    MockTimeSource::set_time(1000);
     table.learn(addr.clone(), None, peer2.clone());
     assert_eq!(table.lookup(&addr), Some(peer));
-    thread::sleep(std::time::Duration::from_secs(1));
+    MockTimeSource::set_time(1010);
     table.learn(addr.clone(), None, peer2.clone());
     assert_eq!(table.lookup(&addr), Some(peer2));
 }

@@ -4,6 +4,7 @@
 
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::fmt;
+use std::sync::atomic::{AtomicIsize, Ordering};
 
 use super::types::Error;
 
@@ -20,19 +21,6 @@ use std::time::Instant;
 pub type Duration = u32;
 pub type Time = i64;
 
-#[inline]
-#[cfg(target_os = "linux")]
-pub fn now() -> Time {
-    let mut tv = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-    unsafe { libc::clock_gettime(6, &mut tv); }
-    tv.tv_sec as Time
-}
-
-#[inline]
-#[cfg(not(target_os = "linux"))]
-pub fn now() -> Time {
-    time::get_time().sec
-}
 
 const HEX_CHARS: &[u8] = b"0123456789abcdef";
 
@@ -187,5 +175,46 @@ impl CtrlC {
 
     pub fn was_pressed(&self) -> bool {
         self.trap.wait(self.dummy_time).is_some()
+    }
+}
+
+
+pub trait TimeSource: Sync + Copy + Send + 'static {
+    fn now() -> Time;
+}
+
+#[derive(Clone, Copy)]
+pub struct SystemTimeSource;
+
+impl TimeSource for SystemTimeSource {
+    #[cfg(target_os = "linux")]
+    fn now() -> Time {
+        let mut tv = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+        unsafe { libc::clock_gettime(6, &mut tv); }
+        tv.tv_sec as Time
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn now() -> Time {
+        time::get_time().sec
+    }
+}
+
+thread_local! {
+    static MOCK_TIME: AtomicIsize = AtomicIsize::new(0);
+}
+
+#[derive(Clone, Copy)]
+pub struct MockTimeSource;
+
+impl MockTimeSource {
+    pub fn set_time(time: Time) {
+        MOCK_TIME.with(|t| t.store(time as isize, Ordering::SeqCst))
+    }
+}
+
+impl TimeSource for MockTimeSource {
+    fn now() -> Time {
+        MOCK_TIME.with(|t| t.load(Ordering::SeqCst) as Time)
     }
 }
