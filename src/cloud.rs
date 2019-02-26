@@ -40,7 +40,7 @@ struct PeerData {
     alt_addrs: Vec<SocketAddr>,
 }
 
-struct PeerList<TS: TimeSource> {
+pub struct PeerList<TS: TimeSource> {
     timeout: Duration,
     peers: HashMap<SocketAddr, PeerData, Hash>,
     nodes: HashMap<NodeId, SocketAddr, Hash>,
@@ -81,12 +81,12 @@ impl<TS: TimeSource> PeerList<TS> {
     }
 
     #[inline]
-    fn contains_addr(&self, addr: &SocketAddr) -> bool {
+    pub fn contains_addr(&self, addr: &SocketAddr) -> bool {
         self.addresses.contains_key(addr)
     }
 
     #[inline]
-    fn is_connected<Addr: ToSocketAddrs+fmt::Debug>(&self, addr: Addr) -> Result<bool, Error> {
+    pub fn is_connected<Addr: ToSocketAddrs+fmt::Debug>(&self, addr: Addr) -> Result<bool, Error> {
         for addr in try!(resolve(&addr)) {
             if self.contains_addr(&addr) {
                 return Ok(true);
@@ -96,7 +96,7 @@ impl<TS: TimeSource> PeerList<TS> {
     }
 
     #[inline]
-    fn contains_node(&self, node_id: &NodeId) -> bool {
+    pub fn contains_node(&self, node_id: &NodeId) -> bool {
         self.nodes.contains_key(node_id)
     }
 
@@ -142,23 +142,23 @@ impl<TS: TimeSource> PeerList<TS> {
     }
 
     #[inline]
-    fn get_node_id(&self, addr: &SocketAddr) -> Option<NodeId> {
+    pub fn get_node_id(&self, addr: &SocketAddr) -> Option<NodeId> {
         self.addresses.get(addr).map(|n| *n)
     }
 
     #[inline]
-    fn as_vec(&self) -> Vec<SocketAddr> {
+    pub fn as_vec(&self) -> Vec<SocketAddr> {
         self.addresses.keys().cloned().collect()
     }
 
     #[inline]
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.peers.len()
     }
 
     #[inline]
     #[allow(dead_code)]
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.peers.is_empty()
     }
 
@@ -687,12 +687,13 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                 }
                 // Reply with stage=1 if stage is 0
                 if stage == 0 {
-                    let peers = self.peers.as_vec();
                     let own_addrs = self.addresses.clone();
                     let own_node_id = self.node_id;
                     try!(self.send_msg(peer, &mut Message::Init(stage+1, own_node_id, own_addrs)));
-                    try!(self.send_msg(peer, &mut Message::Peers(peers)));
                 }
+                // Send peers in any case
+                let peers = self.peers.as_vec();
+                try!(self.send_msg(peer, &mut Message::Peers(peers)));
             },
             Message::Close => {
                 self.peers.remove(&peer);
@@ -710,10 +711,6 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                 self.own_addresses.push(v6);
             }
         }
-    }
-
-    fn decode_message<'a>(&self, msg: &'a mut [u8]) -> Result<Message<'a>, Error> {
-        decode(msg, self.magic, &self.crypto)
     }
 
     fn handle_socket_data(&mut self, src: SocketAddr, data: &mut [u8]) {
@@ -788,42 +785,52 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
 }
 
 
-
-#[cfg(test)] use super::ethernet::{self, SwitchTable};
-#[cfg(test)] use super::util::MockTimeSource;
 #[cfg(test)] use super::net::MockSocket;
+#[cfg(test)] use super::util::MockTimeSource;
 #[cfg(test)] use super::device::MockDevice;
 
 #[cfg(test)]
-impl<P: Protocol, T: Table, TS: TimeSource> GenericCloud<MockDevice, P, T, MockSocket, TS> {
-    fn is_empty(&self) -> bool {
-        self.device.is_empty() && self.socket4.is_empty() && self.socket6.is_empty()
+impl<P: Protocol, T: Table> GenericCloud<MockDevice, P, T, MockSocket, MockTimeSource> {
+    pub fn socket4(&mut self) -> &mut MockSocket {
+        &mut self.socket4
     }
-}
 
-#[cfg(test)]
-type TestNode = GenericCloud<MockDevice, ethernet::Frame, SwitchTable<MockTimeSource>, MockSocket, MockTimeSource>;
+    pub fn socket6(&mut self) -> &mut MockSocket {
+        &mut self.socket6
+    }
 
-#[cfg(test)]
-fn create_node() -> TestNode {
-    TestNode::new(
-        &Config::default(),
-        MockDevice::new(),
-        SwitchTable::new(1800, 10),
-        true, true, vec![], Crypto::None, None
-    )
-}
+    pub fn device(&mut self) -> &mut MockDevice {
+        &mut self.device
+    }
 
-#[test]
-fn connect() {
-    let mut node = create_node();
-    assert!(node.is_empty());
-    node.connect("1.2.3.4:5678").unwrap();
-    assert!(node.device.is_empty());
-    assert!(node.socket6.is_empty());
-    let (addr, mut message) = node.socket4.pop_outbound().unwrap();
-    assert_eq!("1.2.3.4:5678".to_socket_addrs().unwrap().next().unwrap(), addr);
-    let message = node.decode_message(&mut message).unwrap();
-    assert_eq!(Message::Init(0, node.node_id, vec![]), message);
+    pub fn trigger_socket_v4_event(&mut self) {
+        let mut buffer = [0; 64*1024];
+        self.handle_socket_v4_event(&mut buffer);
+    }
 
+    pub fn trigger_socket_v6_event(&mut self) {
+        let mut buffer = [0; 64*1024];
+        self.handle_socket_v6_event(&mut buffer);
+    }
+
+    pub fn trigger_device_event(&mut self) {
+        let mut buffer = [0; 64*1024];
+        self.handle_device_event(&mut buffer);
+    }
+
+    pub fn node_id(&self) -> NodeId {
+        self.node_id
+    }
+
+    pub fn peers(&self) -> &PeerList<MockTimeSource> {
+        &self.peers
+    }
+
+    pub fn own_addresses(&self) -> &[SocketAddr] {
+        &self.own_addresses
+    }
+
+    pub fn decode_message<'a>(&self, msg: &'a mut [u8]) -> Result<Message<'a>, Error> {
+        decode(msg, self.magic, &self.crypto)
+    }
 }

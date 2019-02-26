@@ -259,8 +259,8 @@ impl MockDevice {
         self.outbound.pop_front()
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.inbound.is_empty() && self.outbound.is_empty()
+    pub fn has_inbound(&self) -> bool {
+        !self.inbound.is_empty()
     }
 }
 

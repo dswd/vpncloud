@@ -55,6 +55,17 @@ pub enum Message<'a> {
     Close,
 }
 
+impl<'a> Message<'a> {
+    pub fn without_data(self) -> Message<'static> {
+        match self {
+            Message::Data(_, start, end) => Message::Data(&mut [], start, end),
+            Message::Peers(peers) => Message::Peers(peers),
+            Message::Init(step, node_id, ranges) => Message::Init(step, node_id, ranges),
+            Message::Close => Message::Close
+        }
+    }
+}
+
 impl<'a> fmt::Debug for Message<'a> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {

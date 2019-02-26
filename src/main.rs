@@ -25,6 +25,7 @@ extern crate base_62;
 #[cfg(feature = "bench")] extern crate test;
 
 #[macro_use] pub mod util;
+#[cfg(test)] #[macro_use] mod tests;
 pub mod types;
 pub mod crypto;
 pub mod udpmessage;

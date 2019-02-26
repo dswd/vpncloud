@@ -129,6 +129,14 @@ pub fn resolve<Addr: ToSocketAddrs+fmt::Debug>(addr: Addr) -> Result<Vec<SocketA
     Ok(addrs)
 }
 
+macro_rules! addr {
+    ($addr: expr) => {
+        {
+            std::net::ToSocketAddrs::to_socket_addrs($addr).unwrap().next().unwrap()
+        }
+    };
+}
+
 
 pub struct Bytes(pub u64);
 
