@@ -50,7 +50,7 @@ use std::path::Path;
 use std::io::{self, Write};
 use std::net::UdpSocket;
 
-use device::{Device, Type};
+use device::{TunTapDevice, Device, Type};
 use ethernet::SwitchTable;
 use ip::RoutingTable;
 use types::{Mode, Range, Protocol, HeaderMagic, Error};
@@ -161,20 +161,20 @@ enum AnyTable {
 }
 
 enum AnyCloud<P: Protocol> {
-    Switch(GenericCloud<P, SwitchTable<SystemTimeSource>, UdpSocket, SystemTimeSource>),
-    Routing(GenericCloud<P, RoutingTable, UdpSocket, SystemTimeSource>)
+    Switch(GenericCloud<TunTapDevice, P, SwitchTable<SystemTimeSource>, UdpSocket, SystemTimeSource>),
+    Routing(GenericCloud<TunTapDevice, P, RoutingTable, UdpSocket, SystemTimeSource>)
 }
 
 impl<P: Protocol> AnyCloud<P> {
     #[allow(unknown_lints, clippy::too_many_arguments)]
-    fn new(config: &Config, device: Device, table: AnyTable,
+    fn new(config: &Config, device: TunTapDevice, table: AnyTable,
             learning: bool, broadcast: bool, addresses: Vec<Range>,
             crypto: Crypto, port_forwarding: Option<PortForwarding>) -> Self {
         match table {
-            AnyTable::Switch(t) => AnyCloud::Switch(GenericCloud::<P, SwitchTable<SystemTimeSource>, UdpSocket, SystemTimeSource>::new(
+            AnyTable::Switch(t) => AnyCloud::Switch(GenericCloud::<TunTapDevice, P, SwitchTable<SystemTimeSource>, UdpSocket, SystemTimeSource>::new(
                 config, device,t, learning, broadcast, addresses, crypto, port_forwarding
             )),
-            AnyTable::Routing(t) => AnyCloud::Routing(GenericCloud::<P, RoutingTable, UdpSocket, SystemTimeSource>::new(
+            AnyTable::Routing(t) => AnyCloud::Routing(GenericCloud::<TunTapDevice, P, RoutingTable, UdpSocket, SystemTimeSource>::new(
                 config, device,t, learning, broadcast, addresses, crypto, port_forwarding
             ))
         }
@@ -211,7 +211,7 @@ impl<P: Protocol> AnyCloud<P> {
 
 
 fn run<P: Protocol> (config: Config) {
-    let device = try_fail!(Device::new(&config.device_name, config.device_type, config.device_path.as_ref().map(|s| s as &str)),
+    let device = try_fail!(TunTapDevice::new(&config.device_name, config.device_type, config.device_path.as_ref().map(|s| s as &str)),
         "Failed to open virtual {} interface {}: {}", config.device_type, config.device_name);
     info!("Opened device {}", device.ifname());
     let mut ranges = Vec::with_capacity(config.subnets.len());

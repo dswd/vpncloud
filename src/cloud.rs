@@ -201,7 +201,7 @@ pub struct ReconnectEntry {
 }
 
 
-pub struct GenericCloud<P: Protocol, T: Table, S: Socket, TS: TimeSource> {
+pub struct GenericCloud<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> {
     config: Config,
     magic: HeaderMagic,
     node_id: NodeId,
@@ -214,7 +214,7 @@ pub struct GenericCloud<P: Protocol, T: Table, S: Socket, TS: TimeSource> {
     table: T,
     socket4: S,
     socket6: S,
-    device: Device,
+    device: D,
     crypto: Crypto,
     next_peerlist: Time,
     update_freq: Duration,
@@ -229,8 +229,8 @@ pub struct GenericCloud<P: Protocol, T: Table, S: Socket, TS: TimeSource> {
     _dummy_ts: PhantomData<TS>
 }
 
-impl<P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<P, T, S, TS> {
-    pub fn new(config: &Config, device: Device, table: T,
+impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D, P, T, S, TS> {
+    pub fn new(config: &Config, device: D, table: T,
         learning: bool, broadcast: bool, addresses: Vec<Range>,
         crypto: Crypto, port_forwarding: Option<PortForwarding>
     ) -> Self {
@@ -712,6 +712,10 @@ impl<P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<P, T, S, TS>
         }
     }
 
+    fn decode_message<'a>(&self, msg: &'a mut [u8]) -> Result<Message<'a>, Error> {
+        decode(msg, self.magic, &self.crypto)
+    }
+
     fn handle_socket_data(&mut self, src: SocketAddr, data: &mut [u8]) {
         let size = data.len();
         if let Err(e) = decode(data, self.magic, &mut self.crypto).and_then(|msg| {
@@ -781,4 +785,45 @@ impl<P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<P, T, S, TS>
         info!("Shutting down...");
         self.broadcast_msg(&mut Message::Close).ok();
     }
+}
+
+
+
+#[cfg(test)] use super::ethernet::{self, SwitchTable};
+#[cfg(test)] use super::util::MockTimeSource;
+#[cfg(test)] use super::net::MockSocket;
+#[cfg(test)] use super::device::MockDevice;
+
+#[cfg(test)]
+impl<P: Protocol, T: Table, TS: TimeSource> GenericCloud<MockDevice, P, T, MockSocket, TS> {
+    fn is_empty(&self) -> bool {
+        self.device.is_empty() && self.socket4.is_empty() && self.socket6.is_empty()
+    }
+}
+
+#[cfg(test)]
+type TestNode = GenericCloud<MockDevice, ethernet::Frame, SwitchTable<MockTimeSource>, MockSocket, MockTimeSource>;
+
+#[cfg(test)]
+fn create_node() -> TestNode {
+    TestNode::new(
+        &Config::default(),
+        MockDevice::new(),
+        SwitchTable::new(1800, 10),
+        true, true, vec![], Crypto::None, None
+    )
+}
+
+#[test]
+fn connect() {
+    let mut node = create_node();
+    assert!(node.is_empty());
+    node.connect("1.2.3.4:5678").unwrap();
+    assert!(node.device.is_empty());
+    assert!(node.socket6.is_empty());
+    let (addr, mut message) = node.socket4.pop_outbound().unwrap();
+    assert_eq!("1.2.3.4:5678".to_socket_addrs().unwrap().next().unwrap(), addr);
+    let message = node.decode_message(&mut message).unwrap();
+    assert_eq!(Message::Init(0, node.node_id, vec![]), message);
+
 }

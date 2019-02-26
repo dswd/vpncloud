@@ -3,9 +3,10 @@
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 use std::os::unix::io::{AsRawFd, RawFd};
-use std::io::{self, Error as IoError, Read, Write};
+use std::io::{self, Error as IoError, ErrorKind, Read, Write};
 use std::fs;
 use std::fmt;
+use std::collections::VecDeque;
 
 use super::types::Error;
 
@@ -40,15 +41,48 @@ impl fmt::Display for Type {
 }
 
 
+pub trait Device: AsRawFd {
+    /// Returns the type of this device
+    fn get_type(&self) -> Type;
+
+    /// Returns the interface name of this device.
+    fn ifname(&self) -> &str;
+
+    /// Reads a packet/frame from the device
+    ///
+    /// This method reads one packet or frame (depending on the device type) into the `buffer`.
+    /// The `buffer` must be large enough to hold a packet/frame of maximum size, otherwise the
+    /// packet/frame will be split.
+    /// The method will block until a packet/frame is ready to be read.
+    /// On success, the method will return the starting position and the amount of bytes read into
+    /// the buffer.
+    ///
+    /// # Errors
+    /// This method will return an error if the underlying read call fails.
+    fn read(&mut self, buffer: &mut [u8]) -> Result<(usize, usize), Error>;
+
+    /// Writes a packet/frame to the device
+    ///
+    /// This method writes one packet or frame (depending on the device type) from `data` to the
+    /// device. The data starts at the position `start` in the buffer. The buffer should have at
+    /// least 4 bytes of space before the start of the packet.
+    /// The method will block until the packet/frame has been written.
+    ///
+    /// # Errors
+    /// This method will return an error if the underlying read call fails.
+    fn write(&mut self, data: &mut [u8], start: usize) -> Result<(), Error>;
+}
+
+
 /// Represents a tun/tap device
-pub struct Device {
+pub struct TunTapDevice {
     fd: fs::File,
     ifname: String,
     type_: Type,
 }
 
 
-impl Device {
+impl TunTapDevice {
     /// Creates a new tun/tap device
     ///
     /// This method creates a new device of the `type_` kind with the name `ifname`.
@@ -91,7 +125,7 @@ impl Device {
                 while ifname_c.last() == Some(&0) {
                     ifname_c.pop();
                 }
-                Ok(Device{fd, ifname: String::from_utf8(ifname_c).unwrap(), type_})
+                Ok(Self{fd, ifname: String::from_utf8(ifname_c).unwrap(), type_})
             },
             _ => Err(IoError::last_os_error())
         }
@@ -104,19 +138,6 @@ impl Device {
             Type::Tun | Type::Tap => "/dev/net/tun",
             Type::Dummy => "/dev/null"
         }
-    }
-
-    /// Returns the interface name of this device.
-    #[inline]
-    pub fn ifname(&self) -> &str {
-        &self.ifname
-    }
-
-    /// Returns the type of this device
-    #[allow(dead_code)]
-    #[inline]
-    pub fn get_type(&self) -> Type {
-        self.type_
     }
 
     /// Creates a dummy device based on an existing file
@@ -134,29 +155,11 @@ impl Device {
     /// This method will return an error if the file can not be opened for reading and writing.
     #[allow(dead_code)]
     pub fn dummy(ifname: &str, path: &str, type_: Type) -> io::Result<Self> {
-        Ok(Device{
+        Ok(TunTapDevice{
             fd: try!(fs::OpenOptions::new().create(true).read(true).write(true).open(path)),
             ifname: ifname.to_string(),
             type_
         })
-    }
-
-    /// Reads a packet/frame from the device
-    ///
-    /// This method reads one packet or frame (depending on the device type) into the `buffer`.
-    /// The `buffer` must be large enough to hold a packet/frame of maximum size, otherwise the
-    /// packet/frame will be split.
-    /// The method will block until a packet/frame is ready to be read.
-    /// On success, the method will return the starting position and the amount of bytes read into
-    /// the buffer.
-    ///
-    /// # Errors
-    /// This method will return an error if the underlying read call fails.
-    #[inline]
-    pub fn read(&mut self, mut buffer: &mut [u8]) -> Result<(usize, usize), Error> {
-        let read = try!(self.fd.read(&mut buffer).map_err(|e| Error::TunTapDev("Read error", e)));
-        let (start, read) = self.correct_data_after_read(&mut buffer, 0, read);
-        Ok((start, read))
     }
 
     #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -176,24 +179,6 @@ impl Device {
             (start+4, read-4)
         } else {
             (start, read)
-        }
-    }
-
-    /// Writes a packet/frame to the device
-    ///
-    /// This method writes one packet or frame (depending on the device type) from `data` to the
-    /// device. The data starts at the position `start` in the buffer. The buffer should have at
-    /// least 4 bytes of space before the start of the packet.
-    /// The method will block until the packet/frame has been written.
-    ///
-    /// # Errors
-    /// This method will return an error if the underlying read call fails.
-    #[inline]
-    pub fn write(&mut self, mut data: &mut [u8], start: usize) -> Result<(), Error> {
-        let start = self.correct_data_before_write(&mut data, start);
-        match self.fd.write_all(&data[start..]) {
-            Ok(_) => self.fd.flush().map_err(|e| Error::TunTapDev("Flush error", e)),
-            Err(e) => Err(Error::TunTapDev("Write error", e))
         }
     }
 
@@ -223,9 +208,89 @@ impl Device {
     }
 }
 
-impl AsRawFd for Device {
+impl Device for TunTapDevice {
+    fn get_type(&self) -> Type {
+        self.type_
+    }
+
+    fn ifname(&self) -> &str {
+        &self.ifname
+    }
+
+    fn read(&mut self, mut buffer: &mut [u8]) -> Result<(usize, usize), Error> {
+        let read = try!(self.fd.read(&mut buffer).map_err(|e| Error::TunTapDev("Read error", e)));
+        let (start, read) = self.correct_data_after_read(&mut buffer, 0, read);
+        Ok((start, read))
+    }
+
+    fn write(&mut self, mut data: &mut [u8], start: usize) -> Result<(), Error> {
+        let start = self.correct_data_before_write(&mut data, start);
+        match self.fd.write_all(&data[start..]) {
+            Ok(_) => self.fd.flush().map_err(|e| Error::TunTapDev("Flush error", e)),
+            Err(e) => Err(Error::TunTapDev("Write error", e))
+        }
+    }
+
+}
+
+impl AsRawFd for TunTapDevice {
     #[inline]
     fn as_raw_fd(&self) -> RawFd {
         self.fd.as_raw_fd()
+    }
+}
+
+
+pub struct MockDevice {
+    inbound: VecDeque<Vec<u8>>,
+    outbound: VecDeque<Vec<u8>>
+}
+
+impl MockDevice {
+    pub fn new() -> Self {
+        Self { outbound: VecDeque::new(), inbound: VecDeque::new() }
+    }
+
+    pub fn put_inbound(&mut self, data: Vec<u8>) {
+        self.inbound.push_back(data)
+    }
+
+    pub fn pop_outbound(&mut self) -> Option<Vec<u8>> {
+        self.outbound.pop_front()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inbound.is_empty() && self.outbound.is_empty()
+    }
+}
+
+impl Device for MockDevice {
+    fn get_type(&self) -> Type {
+        Type::Dummy
+    }
+
+    fn ifname(&self) -> &str {
+        unimplemented!()
+    }
+
+    fn read(&mut self, buffer: &mut [u8]) -> Result<(usize, usize), Error> {
+        if let Some(data) = self.inbound.pop_front() {
+            buffer[0..data.len()].copy_from_slice(&data);
+            Ok((0, data.len()))
+        } else {
+            Err(Error::TunTapDev("empty", io::Error::from(ErrorKind::UnexpectedEof)))
+        }
+    }
+
+    fn write(&mut self, data: &mut [u8], start: usize) -> Result<(), Error> {
+        self.outbound.push_back(data[start..].to_owned());
+        Ok(())
+    }
+}
+
+impl AsRawFd for MockDevice {
+    #[inline]
+    fn as_raw_fd(&self) -> RawFd {
+        unimplemented!()
     }
 }

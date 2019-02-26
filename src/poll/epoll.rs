@@ -7,7 +7,6 @@ use libc;
 use std::os::unix::io::RawFd;
 use std::io;
 use device::Device;
-use std::os::unix::io::AsRawFd;
 
 use super::WaitResult;
 use ::device::Type;

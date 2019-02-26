@@ -54,6 +54,10 @@ impl MockSocket {
     pub fn pop_outbound(&mut self) -> Option<(SocketAddr, Vec<u8>)> {
         self.outbound.pop_front()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.inbound.is_empty() && self.outbound.is_empty()
+    }
 }
 
 impl AsRawFd for MockSocket {

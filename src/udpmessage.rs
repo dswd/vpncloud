@@ -78,7 +78,7 @@ impl<'a> fmt::Debug for Message<'a> {
 }
 
 #[allow(unknown_lints,clippy::needless_range_loop)]
-pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &mut Crypto) -> Result<Message<'a>, Error> {
+pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &Crypto) -> Result<Message<'a>, Error> {
     let mut end = data.len();
     let (header, mut pos) = try!(TopHeader::read_from(&data[..end]));
     if header.magic != magic {
