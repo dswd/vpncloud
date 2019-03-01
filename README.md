@@ -74,6 +74,8 @@ Debian packages can be built using [cargo-deb](https://github.com/mmstick/cargo-
 There is a [VpnCloud package for Arch Linux](https://aur.archlinux.org/packages/vpncloud/)
 thanks to Oscar Rainford (fourbytes).
 
+#### CentOS 7
+Centos 7 .rpm package can be built using [cargo-rpm](https://github.com/RustRPM/cargo-rpm): ``cargo rpm``
 
 ### Contributions welcome
 There are several areas in which still some work has to be done and where
