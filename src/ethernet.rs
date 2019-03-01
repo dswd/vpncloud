@@ -49,8 +49,8 @@ impl Protocol for Frame {
             dst[2..8].copy_from_slice(dst_data);
             Ok((Address{data: src, len: 8}, Address{data: dst, len: 8}))
         } else {
-            let src = try!(Address::read_from_fixed(src_data, 6));
-            let dst = try!(Address::read_from_fixed(dst_data, 6));
+            let src = Address::read_from_fixed(src_data, 6)?;
+            let dst = Address::read_from_fixed(dst_data, 6)?;
             Ok((src, dst))
         }
     }
@@ -105,9 +105,9 @@ impl<TS: TimeSource> Table for SwitchTable<TS> {
     /// Write out the table
     fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error> {
         let now = TS::now();
-        try!(writeln!(out, "Switch table:"));
+        writeln!(out, "Switch table:")?;
         for (addr, val) in &self.table {
-            try!(writeln!(out, " - {} => {} (ttl: {} s)", addr, val.address, val.timeout - now));
+            writeln!(out, " - {} => {} (ttl: {} s)", addr, val.address, val.timeout - now)?;
         }
         Ok(())
     }

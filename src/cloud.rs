@@ -87,7 +87,7 @@ impl<TS: TimeSource> PeerList<TS> {
 
     #[inline]
     pub fn is_connected<Addr: ToSocketAddrs+fmt::Debug>(&self, addr: Addr) -> Result<bool, Error> {
-        for addr in try!(resolve(&addr)) {
+        for addr in resolve(&addr)? {
             if self.contains_addr(&addr) {
                 return Ok(true);
             }
@@ -143,7 +143,7 @@ impl<TS: TimeSource> PeerList<TS> {
 
     #[inline]
     pub fn get_node_id(&self, addr: &SocketAddr) -> Option<NodeId> {
-        self.addresses.get(addr).map(|n| *n)
+        self.addresses.get(addr).cloned()
     }
 
     #[inline]
@@ -181,10 +181,10 @@ impl<TS: TimeSource> PeerList<TS> {
 
     #[inline]
     fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error> {
-        try!(writeln!(out, "Peers:"));
+        writeln!(out, "Peers:")?;
         let now = TS::now();
         for (addr, data) in &self.peers {
-            try!(writeln!(out, " - {} (ttl: {} s)", addr, data.timeout-now));
+            writeln!(out, " - {} (ttl: {} s)", addr, data.timeout-now)?;
         }
         Ok(())
     }
@@ -230,6 +230,7 @@ pub struct GenericCloud<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSou
 }
 
 impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D, P, T, S, TS> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(config: &Config, device: D, table: T,
         learning: bool, broadcast: bool, addresses: Vec<Range>,
         crypto: Crypto, port_forwarding: Option<PortForwarding>
@@ -271,7 +272,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             _dummy_ts: PhantomData
         };
         res.initialize();
-        return res
+        res
     }
 
     #[inline]
@@ -292,15 +293,15 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         let msg_data = encode(msg, &mut self.buffer_out, self.magic, &mut self.crypto);
         for addr in self.peers.peers.keys() {
             self.traffic.count_out_traffic(*addr, msg_data.len());
-            let mut socket = match *addr {
+            let socket = match *addr {
                 SocketAddr::V4(_) => &mut self.socket4,
                 SocketAddr::V6(_) => &mut self.socket6
             };
-            try!(match socket.send(msg_data, *addr) {
+            match socket.send(msg_data, *addr) {
                 Ok(written) if written == msg_data.len() => Ok(()),
                 Ok(_) => Err(Error::Socket("Sent out truncated packet", io::Error::new(io::ErrorKind::Other, "truncated"))),
                 Err(e) => Err(Error::Socket("IOError when sending", e))
-            })
+            }?
         }
         Ok(())
     }
@@ -336,7 +337,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     /// Returns an IOError if the underlying system call fails
     #[allow(dead_code)]
     pub fn address(&self) -> io::Result<(SocketAddr, SocketAddr)> {
-        Ok((try!(self.socket4.address()), try!(self.socket6.address())))
+        Ok((self.socket4.address()?, self.socket6.address()?))
     }
 
     /// Returns the number of peers
@@ -367,7 +368,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     /// Returns an `Error::SocketError` if the given address is a name that failed to resolve to
     /// actual addresses.
     fn is_own_address<Addr: ToSocketAddrs+fmt::Debug>(&self, addr: Addr) -> Result<bool, Error> {
-        for addr in try!(resolve(&addr)) {
+        for addr in resolve(&addr)? {
             if self.own_addresses.contains(&addr) {
                 return Ok(true);
             }
@@ -384,14 +385,14 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     /// # Errors
     /// This method returns `Error::NameError` if the address is a name that fails to resolve.
     pub fn connect<Addr: ToSocketAddrs+fmt::Debug+Clone>(&mut self, addr: Addr) -> Result<(), Error> {
-        if try!(self.peers.is_connected(addr.clone())) || try!(self.is_own_address(addr.clone())) {
+        if self.peers.is_connected(addr.clone())? || self.is_own_address(addr.clone())? {
             return Ok(())
         }
         debug!("Connecting to {:?}", addr);
         let subnets = self.addresses.clone();
         let node_id = self.node_id;
         // Send a message to each resolved address
-        for a in try!(resolve(&addr)) {
+        for a in resolve(&addr)? {
             // Ignore error this time
             let mut msg = Message::Init(0, node_id, subnets.clone());
             self.send_msg(a, &mut msg).ok();
@@ -449,7 +450,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             let peers = self.peers.subset(peer_num);
             // ...and send them to all peers
             let mut msg = Message::Peers(peers);
-            try!(self.broadcast_msg(&mut msg));
+            self.broadcast_msg(&mut msg)?;
             // Reschedule for next update
             self.next_peerlist = now + Time::from(self.update_freq);
         }
@@ -458,11 +459,11 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             if entry.next > now {
                 continue
             }
-            try!(self.connect(&entry.resolved as &[SocketAddr]));
+            self.connect(&entry.resolved as &[SocketAddr])?;
         }
         for entry in &mut self.reconnect_peers {
             // Schedule for next second if node is connected
-            if try!(self.peers.is_connected(&entry.resolved as &[SocketAddr])) {
+            if self.peers.is_connected(&entry.resolved as &[SocketAddr])? {
                 entry.tries = 0;
                 entry.timeout = 1;
                 entry.next = now + 1;
@@ -494,19 +495,19 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         }
         if self.next_stats_out < now {
             // Write out the statistics
-            try!(self.write_out_stats().map_err(|err| Error::File("Failed to write stats file", err)));
+            self.write_out_stats().map_err(|err| Error::File("Failed to write stats file", err))?;
             self.next_stats_out = now + STATS_INTERVAL;
             self.traffic.period(Some(60));
         }
         if let Some(peers) = self.beacon_serializer.get_cmd_results() {
             debug!("Loaded beacon with peers: {:?}", peers);
             for peer in peers {
-                try!(self.connect_sock(peer));
+                self.connect_sock(peer)?;
             }
         }
         if self.next_beacon < now {
-            try!(self.store_beacon());
-            try!(self.load_beacon());
+            self.store_beacon()?;
+            self.load_beacon()?;
             self.next_beacon = now + Time::from(self.config.beacon_interval);
         }
         Ok(())
@@ -517,9 +518,9 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         if let Some(ref path) = self.config.beacon_store {
             let peers: Vec<_> = self.own_addresses.choose_multiple(&mut thread_rng(),3).cloned().collect();
             if path.starts_with('|') {
-                try!(self.beacon_serializer.write_to_cmd(&peers, &path[1..]).map_err(|e| Error::Beacon("Failed to call beacon command", e)));
+                self.beacon_serializer.write_to_cmd(&peers, &path[1..]).map_err(|e| Error::Beacon("Failed to call beacon command", e))?;
             } else {
-                try!(self.beacon_serializer.write_to_file(&peers, &path).map_err(|e| Error::Beacon("Failed to write beacon to file", e)));
+                self.beacon_serializer.write_to_file(&peers, &path).map_err(|e| Error::Beacon("Failed to write beacon to file", e))?;
             }
         }
         Ok(())
@@ -530,17 +531,17 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         let peers;
         if let Some(ref path) = self.config.beacon_load {
             if path.starts_with('|') {
-                try!(self.beacon_serializer.read_from_cmd(&path[1..], Some(50)).map_err(|e| Error::Beacon("Failed to call beacon command", e)));
+                self.beacon_serializer.read_from_cmd(&path[1..], Some(50)).map_err(|e| Error::Beacon("Failed to call beacon command", e))?;
                 return Ok(())
             } else {
-                peers = try!(self.beacon_serializer.read_from_file(&path, Some(50)).map_err(|e| Error::Beacon("Failed to read beacon from file", e)));
+                peers = self.beacon_serializer.read_from_file(&path, Some(50)).map_err(|e| Error::Beacon("Failed to read beacon from file", e))?;
             }
         } else {
             return Ok(())
         }
         debug!("Loaded beacon with peers: {:?}", peers);
         for peer in peers {
-            try!(self.connect_sock(peer));
+            self.connect_sock(peer)?;
         }
         Ok(())
     }
@@ -549,14 +550,14 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     fn write_out_stats(&mut self) -> Result<(), io::Error> {
         if self.config.stats_file.is_none() { return Ok(()) }
         debug!("Writing out stats");
-        let mut f = try!(File::create(self.config.stats_file.as_ref().unwrap()));
-        try!(self.peers.write_out(&mut f));
-        try!(writeln!(&mut f));
-        try!(self.table.write_out(&mut f));
-        try!(writeln!(&mut f));
-        try!(self.traffic.write_out(&mut f));
-        try!(writeln!(&mut f));
-        try!(fs::set_permissions(self.config.stats_file.as_ref().unwrap(), Permissions::from_mode(0o644)));
+        let mut f = File::create(self.config.stats_file.as_ref().unwrap())?;
+        self.peers.write_out(&mut f)?;
+        writeln!(&mut f)?;
+        self.table.write_out(&mut f)?;
+        writeln!(&mut f)?;
+        self.traffic.write_out(&mut f)?;
+        writeln!(&mut f)?;
+        fs::set_permissions(self.config.stats_file.as_ref().unwrap(), Permissions::from_mode(0o644))?;
         Ok(())
     }
 
@@ -577,26 +578,26 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     /// - with `Error::ParseError` if the payload data failed to parse
     /// - with `Error::SocketError` if sending a message fails
     pub fn handle_interface_data(&mut self, payload: &mut [u8], start: usize, end: usize) -> Result<(), Error> {
-        let (src, dst) = try!(P::parse(&payload[start..end]));
+        let (src, dst) = P::parse(&payload[start..end])?;
         debug!("Read data from interface: src: {}, dst: {}, {} bytes", src, dst, end-start);
         self.traffic.count_out_payload(dst, src, end-start);
         match self.table.lookup(&dst) {
             Some(addr) => { // Peer found for destination
                 debug!("Found destination for {} => {}", dst, addr);
-                try!(self.send_msg(addr, &mut Message::Data(payload, start, end)));
+                self.send_msg(addr, &mut Message::Data(payload, start, end))?;
                 if !self.peers.contains_addr(&addr) {
                     // If the peer is not actually connected, remove the entry in the table and try
                     // to reconnect.
                     warn!("Destination for {} not found in peers: {}", dst, addr);
                     self.table.remove(&dst);
-                    try!(self.connect_sock(addr));
+                    self.connect_sock(addr)?;
                 }
             },
             None => {
                 if self.broadcast {
                     debug!("No destination for {} found, broadcasting", dst);
                     let mut msg = Message::Data(payload, start, end);
-                    try!(self.broadcast_msg(&mut msg));
+                    self.broadcast_msg(&mut msg)?;
                 } else {
                     debug!("No destination for {} found, dropping", dst);
                 }
@@ -642,7 +643,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         debug!("Received {:?} from {}", msg, peer);
         match msg {
             Message::Data(payload, start, end) => {
-                let (src, dst) = try!(P::parse(&payload[start..end]));
+                let (src, dst) = P::parse(&payload[start..end])?;
                 debug!("Writing data to device: {} bytes", end-start);
                 self.traffic.count_in_payload(src, dst, end-start);
                 if let Err(e) = self.device.write(&mut payload[..end], start) {
@@ -658,14 +659,14 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             Message::Peers(peers) => {
                 // Connect to sender if not connected
                 if !self.peers.contains_addr(&peer) {
-                    try!(self.connect_sock(peer));
+                    self.connect_sock(peer)?;
                 }
                 if let Some(node_id) = self.peers.get_node_id(&peer) {
                     self.peers.make_primary(node_id, peer);
                 }
                 // Connect to all peers in the message
                 for p in &peers {
-                    try!(self.connect_sock(*p));
+                    self.connect_sock(*p)?;
                 }
                 // Refresh peer
                 self.peers.refresh(&peer);
@@ -689,11 +690,11 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                 if stage == 0 {
                     let own_addrs = self.addresses.clone();
                     let own_node_id = self.node_id;
-                    try!(self.send_msg(peer, &mut Message::Init(stage+1, own_node_id, own_addrs)));
+                    self.send_msg(peer, &mut Message::Init(stage+1, own_node_id, own_addrs))?;
                 }
                 // Send peers in any case
                 let peers = self.peers.as_vec();
-                try!(self.send_msg(peer, &mut Message::Peers(peers)));
+                self.send_msg(peer, &mut Message::Peers(peers))?;
             },
             Message::Close => {
                 self.peers.remove(&peer);
@@ -715,7 +716,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
 
     fn handle_socket_data(&mut self, src: SocketAddr, data: &mut [u8]) {
         let size = data.len();
-        if let Err(e) = decode(data, self.magic, &mut self.crypto).and_then(|msg| {
+        if let Err(e) = decode(data, self.magic, &self.crypto).and_then(|msg| {
             self.traffic.count_in_traffic(src, size);
             self.handle_net_message(src, msg)
         }) {

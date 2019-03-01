@@ -71,14 +71,14 @@ impl<'a> fmt::Debug for Message<'a> {
         match *self {
             Message::Data(_, start, end) => write!(formatter, "Data({} bytes)", end-start),
             Message::Peers(ref peers) => {
-                try!(write!(formatter, "Peers ["));
+                write!(formatter, "Peers [")?;
                 let mut first = true;
                 for p in peers {
                     if !first {
-                        try!(write!(formatter, ", "));
+                        write!(formatter, ", ")?;
                     }
                     first = false;
-                    try!(write!(formatter, "{}", p));
+                    write!(formatter, "{}", p)?;
                 }
                 write!(formatter, "]")
             },
@@ -91,7 +91,7 @@ impl<'a> fmt::Debug for Message<'a> {
 #[allow(unknown_lints,clippy::needless_range_loop)]
 pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &Crypto) -> Result<Message<'a>, Error> {
     let mut end = data.len();
-    let (header, mut pos) = try!(TopHeader::read_from(&data[..end]));
+    let (header, mut pos) = TopHeader::read_from(&data[..end])?;
     if header.magic != magic {
         return Err(Error::WrongHeaderMagic(header.magic));
     }
@@ -107,7 +107,7 @@ pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &Crypto) -> Re
             let (before, after) = data.split_at_mut(pos);
             let (nonce, crypto_data) = after.split_at_mut(len);
             pos += len;
-            end = try!(crypto.decrypt(crypto_data, nonce, &before[..TopHeader::size()])) + pos;
+            end = crypto.decrypt(crypto_data, nonce, &before[..TopHeader::size()])? + pos;
         }
         assert_eq!(end, data.len()-crypto.additional_bytes());
     }
@@ -169,7 +169,7 @@ pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &Crypto) -> Re
             pos += 1;
             let mut addrs = Vec::with_capacity(count);
             for _ in 0..count {
-                let (range, read) = try!(Range::read_from(&data[pos..end]));
+                let (range, read) = Range::read_from(&data[pos..end])?;
                 pos += read;
                 addrs.push(range);
             }
@@ -183,6 +183,12 @@ pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &Crypto) -> Re
 
 #[allow(unknown_lints,clippy::needless_range_loop)]
 pub fn encode<'a>(msg: &'a mut Message, mut buf: &'a mut [u8], magic: HeaderMagic, crypto: &mut Crypto) -> &'a mut [u8] {
+    let header_type = match msg {
+        Message::Data(_, _, _) => 0,
+        Message::Peers(_) => 1,
+        Message::Init(_, _, _) => 2,
+        Message::Close => 3
+    };
     let mut start = 64;
     let mut end = 64;
     match *msg {
@@ -250,12 +256,7 @@ pub fn encode<'a>(msg: &'a mut Message, mut buf: &'a mut [u8], magic: HeaderMagi
     start -= crypto.nonce_bytes();
     let mut header = TopHeader::default();
     header.magic = magic;
-    header.msgtype = match *msg {
-        Message::Data(_, _, _) => 0,
-        Message::Peers(_) => 1,
-        Message::Init(_, _, _) => 2,
-        Message::Close => 3
-    };
+    header.msgtype = header_type;
     header.crypto_method = crypto.method();
     start -= TopHeader::size();
     header.write_to(&mut buf[start..]);
@@ -273,17 +274,17 @@ pub fn encode<'a>(msg: &'a mut Message, mut buf: &'a mut [u8], magic: HeaderMagi
 
 impl<'a> PartialEq for Message<'a> {
     fn eq(&self, other: &Message) -> bool {
-        match self {
-            &Message::Data(ref data1, start1, end1) => if let &Message::Data(ref data2, start2, end2) = other {
+        match *self {
+            Message::Data(ref data1, start1, end1) => if let Message::Data(ref data2, start2, end2) = *other {
                 data1[start1..end1] == data2[start2..end2]
             } else { false },
-            &Message::Peers(ref peers1) => if let &Message::Peers(ref peers2) = other {
+            Message::Peers(ref peers1) => if let Message::Peers(ref peers2) = *other {
                 peers1 == peers2
             } else { false },
-            &Message::Init(step1, node_id1, ref ranges1) => if let &Message::Init(step2, node_id2, ref ranges2) = other {
+            Message::Init(step1, node_id1, ref ranges1) => if let Message::Init(step2, node_id2, ref ranges2) = *other {
                 step1 == step2 && node_id1 == node_id2 && ranges1 == ranges2
             } else { false },
-            &Message::Close => if let &Message::Close = other {
+            Message::Close => if let Message::Close = *other {
                 true
             } else { false }
         }

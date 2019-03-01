@@ -5,7 +5,12 @@ This project follows [semantic versioning](http://semver.org).
 ### UNRELEASED
 
 - [added] Added ability to publish small beacons for rendezvous
+- [added] Added build chain for pacakges
+- [added] Added more tests
 - [changed] Allow to build binary without manpage
+- [changed] Rust edition 2018
+- [changed] Rust version 1.33.0
+- [changed] Updated dependencies
 - [fixed] Fixed bug that could cause repeated initialization messages
 
 ### v0.9.1 (2019-02-16)

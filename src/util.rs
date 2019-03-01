@@ -117,7 +117,7 @@ macro_rules! try_fail {
 
 #[allow(unknown_lints,clippy::needless_pass_by_value)]
 pub fn resolve<Addr: ToSocketAddrs+fmt::Debug>(addr: Addr) -> Result<Vec<SocketAddr>, Error> {
-    let addrs = try!(addr.to_socket_addrs().map_err(|_| Error::Name(format!("{:?}", addr))));
+    let addrs = addr.to_socket_addrs().map_err(|_| Error::Name(format!("{:?}", addr)))?;
     // Remove duplicates in addrs (why are there duplicates???)
     let mut addrs = addrs.collect::<Vec<_>>();
     // Try IPv4 first as it usually is faster
@@ -177,13 +177,19 @@ pub struct CtrlC {
 
 impl CtrlC {
     pub fn new() -> Self {
-        let dummy_time = Instant::now();
-        let trap = Trap::trap(&[Signal::SIGINT, Signal::SIGTERM, Signal::SIGQUIT]);
-        Self { dummy_time, trap }
+        Default::default()
     }
 
     pub fn was_pressed(&self) -> bool {
         self.trap.wait(self.dummy_time).is_some()
+    }
+}
+
+impl Default for CtrlC {
+    fn default() -> Self {
+        let dummy_time = Instant::now();
+        let trap = Trap::trap(&[Signal::SIGINT, Signal::SIGTERM, Signal::SIGQUIT]);
+        Self { dummy_time, trap }
     }
 }
 

@@ -5,22 +5,8 @@
 #![cfg_attr(feature = "bench", feature(test))]
 
 #[macro_use] extern crate log;
-extern crate time;
-extern crate docopt;
 #[macro_use] extern crate serde_derive;
-extern crate serde;
-extern crate serde_yaml;
-extern crate signal;
-extern crate libc;
-extern crate rand;
-extern crate fnv;
-extern crate net2;
-extern crate yaml_rust;
-extern crate igd;
-extern crate siphasher;
-extern crate daemonize;
-extern crate ring;
-extern crate base_62;
+
 #[cfg(test)] extern crate tempfile;
 #[cfg(feature = "bench")] extern crate test;
 
@@ -51,15 +37,15 @@ use std::path::Path;
 use std::io::{self, Write};
 use std::net::UdpSocket;
 
-use device::{TunTapDevice, Device, Type};
-use ethernet::SwitchTable;
-use ip::RoutingTable;
-use types::{Mode, Range, Protocol, HeaderMagic, Error};
-use cloud::GenericCloud;
-use crypto::{Crypto, CryptoMethod};
-use port_forwarding::PortForwarding;
-use util::{Duration, SystemTimeSource};
-use config::Config;
+use crate::device::{TunTapDevice, Device, Type};
+use crate::ethernet::SwitchTable;
+use crate::ip::RoutingTable;
+use crate::types::{Mode, Range, Protocol, HeaderMagic, Error};
+use crate::cloud::GenericCloud;
+use crate::crypto::{Crypto, CryptoMethod};
+use crate::port_forwarding::PortForwarding;
+use crate::util::{Duration, SystemTimeSource};
+use crate::config::Config;
 
 
 const VERSION: u8 = 1;
@@ -109,7 +95,7 @@ struct DualLogger {
 impl DualLogger {
     pub fn new<P: AsRef<Path>>(path: Option<P>) -> Result<Self, io::Error> {
         if let Some(path) = path {
-            let file = try!(File::create(path));
+            let file = File::create(path)?;
             Ok(DualLogger{file: Mutex::new(Some(file))})
         } else {
             Ok(DualLogger{file: Mutex::new(None)})

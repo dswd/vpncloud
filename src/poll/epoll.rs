@@ -6,11 +6,11 @@ use libc;
 
 use std::os::unix::io::RawFd;
 use std::io;
-use device::Device;
+use crate::device::Device;
 
 use super::WaitResult;
-use ::device::Type;
-use net::Socket;
+use crate::device::Type;
+use crate::net::Socket;
 
 pub struct EpollWait {
     poll_fd: RawFd,
