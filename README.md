@@ -76,6 +76,19 @@ thanks to Oscar Rainford (fourbytes).
 
 #### CentOS 7
 CentOS 7 .rpm package can be built using [cargo-rpm](https://github.com/RustRPM/cargo-rpm): ``cargo rpm``
+On an CentOS 7:
+
+1. Install the required build environment (on CentOS 7)
+
+       $> yum install -y cargo
+       
+       $> yum groupinstall -y 'Development Tools'
+ 
+2. Build the software
+
+       $> cargo rpm build --release
+       
+rpm will be situated in `target/release/rpmbuild/RPMS/`
 
 ### Contributions welcome
 There are several areas in which still some work has to be done and where
