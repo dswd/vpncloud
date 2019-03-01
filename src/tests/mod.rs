@@ -3,10 +3,11 @@
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 #[macro_use] mod helper;
-mod connect;
+mod peers;
 mod payload;
 
 pub use std::net::SocketAddr;
+use std::sync::atomic::{Ordering, AtomicUsize};
 
 pub use super::ethernet::{self, SwitchTable};
 pub use super::util::MockTimeSource;
@@ -26,9 +27,13 @@ type TapTestNode = TestNode<ethernet::Frame, SwitchTable<MockTimeSource>>;
 type TunTestNode = TestNode<ip::Packet, RoutingTable>;
 
 
+thread_local! {
+    static NEXT_PORT: AtomicUsize = AtomicUsize::new(1);
+}
+
 fn create_tap_node() -> TapTestNode {
     TestNode::new(
-        &Config::default(),
+        &Config { port: NEXT_PORT.with(|p| p.fetch_add(1, Ordering::Relaxed)) as u16, ..Config::default() },
         MockDevice::new(),
         SwitchTable::new(1800, 10),
         true, true, vec![], Crypto::None, None
@@ -37,7 +42,7 @@ fn create_tap_node() -> TapTestNode {
 
 fn create_tun_node(addresses: Vec<Range>) -> TunTestNode {
     TestNode::new(
-        &Config::default(),
+        &Config { port: NEXT_PORT.with(|p| p.fetch_add(1, Ordering::Relaxed)) as u16, ..Config::default() },
         MockDevice::new(),
         RoutingTable::new(),
         false, false, addresses, Crypto::None, None

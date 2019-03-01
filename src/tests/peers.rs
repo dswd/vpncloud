@@ -90,5 +90,46 @@ fn cross_connect() {
     assert_connected!(node3, node2);
 
     // transient connections 2nd degree
-    assert_connected!(node1, node4);
+    assert_connected!(node2, node4);
 }
+
+#[test]
+fn connect_via_beacons() {
+    //TODO
+}
+
+#[test]
+fn reconnect_after_timeout() {
+    //TODO
+}
+
+#[test]
+fn lost_init1() {
+    //TODO
+}
+
+#[test]
+fn wrong_magic() {
+    //TODO
+}
+
+#[test]
+fn peer_exchange() {
+    //TODO
+}
+
+#[test]
+fn lost_peer_exchange() {
+    //TODO
+}
+
+#[test]
+fn remove_dead_peers() {
+    //TODO
+}
+
+#[test]
+fn update_primary_address() {
+    //TODO
+}
+

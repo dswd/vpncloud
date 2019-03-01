@@ -12,7 +12,7 @@ use std::marker::PhantomData;
 use fnv::FnvHasher;
 
 use super::types::{Error, Table, Protocol, Address};
-use super::util::{TimeSource, Time, Duration, MockTimeSource};
+use super::util::{TimeSource, Time, Duration};
 
 /// An ethernet frame dissector
 ///
@@ -165,6 +165,7 @@ impl<TS: TimeSource> Table for SwitchTable<TS> {
 
 #[cfg(test)] use std::str::FromStr;
 #[cfg(test)] use std::net::ToSocketAddrs;
+#[cfg(test)] use super::util::MockTimeSource;
 
 #[test]
 fn decode_frame_without_vlan() {

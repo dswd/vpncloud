@@ -5,7 +5,7 @@
 use super::*;
 
 #[test]
-fn ethernet_send() {
+fn ethernet_delivers() {
     let mut node1 = create_tap_node();
     let node1_addr = addr!("1.2.3.4:5678");
     let mut node2 = create_tap_node();
@@ -27,7 +27,7 @@ fn ethernet_send() {
 }
 
 #[test]
-fn learning_switch() {
+fn switch_learns() {
     let mut node1 = create_tap_node();
     let node1_addr = addr!("1.2.3.4:5678");
     let mut node2 = create_tap_node();
@@ -42,6 +42,8 @@ fn learning_switch() {
 
     let payload = vec![2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5];
 
+    // Nothing learnt so far, node1 broadcasts
+
     node1.device().put_inbound(payload.clone());
 
     simulate!(node1 => node1_addr, node2 => node2_addr, node3 => node3_addr);
@@ -51,6 +53,8 @@ fn learning_switch() {
 
     let payload = vec![1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 5, 4, 3, 2, 1];
 
+    // Node 2 learned the address by receiving it, does not broadcast
+
     node2.device().put_inbound(payload.clone());
 
     simulate!(node1 => node1_addr, node2 => node2_addr, node3 => node3_addr);
@@ -59,4 +63,24 @@ fn learning_switch() {
     assert_clean!(node3);
 
     assert_clean!(node1, node2, node3);
+}
+
+#[test]
+fn switch_honours_vlans() {
+    //TODO
+}
+
+#[test]
+fn switch_forgets() {
+    //TODO
+}
+
+#[test]
+fn router_delivers() {
+    //TODO
+}
+
+#[test]
+fn router_drops_unknown_dest() {
+    //TODO
 }

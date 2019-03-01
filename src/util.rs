@@ -129,6 +129,7 @@ pub fn resolve<Addr: ToSocketAddrs+fmt::Debug>(addr: Addr) -> Result<Vec<SocketA
     Ok(addrs)
 }
 
+#[allow(unused_macros)]
 macro_rules! addr {
     ($addr: expr) => {
         {
