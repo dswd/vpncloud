@@ -5,22 +5,8 @@
 #![cfg_attr(feature = "bench", feature(test))]
 
 #[macro_use] extern crate log;
-extern crate time;
-extern crate docopt;
 #[macro_use] extern crate serde_derive;
-extern crate serde;
-extern crate serde_yaml;
-extern crate signal;
-extern crate libc;
-extern crate rand;
-extern crate fnv;
-extern crate net2;
-extern crate yaml_rust;
-extern crate igd;
-extern crate siphasher;
-extern crate daemonize;
-extern crate ring;
-extern crate base_62;
+
 #[cfg(test)] extern crate tempfile;
 #[cfg(feature = "bench")] extern crate test;
 

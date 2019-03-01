@@ -177,13 +177,19 @@ pub struct CtrlC {
 
 impl CtrlC {
     pub fn new() -> Self {
-        let dummy_time = Instant::now();
-        let trap = Trap::trap(&[Signal::SIGINT, Signal::SIGTERM, Signal::SIGQUIT]);
-        Self { dummy_time, trap }
+        Default::default()
     }
 
     pub fn was_pressed(&self) -> bool {
         self.trap.wait(self.dummy_time).is_some()
+    }
+}
+
+impl Default for CtrlC {
+    fn default() -> Self {
+        let dummy_time = Instant::now();
+        let trap = Trap::trap(&[Signal::SIGINT, Signal::SIGTERM, Signal::SIGQUIT]);
+        Self { dummy_time, trap }
     }
 }
 

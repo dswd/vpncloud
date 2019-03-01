@@ -273,17 +273,17 @@ pub fn encode<'a>(msg: &'a mut Message, mut buf: &'a mut [u8], magic: HeaderMagi
 
 impl<'a> PartialEq for Message<'a> {
     fn eq(&self, other: &Message) -> bool {
-        match self {
-            &Message::Data(ref data1, start1, end1) => if let &Message::Data(ref data2, start2, end2) = other {
+        match *self {
+            Message::Data(ref data1, start1, end1) => if let Message::Data(ref data2, start2, end2) = *other {
                 data1[start1..end1] == data2[start2..end2]
             } else { false },
-            &Message::Peers(ref peers1) => if let &Message::Peers(ref peers2) = other {
+            Message::Peers(ref peers1) => if let Message::Peers(ref peers2) = *other {
                 peers1 == peers2
             } else { false },
-            &Message::Init(step1, node_id1, ref ranges1) => if let &Message::Init(step2, node_id2, ref ranges2) = other {
+            Message::Init(step1, node_id1, ref ranges1) => if let Message::Init(step2, node_id2, ref ranges2) = *other {
                 step1 == step2 && node_id1 == node_id2 && ranges1 == ranges2
             } else { false },
-            &Message::Close => if let &Message::Close = other {
+            Message::Close => if let Message::Close = *other {
                 true
             } else { false }
         }

@@ -143,7 +143,7 @@ impl<TS: TimeSource> PeerList<TS> {
 
     #[inline]
     pub fn get_node_id(&self, addr: &SocketAddr) -> Option<NodeId> {
-        self.addresses.get(addr).map(|n| *n)
+        self.addresses.get(addr).cloned()
     }
 
     #[inline]
@@ -230,6 +230,7 @@ pub struct GenericCloud<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSou
 }
 
 impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D, P, T, S, TS> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(config: &Config, device: D, table: T,
         learning: bool, broadcast: bool, addresses: Vec<Range>,
         crypto: Crypto, port_forwarding: Option<PortForwarding>
@@ -271,7 +272,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             _dummy_ts: PhantomData
         };
         res.initialize();
-        return res
+        res
     }
 
     #[inline]
@@ -292,7 +293,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         let msg_data = encode(msg, &mut self.buffer_out, self.magic, &mut self.crypto);
         for addr in self.peers.peers.keys() {
             self.traffic.count_out_traffic(*addr, msg_data.len());
-            let mut socket = match *addr {
+            let socket = match *addr {
                 SocketAddr::V4(_) => &mut self.socket4,
                 SocketAddr::V6(_) => &mut self.socket6
             };
@@ -715,7 +716,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
 
     fn handle_socket_data(&mut self, src: SocketAddr, data: &mut [u8]) {
         let size = data.len();
-        if let Err(e) = decode(data, self.magic, &mut self.crypto).and_then(|msg| {
+        if let Err(e) = decode(data, self.magic, &self.crypto).and_then(|msg| {
             self.traffic.count_in_traffic(src, size);
             self.handle_net_message(src, msg)
         }) {

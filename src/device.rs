@@ -248,7 +248,7 @@ pub struct MockDevice {
 
 impl MockDevice {
     pub fn new() -> Self {
-        Self { outbound: VecDeque::new(), inbound: VecDeque::new() }
+        Default::default()
     }
 
     pub fn put_inbound(&mut self, data: Vec<u8>) {
@@ -285,6 +285,12 @@ impl Device for MockDevice {
     fn write(&mut self, data: &mut [u8], start: usize) -> Result<(), Error> {
         self.outbound.push_back(data[start..].to_owned());
         Ok(())
+    }
+}
+
+impl Default for MockDevice {
+    fn default() -> Self {
+        Self { outbound: VecDeque::new(), inbound: VecDeque::new() }
     }
 }
 

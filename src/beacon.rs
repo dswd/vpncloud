@@ -31,7 +31,7 @@ fn base_62_sanitize(data: &str) -> String {
 }
 
 fn sha512(data: &[u8]) -> Vec<u8> {
-    digest::digest(&digest::SHA512, data).as_ref().iter().map(|b| *b).collect()
+    digest::digest(&digest::SHA512, data).as_ref().to_vec()
 }
 
 struct FutureResult<T> {
@@ -72,6 +72,7 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
         sha512(&data)
     }
 
+    #[allow(clippy::needless_range_loop)]
     fn mask_with_keystream(&self, data: &mut [u8], type_: u8, seed: u8) {
         let mut iter = 0;
         let mut mask = self.get_keystream(type_, seed, iter);
