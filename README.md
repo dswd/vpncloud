@@ -75,7 +75,7 @@ There is a [VpnCloud package for Arch Linux](https://aur.archlinux.org/packages/
 thanks to Oscar Rainford (fourbytes).
 
 #### CentOS 7
-Centos 7 .rpm package can be built using [cargo-rpm](https://github.com/RustRPM/cargo-rpm): ``cargo rpm``
+CentOS 7 .rpm package can be built using [cargo-rpm](https://github.com/RustRPM/cargo-rpm): ``cargo rpm``
 
 ### Contributions welcome
 There are several areas in which still some work has to be done and where
