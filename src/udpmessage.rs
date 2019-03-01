@@ -183,6 +183,12 @@ pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &Crypto) -> Re
 
 #[allow(unknown_lints,clippy::needless_range_loop)]
 pub fn encode<'a>(msg: &'a mut Message, mut buf: &'a mut [u8], magic: HeaderMagic, crypto: &mut Crypto) -> &'a mut [u8] {
+    let header_type = match msg {
+        Message::Data(_, _, _) => 0,
+        Message::Peers(_) => 1,
+        Message::Init(_, _, _) => 2,
+        Message::Close => 3
+    };
     let mut start = 64;
     let mut end = 64;
     match *msg {
@@ -250,12 +256,7 @@ pub fn encode<'a>(msg: &'a mut Message, mut buf: &'a mut [u8], magic: HeaderMagi
     start -= crypto.nonce_bytes();
     let mut header = TopHeader::default();
     header.magic = magic;
-    header.msgtype = match *msg {
-        Message::Data(_, _, _) => 0,
-        Message::Peers(_) => 1,
-        Message::Init(_, _, _) => 2,
-        Message::Close => 3
-    };
+    header.msgtype = header_type;
     header.crypto_method = crypto.method();
     start -= TopHeader::size();
     header.write_to(&mut buf[start..]);
