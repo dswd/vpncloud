@@ -73,7 +73,7 @@ fn msg6_put<P: Protocol, T: Table>(node: &mut TestNode<P, T>, from: SocketAddr, 
 }
 
 fn simulate<P: Protocol, T: Table>(nodes: &mut [(&mut TestNode<P, T>, SocketAddr)]) {
-    for (ref mut node, ref from_addr) in nodes.iter_mut() {
+    for (ref mut node, ref _from_addr) in nodes.iter_mut() {
         while node.device().has_inbound() {
             node.trigger_device_event();
         }

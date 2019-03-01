@@ -29,7 +29,7 @@ impl Address {
             return Err(Error::Parse("Address too short"));
         }
         let len = data[0] as usize;
-        let addr = try!(Address::read_from_fixed(&data[1..], len));
+        let addr = Address::read_from_fixed(&data[1..], len)?;
         Ok((addr, len + 1))
     }
 
@@ -121,7 +121,7 @@ impl FromStr for Address {
         if parts.len() == 6 {
             let mut bytes = [0; 16];
             for i in 0..6 {
-                bytes[i] = try!(u8::from_str_radix(parts[i], 16).map_err(|_| Error::Parse("Failed to parse mac")));
+                bytes[i] = u8::from_str_radix(parts[i], 16).map_err(|_| Error::Parse("Failed to parse mac"))?;
             }
             return Ok(Address{data: bytes, len: 6});
         }
@@ -139,7 +139,7 @@ pub struct Range {
 impl Range {
     #[inline]
     pub fn read_from(data: &[u8]) -> Result<(Range, usize), Error> {
-        let (address, read) = try!(Address::read_from(data));
+        let (address, read) = Address::read_from(data)?;
         if data.len() < read + 1 {
             return Err(Error::Parse("Range too short"));
         }
@@ -164,9 +164,9 @@ impl FromStr for Range {
             Some(pos) => pos,
             None => return Err(Error::Parse("Invalid range format"))
         };
-        let prefix_len = try!(u8::from_str(&text[pos+1..])
-            .map_err(|_| Error::Parse("Failed to parse prefix length")));
-        let base = try!(Address::from_str(&text[..pos]));
+        let prefix_len = u8::from_str(&text[pos+1..])
+            .map_err(|_| Error::Parse("Failed to parse prefix length"))?;
+        let base = Address::from_str(&text[..pos])?;
         Ok(Range{base, prefix_len})
     }
 }
@@ -207,16 +207,16 @@ impl fmt::Display for Mode {
 }
 
 pub trait Table {
-    fn learn(&mut self, Address, Option<u8>, SocketAddr);
-    fn lookup(&mut self, &Address) -> Option<SocketAddr>;
+    fn learn(&mut self, _: Address, _: Option<u8>, _: SocketAddr);
+    fn lookup(&mut self, _: &Address) -> Option<SocketAddr>;
     fn housekeep(&mut self);
     fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error>;
-    fn remove(&mut self, &Address) -> bool;
-    fn remove_all(&mut self, &SocketAddr);
+    fn remove(&mut self, _: &Address) -> bool;
+    fn remove_all(&mut self, _: &SocketAddr);
 }
 
 pub trait Protocol: Sized {
-    fn parse(&[u8]) -> Result<(Address, Address), Error>;
+    fn parse(_: &[u8]) -> Result<(Address, Address), Error>;
 }
 
 #[derive(Debug)]
@@ -278,10 +278,10 @@ fn address_decode_encode() {
 
 #[test]
 fn address_eq() {
-    assert!(Address::read_from_fixed(&[1,2,3,4], 4).unwrap() == Address::read_from_fixed(&[1,2,3,4], 4).unwrap());
-    assert!(Address::read_from_fixed(&[1,2,3,4], 4).unwrap() != Address::read_from_fixed(&[1,2,3,5], 4).unwrap());
-    assert!(Address::read_from_fixed(&[1,2,3,4], 3).unwrap() == Address::read_from_fixed(&[1,2,3,5], 3).unwrap());
-    assert!(Address::read_from_fixed(&[1,2,3,4], 3).unwrap() != Address::read_from_fixed(&[1,2,3,4], 4).unwrap());
+    assert_eq!(Address::read_from_fixed(&[1,2,3,4], 4).unwrap(), Address::read_from_fixed(&[1,2,3,4], 4).unwrap());
+    assert_ne!(Address::read_from_fixed(&[1,2,3,4], 4).unwrap(), Address::read_from_fixed(&[1,2,3,5], 4).unwrap());
+    assert_eq!(Address::read_from_fixed(&[1,2,3,4], 3).unwrap(), Address::read_from_fixed(&[1,2,3,5], 3).unwrap());
+    assert_ne!(Address::read_from_fixed(&[1,2,3,4], 3).unwrap(), Address::read_from_fixed(&[1,2,3,4], 4).unwrap());
 }
 
 #[test]

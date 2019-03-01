@@ -209,9 +209,9 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
     pub fn write_to_file<P: AsRef<Path>>(&self, peers: &[SocketAddr], path: P) -> Result<(), io::Error> {
         let beacon = self.encode(peers);
         debug!("Beacon: {}", beacon);
-        let mut f = try!(File::create(&path));
-        try!(writeln!(&mut f, "{}", beacon));
-        try!(fs::set_permissions(&path, Permissions::from_mode(0o644)));
+        let mut f = File::create(&path)?;
+        writeln!(&mut f, "{}", beacon)?;
+        fs::set_permissions(&path, Permissions::from_mode(0o644))?;
         Ok(())
     }
 
@@ -221,9 +221,9 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
         let end = self.end();
         let beacon = format!("{}{}{}", begin, data, end);
         debug!("Calling beacon command: {}", cmd);
-        let process = try!(Command::new("sh").args(&["-c", cmd])
+        let process = Command::new("sh").args(&["-c", cmd])
             .env("begin", begin).env("data", data).env("end", end).env("beacon", beacon)
-            .stdout(Stdio::piped()).stderr(Stdio::piped()).spawn());
+            .stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
         thread::spawn(move || {
             let output = process.wait_with_output().expect("Failed to wait on child");
             if !output.status.success() {
@@ -256,9 +256,9 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
     }
 
     pub fn read_from_file<P: AsRef<Path>>(&self, path: P, ttl_hours: Option<u16>) -> Result<Vec<SocketAddr>, io::Error> {
-        let mut f = try!(File::open(&path));
+        let mut f = File::open(&path)?;
         let mut contents = String::new();
-        try!(f.read_to_string(&mut contents));
+        f.read_to_string(&mut contents)?;
         Ok(self.decode(&contents, ttl_hours))
     }
 
@@ -266,9 +266,9 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
         let begin = self.begin();
         let end = self.end();
         debug!("Calling beacon command: {}", cmd);
-        let process = try!(Command::new("sh").args(&["-c", cmd])
+        let process = Command::new("sh").args(&["-c", cmd])
             .env("begin", begin).env("end", end)
-            .stdout(Stdio::piped()).stderr(Stdio::piped()).spawn());
+            .stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
         let this = self.clone();
         thread::spawn(move || {
             let output = process.wait_with_output().expect("Failed to wait on child");
@@ -301,7 +301,7 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
 #[cfg(test)] use std::str::FromStr;
 #[cfg(test)] use std::time::Duration;
 #[cfg(test)] use tempfile;
-#[cfg(test)] use ::util::MockTimeSource;
+#[cfg(test)] use crate::util::MockTimeSource;
 
 #[test]
 fn encode() {

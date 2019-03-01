@@ -9,6 +9,7 @@ homepage = "https://vpncloud.ddswd.de"
 repository = "https://github.com/dswd/vpncloud"
 keywords = ["vpn", "p2p", "tun", "tap", "network"]
 readme = "README.md"
+edition = "2018"
 
 [dependencies]
 time = "0.1"

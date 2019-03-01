@@ -51,15 +51,15 @@ use std::path::Path;
 use std::io::{self, Write};
 use std::net::UdpSocket;
 
-use device::{TunTapDevice, Device, Type};
-use ethernet::SwitchTable;
-use ip::RoutingTable;
-use types::{Mode, Range, Protocol, HeaderMagic, Error};
-use cloud::GenericCloud;
-use crypto::{Crypto, CryptoMethod};
-use port_forwarding::PortForwarding;
-use util::{Duration, SystemTimeSource};
-use config::Config;
+use crate::device::{TunTapDevice, Device, Type};
+use crate::ethernet::SwitchTable;
+use crate::ip::RoutingTable;
+use crate::types::{Mode, Range, Protocol, HeaderMagic, Error};
+use crate::cloud::GenericCloud;
+use crate::crypto::{Crypto, CryptoMethod};
+use crate::port_forwarding::PortForwarding;
+use crate::util::{Duration, SystemTimeSource};
+use crate::config::Config;
 
 
 const VERSION: u8 = 1;
@@ -109,7 +109,7 @@ struct DualLogger {
 impl DualLogger {
     pub fn new<P: AsRef<Path>>(path: Option<P>) -> Result<Self, io::Error> {
         if let Some(path) = path {
-            let file = try!(File::create(path));
+            let file = File::create(path)?;
             Ok(DualLogger{file: Mutex::new(Some(file))})
         } else {
             Ok(DualLogger{file: Mutex::new(None)})

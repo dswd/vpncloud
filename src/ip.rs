@@ -34,16 +34,16 @@ impl Protocol for Packet {
                 if data.len() < 20 {
                     return Err(Error::Parse("Truncated IPv4 header"));
                 }
-                let src = try!(Address::read_from_fixed(&data[12..], 4));
-                let dst = try!(Address::read_from_fixed(&data[16..], 4));
+                let src = Address::read_from_fixed(&data[12..], 4)?;
+                let dst = Address::read_from_fixed(&data[16..], 4)?;
                 Ok((src, dst))
             },
             6 => {
                 if data.len() < 40 {
                     return Err(Error::Parse("Truncated IPv6 header"));
                 }
-                let src = try!(Address::read_from_fixed(&data[8..], 16));
-                let dst = try!(Address::read_from_fixed(&data[24..], 16));
+                let src = Address::read_from_fixed(&data[8..], 16)?;
+                let dst = Address::read_from_fixed(&data[24..], 16)?;
                 Ok((src, dst))
             },
             _ => Err(Error::Parse("Invalid version"))
@@ -149,10 +149,10 @@ impl Table for RoutingTable {
 
     /// Write out the table
     fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error> {
-        try!(writeln!(out, "Routing table:"));
+        writeln!(out, "Routing table:")?;
         for entries in self.0.values() {
             for entry in entries {
-                try!(writeln!(out, " - {}/{} => {}", entry.bytes, entry.prefix_len, entry.address));
+                writeln!(out, " - {}/{} => {}", entry.bytes, entry.prefix_len, entry.address)?;
             }
         }
         Ok(())

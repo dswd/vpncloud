@@ -107,7 +107,7 @@ impl TunTapDevice {
         if type_ == Type::Dummy {
             return Self::dummy(ifname, path, type_);
         }
-        let fd = try!(fs::OpenOptions::new().read(true).write(true).open(path));
+        let fd = fs::OpenOptions::new().read(true).write(true).open(path)?;
         // Add trailing \0 to interface name
         let mut ifname_string = String::with_capacity(32);
         ifname_string.push_str(ifname);
@@ -156,7 +156,7 @@ impl TunTapDevice {
     #[allow(dead_code)]
     pub fn dummy(ifname: &str, path: &str, type_: Type) -> io::Result<Self> {
         Ok(TunTapDevice{
-            fd: try!(fs::OpenOptions::new().create(true).read(true).write(true).open(path)),
+            fd: fs::OpenOptions::new().create(true).read(true).write(true).open(path)?,
             ifname: ifname.to_string(),
             type_
         })
@@ -218,7 +218,7 @@ impl Device for TunTapDevice {
     }
 
     fn read(&mut self, mut buffer: &mut [u8]) -> Result<(usize, usize), Error> {
-        let read = try!(self.fd.read(&mut buffer).map_err(|e| Error::TunTapDev("Read error", e)));
+        let read = self.fd.read(&mut buffer).map_err(|e| Error::TunTapDev("Read error", e))?;
         let (start, read) = self.correct_data_after_read(&mut buffer, 0, read);
         Ok((start, read))
     }

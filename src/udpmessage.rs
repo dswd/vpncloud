@@ -71,14 +71,14 @@ impl<'a> fmt::Debug for Message<'a> {
         match *self {
             Message::Data(_, start, end) => write!(formatter, "Data({} bytes)", end-start),
             Message::Peers(ref peers) => {
-                try!(write!(formatter, "Peers ["));
+                write!(formatter, "Peers [")?;
                 let mut first = true;
                 for p in peers {
                     if !first {
-                        try!(write!(formatter, ", "));
+                        write!(formatter, ", ")?;
                     }
                     first = false;
-                    try!(write!(formatter, "{}", p));
+                    write!(formatter, "{}", p)?;
                 }
                 write!(formatter, "]")
             },
@@ -91,7 +91,7 @@ impl<'a> fmt::Debug for Message<'a> {
 #[allow(unknown_lints,clippy::needless_range_loop)]
 pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &Crypto) -> Result<Message<'a>, Error> {
     let mut end = data.len();
-    let (header, mut pos) = try!(TopHeader::read_from(&data[..end]));
+    let (header, mut pos) = TopHeader::read_from(&data[..end])?;
     if header.magic != magic {
         return Err(Error::WrongHeaderMagic(header.magic));
     }
@@ -107,7 +107,7 @@ pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &Crypto) -> Re
             let (before, after) = data.split_at_mut(pos);
             let (nonce, crypto_data) = after.split_at_mut(len);
             pos += len;
-            end = try!(crypto.decrypt(crypto_data, nonce, &before[..TopHeader::size()])) + pos;
+            end = crypto.decrypt(crypto_data, nonce, &before[..TopHeader::size()])? + pos;
         }
         assert_eq!(end, data.len()-crypto.additional_bytes());
     }
@@ -169,7 +169,7 @@ pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &Crypto) -> Re
             pos += 1;
             let mut addrs = Vec::with_capacity(count);
             for _ in 0..count {
-                let (range, read) = try!(Range::read_from(&data[pos..end]));
+                let (range, read) = Range::read_from(&data[pos..end])?;
                 pos += read;
                 addrs.push(range);
             }
