@@ -24,6 +24,7 @@ pub use super::ip::{self, RoutingTable};
 type TestNode<P, T> = GenericCloud<MockDevice, P, T, MockSocket, MockTimeSource>;
 
 type TapTestNode = TestNode<ethernet::Frame, SwitchTable<MockTimeSource>>;
+#[allow(dead_code)]
 type TunTestNode = TestNode<ip::Packet, RoutingTable>;
 
 
@@ -40,6 +41,7 @@ fn create_tap_node() -> TapTestNode {
     )
 }
 
+#[allow(dead_code)]
 fn create_tun_node(addresses: Vec<Range>) -> TunTestNode {
     TestNode::new(
         &Config { port: NEXT_PORT.with(|p| p.fetch_add(1, Ordering::Relaxed)) as u16, ..Config::default() },
@@ -56,6 +58,7 @@ fn msg4_get<P: Protocol, T: Table>(node: &mut TestNode<P, T>) -> (SocketAddr, Ve
     msg.unwrap()
 }
 
+#[allow(dead_code)]
 fn msg6_get<P: Protocol, T: Table>(node: &mut TestNode<P, T>) -> (SocketAddr, Vec<u8>) {
     let msg = node.socket6().pop_outbound();
     assert!(msg.is_some());

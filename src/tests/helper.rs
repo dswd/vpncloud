@@ -20,6 +20,7 @@ macro_rules! assert_message4 {
     };
 }
 
+#[allow(unused_macros)]
 macro_rules! assert_message6 {
     ($from: expr, $from_addr: expr, $to: expr, $to_addr: expr, $message: expr) => {
         let (addr, mut data) = msg6_get(&mut $from);

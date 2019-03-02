@@ -6,19 +6,20 @@ use test::Bencher;
 
 use std::str::FromStr;
 use std::net::{UdpSocket, ToSocketAddrs, Ipv4Addr, SocketAddr, SocketAddrV4};
-use std::os::unix::io::AsRawFd;
 
 use super::MAGIC;
 use super::config::Config;
 use super::cloud::GenericCloud;
-use super::device::{Device, Type};
+use super::device::Type;
 use super::udpmessage::{Message, encode, decode};
 use super::crypto::{Crypto, CryptoMethod};
-use super::ethernet::{Frame, SwitchTable};
+use super::ethernet::{self, SwitchTable};
 use super::types::{Address, Table, Protocol};
 use super::ip::Packet;
-use super::util::now as util_now;
-use super::poll::{Poll, Flags};
+use super::util::{TimeSource, SystemTimeSource, MockTimeSource};
+use super::poll::WaitImpl;
+use super::device::TunTapDevice;
+use super::net::MockSocket;
 
 #[bench]
 fn crypto_chacha20(b: &mut Bencher) {
@@ -73,7 +74,7 @@ fn message_decode(b: &mut Bencher) {
 
 #[bench]
 fn switch_learn(b: &mut Bencher) {
-    let mut table = SwitchTable::new(10, 0);
+    let mut table = SwitchTable::<SystemTimeSource>::new(10, 0);
     let addr = Address::from_str("12:34:56:78:90:ab").unwrap();
     let peer = "1.2.3.4:5678".to_socket_addrs().unwrap().next().unwrap();
     b.iter(|| {
@@ -84,7 +85,7 @@ fn switch_learn(b: &mut Bencher) {
 
 #[bench]
 fn switch_lookup(b: &mut Bencher) {
-    let mut table = SwitchTable::new(10, 0);
+    let mut table = SwitchTable::<SystemTimeSource>::new(10, 0);
     let addr = Address::from_str("12:34:56:78:90:ab").unwrap();
     let peer = "1.2.3.4:5678".to_socket_addrs().unwrap().next().unwrap();
     table.learn(addr.clone(), None, peer);
@@ -99,7 +100,7 @@ fn ethernet_parse(b: &mut Bencher) {
     let mut data = [0; 1500];
     data[5] = 45;
     b.iter(|| {
-        Frame::parse(&data).unwrap()
+        ethernet::Frame::parse(&data).unwrap()
     });
     b.bytes = 1400;
 }
@@ -127,30 +128,37 @@ fn ipv6_parse(b: &mut Bencher) {
 #[bench]
 fn now(b: &mut Bencher) {
     b.iter(|| {
-        util_now()
+        SystemTimeSource::now()
     });
     b.bytes = 1400;
 }
 
 #[bench]
 fn epoll_wait(b: &mut Bencher) {
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let mut poll_handle = Poll::new(1).unwrap();
-    let fd = socket.as_raw_fd();
-    poll_handle.register(fd, Flags::WRITE).unwrap();
+    let socketv4 = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let socketv6 = UdpSocket::bind("[::]:0").unwrap();
+    let device = TunTapDevice::dummy("dummy", "/dev/zero", Type::Dummy).unwrap();
+    let mut waiter = WaitImpl::testing(&socketv4, &socketv6, &device, 1000).unwrap();
     b.iter(|| {
-        assert_eq!(poll_handle.wait(1000).unwrap().len(), 1)
+        assert!(waiter.next().is_some())
     });
     b.bytes = 1400;
 }
 
+type TestNode = GenericCloud<TunTapDevice, ethernet::Frame, SwitchTable<MockTimeSource>, MockSocket, MockTimeSource>;
+
+fn create_test_node() -> TestNode {
+    TestNode::new(
+        &Config::default(),
+        TunTapDevice::dummy("dummy", "/dev/null", Type::Tap).unwrap(),
+        SwitchTable::new(1800, 10),
+        true, true, vec![], Crypto::None, None
+    )
+}
+
 #[bench]
 fn handle_interface_data(b: &mut Bencher) {
-    let config = Config::default();
-    let mut node = GenericCloud::<Frame, SwitchTable>::new(
-        &config, Device::dummy("vpncloud0", "/dev/null", Type::Tap).unwrap(),
-        SwitchTable::new(300, 10), true, true, vec![], Crypto::None, None
-    );
+    let mut node = create_test_node();
     let mut data = [0; 1500];
     data[105] = 45;
     b.iter(|| {
@@ -161,11 +169,7 @@ fn handle_interface_data(b: &mut Bencher) {
 
 #[bench]
 fn handle_net_message(b: &mut Bencher) {
-    let config = Config::default();
-    let mut node = GenericCloud::<Frame, SwitchTable>::new(
-        &config, Device::dummy("vpncloud0", "/dev/null", Type::Tap).unwrap(),
-        SwitchTable::new(300, 10), true, true, vec![], Crypto::None, None
-    );
+    let mut node = create_test_node();
     let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 1));
     let mut data = [0; 1500];
     data[105] = 45;

@@ -23,6 +23,14 @@ pub struct EpollWait {
 
 impl EpollWait {
     pub fn new<S: Socket>(socketv4: &S, socketv6: &S, device: &Device, timeout: u32) -> io::Result<Self> {
+        Self::create(socketv4, socketv6, device, timeout, libc::EPOLLIN as u32)
+    }
+
+    pub fn testing<S: Socket>(socketv4: &S, socketv6: &S, device: &Device, timeout: u32) -> io::Result<Self> {
+        Self::create(socketv4, socketv6, device, timeout, ( libc::EPOLLIN | libc::EPOLLOUT ) as u32)
+    }
+
+    fn create<S: Socket>(socketv4: &S, socketv6: &S, device: &Device, timeout: u32, flags: u32) -> io::Result<Self> {
         let mut event = libc::epoll_event{u64: 0, events: 0};
         let poll_fd =  unsafe { libc::epoll_create(3) };
         if poll_fd == -1 {
@@ -35,7 +43,7 @@ impl EpollWait {
         };
         for fd in raw_fds {
             event.u64 = fd as u64;
-            event.events = libc::EPOLLIN as u32;
+            event.events = flags;
             let res = unsafe { libc::epoll_ctl(poll_fd, libc::EPOLL_CTL_ADD, fd, &mut event) };
             if res == -1 {
                 return Err(io::Error::last_os_error());
