@@ -24,8 +24,10 @@ rm -rf %{buildroot}
 mkdir -p %{buildroot}
 mkdir -p %{buildroot}/etc/vpncloud
 mkdir -p %{buildroot}/lib/systemd/system
+mkdir -p %{buildroot}/usr/share/man/man1
 cp %{buildroot}/../../../../../assets/example.net.disabled %{buildroot}/etc/vpncloud/example.net.disabled
 cp %{buildroot}/../../../../../assets/vpncloud@.service %{buildroot}/lib/systemd/system/vpncloud@.service
+cp %{buildroot}/../../../../../target/vpncloud.1.gz %{buildroot}/usr/share/man/man1/vpncloud.1.gz
 cp -a * %{buildroot}
 
 %clean
@@ -36,6 +38,7 @@ rm -rf %{buildroot}
 /etc/vpncloud/example.net.disabled
 /usr/bin/vpncloud
 /lib/systemd/system/vpncloud@.service
+/usr/share/man/man1/vpncloud.1.gz
 
 %defattr(-,root,root,-)
 %{_bindir}/*
