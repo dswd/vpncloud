@@ -40,7 +40,6 @@ tempfile = "3"
 [features]
 default = []
 bench = []
-system-libsodium = []
 
 [profile.release]
 lto = true
