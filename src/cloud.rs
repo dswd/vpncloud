@@ -352,11 +352,18 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     /// connect to the peer if it is not already connected.
     pub fn add_reconnect_peer(&mut self, add: String) {
         let now = TS::now();
+        let resolved =  match resolve(&add as &str) {
+            Ok(addrs) => addrs,
+            Err(err) => {
+                warn!("Failed to resolve {}: {:?}", add, err);
+                vec![]
+            }
+        };
         self.reconnect_peers.push(ReconnectEntry {
             address: add,
             tries: 0,
             timeout: 1,
-            resolved: vec![],
+            resolved: resolved,
             next_resolve: now,
             next: now
         })
@@ -817,6 +824,10 @@ impl<P: Protocol, T: Table> GenericCloud<MockDevice, P, T, MockSocket, MockTimeS
     pub fn trigger_device_event(&mut self) {
         let mut buffer = [0; 64*1024];
         self.handle_device_event(&mut buffer);
+    }
+
+    pub fn trigger_housekeep(&mut self) {
+        assert!(self.housekeep().is_ok())
     }
 
     pub fn node_id(&self) -> NodeId {

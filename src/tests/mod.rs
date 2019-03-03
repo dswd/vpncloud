@@ -33,8 +33,13 @@ thread_local! {
 }
 
 fn create_tap_node() -> TapTestNode {
+    create_tap_node_with_config(Config::default())
+}
+
+fn create_tap_node_with_config(mut config: Config) -> TapTestNode {
+    config.port = NEXT_PORT.with(|p| p.fetch_add(1, Ordering::Relaxed)) as u16;
     TestNode::new(
-        &Config { port: NEXT_PORT.with(|p| p.fetch_add(1, Ordering::Relaxed)) as u16, ..Config::default() },
+        &config,
         MockDevice::new(),
         SwitchTable::new(1800, 10),
         true, true, vec![], Crypto::None, None

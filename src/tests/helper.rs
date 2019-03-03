@@ -13,7 +13,7 @@ macro_rules! assert_message4 {
         let (addr, mut data) = msg4_get(&mut $from);
         assert_eq!($to_addr, addr);
         {
-            let message = $to.decode_message(&mut data).unwrap();
+            let message = $from.decode_message(&mut data).unwrap();
             assert_eq!($message, message.without_data());
         }
         msg4_put(&mut $to, $from_addr, data);
@@ -26,7 +26,7 @@ macro_rules! assert_message6 {
         let (addr, mut data) = msg6_get(&mut $from);
         assert_eq!($to_addr, addr);
         {
-            let message = $to.decode_message(&mut data).unwrap();
+            let message = $from.decode_message(&mut data).unwrap();
             assert_eq!($message, message.without_data());
         }
         msg6_put(&mut $to, $from_addr, data);
