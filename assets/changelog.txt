@@ -1,3 +1,16 @@
+vpncloud (1.0.0) stable; urgency=medium
+
+  * [added] Added ability to publish small beacons for rendezvous
+  * [added] Added build chain for packages
+  * [added] Added more tests
+  * [changed] Allow to build binary without manpage
+  * [changed] Rust edition 2018
+  * [changed] Rust version 1.33.0
+  * [changed] Updated dependencies
+  * [fixed] Fixed bug that could cause repeated initialization messages
+
+ -- Dennis Schwerdel <schwerdel@googlemail.com>  Thu, 21 Mar 2019 18:06:19 +0100
+
 vpncloud (0.9.1) stable; urgency=medium
 
   * [fixed] Fixed bug in new hex secret key functionality

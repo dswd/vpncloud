@@ -2,7 +2,7 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### UNRELEASED
+### v1.0.0 (2019-03-21)
 
 - [added] Added ability to publish small beacons for rendezvous
 - [added] Added build chain for packages
