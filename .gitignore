@@ -7,3 +7,5 @@ deb/vpncloud/vpncloud.1*
 Stats.ods
 dist
 builder/cache
+.idea
+release.sh
