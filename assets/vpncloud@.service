@@ -1,6 +1,6 @@
 [Unit]
 Description=VpnCloud network '%I'
-Before=network.target
+Before=network-online.target
 
 [Service]
 Type=forking
