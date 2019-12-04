@@ -4,11 +4,18 @@
 
 #[macro_use]
 mod helper;
+mod nat;
 mod payload;
 mod peers;
 
 pub use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    io::Write,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Once
+    }
+};
 
 pub use super::{
     cloud::GenericCloud,
@@ -24,6 +31,37 @@ pub use super::{
 };
 
 
+static INIT_LOGGER: Once = Once::new();
+
+pub fn init_debug_logger() {
+    INIT_LOGGER.call_once(|| {
+        log::set_boxed_logger(Box::new(DebugLogger)).unwrap();
+        log::set_max_level(log::LevelFilter::Debug);
+    })
+}
+
+struct DebugLogger;
+
+impl log::Log for DebugLogger {
+    #[inline]
+    fn enabled(&self, _metadata: &log::Metadata) -> bool {
+        true
+    }
+
+    #[inline]
+    fn log(&self, record: &log::Record) {
+        if self.enabled(record.metadata()) {
+            eprintln!("{} - {}", record.level(), record.args());
+        }
+    }
+
+    #[inline]
+    fn flush(&self) {
+        std::io::stderr().flush().expect("Failed to flush")
+    }
+}
+
+
 type TestNode<P, T> = GenericCloud<MockDevice, P, T, MockSocket, MockTimeSource>;
 
 type TapTestNode = TestNode<ethernet::Frame, SwitchTable<MockTimeSource>>;
@@ -35,17 +73,19 @@ thread_local! {
     static NEXT_PORT: AtomicUsize = AtomicUsize::new(1);
 }
 
-fn create_tap_node() -> TapTestNode {
-    create_tap_node_with_config(Config::default())
+fn create_tap_node(nat: bool) -> TapTestNode {
+    create_tap_node_with_config(nat, Config::default())
 }
 
-fn create_tap_node_with_config(mut config: Config) -> TapTestNode {
+fn create_tap_node_with_config(nat: bool, mut config: Config) -> TapTestNode {
+    MockSocket::set_nat(nat);
     config.port = NEXT_PORT.with(|p| p.fetch_add(1, Ordering::Relaxed)) as u16;
     TestNode::new(&config, MockDevice::new(), SwitchTable::new(1800, 10), true, true, vec![], Crypto::None, None)
 }
 
 #[allow(dead_code)]
-fn create_tun_node(addresses: Vec<Range>) -> TunTestNode {
+fn create_tun_node(nat: bool, addresses: Vec<Range>) -> TunTestNode {
+    MockSocket::set_nat(nat);
     TestNode::new(
         &Config { port: NEXT_PORT.with(|p| p.fetch_add(1, Ordering::Relaxed)) as u16, ..Config::default() },
         MockDevice::new(),
@@ -73,13 +113,15 @@ fn msg6_get<P: Protocol, T: Table>(node: &mut TestNode<P, T>) -> (SocketAddr, Ve
 }
 
 fn msg4_put<P: Protocol, T: Table>(node: &mut TestNode<P, T>, from: SocketAddr, msg: Vec<u8>) {
-    node.socket4().put_inbound(from, msg);
-    node.trigger_socket_v4_event();
+    if node.socket4().put_inbound(from, msg) {
+        node.trigger_socket_v4_event();
+    }
 }
 
 fn msg6_put<P: Protocol, T: Table>(node: &mut TestNode<P, T>, from: SocketAddr, msg: Vec<u8>) {
-    node.socket6().put_inbound(from, msg);
-    node.trigger_socket_v6_event();
+    if node.socket6().put_inbound(from, msg) {
+        node.trigger_socket_v6_event();
+    }
 }
 
 fn simulate<P: Protocol, T: Table>(nodes: &mut [(&mut TestNode<P, T>, SocketAddr)]) {

@@ -1,11 +1,12 @@
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     io::{self, ErrorKind},
     net::{SocketAddr, SocketAddrV4, SocketAddrV6, UdpSocket},
-    os::unix::io::{AsRawFd, RawFd}
+    os::unix::io::{AsRawFd, RawFd},
+    sync::atomic::{AtomicBool, Ordering}
 };
 
-use super::util::get_internal_ip;
+use super::util::{get_internal_ip, MockTimeSource, Time, TimeSource};
 
 use net2::UdpBuilder;
 
@@ -16,7 +17,7 @@ pub trait Socket: AsRawFd + Sized {
     fn receive(&mut self, buffer: &mut [u8]) -> Result<(usize, SocketAddr), io::Error>;
     fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error>;
     fn address(&self) -> Result<SocketAddr, io::Error>;
-    fn detect_nat() -> bool;
+    fn detect_nat(&self) -> bool;
 }
 
 impl Socket for UdpSocket {
@@ -45,13 +46,18 @@ impl Socket for UdpSocket {
     fn address(&self) -> Result<SocketAddr, io::Error> {
         self.local_addr()
     }
-    fn detect_nat() -> bool {
+    fn detect_nat(&self) -> bool {
         get_internal_ip().is_private()
     }
 }
 
+thread_local! {
+    static MOCK_SOCKET_NAT: AtomicBool = AtomicBool::new(false);
+}
 
 pub struct MockSocket {
+    nat: bool,
+    nat_peers: HashMap<SocketAddr, Time>,
     address: SocketAddr,
     outbound: VecDeque<(SocketAddr, Vec<u8>)>,
     inbound: VecDeque<(SocketAddr, Vec<u8>)>
@@ -59,11 +65,36 @@ pub struct MockSocket {
 
 impl MockSocket {
     pub fn new(address: SocketAddr) -> Self {
-        Self { address, outbound: VecDeque::new(), inbound: VecDeque::new() }
+        Self {
+            nat: Self::get_nat(),
+            nat_peers: HashMap::new(),
+            address,
+            outbound: VecDeque::new(),
+            inbound: VecDeque::new()
+        }
     }
 
-    pub fn put_inbound(&mut self, from: SocketAddr, data: Vec<u8>) {
-        self.inbound.push_back((from, data))
+    pub fn set_nat(nat: bool) {
+        MOCK_SOCKET_NAT.with(|t| t.store(nat, Ordering::SeqCst))
+    }
+
+    pub fn get_nat() -> bool {
+        MOCK_SOCKET_NAT.with(|t| t.load(Ordering::SeqCst))
+    }
+
+    pub fn put_inbound(&mut self, from: SocketAddr, data: Vec<u8>) -> bool {
+        if !self.nat {
+            self.inbound.push_back((from, data));
+            return true
+        }
+        if let Some(timeout) = self.nat_peers.get(&from) {
+            if *timeout >= MockTimeSource::now() {
+                self.inbound.push_back((from, data));
+                return true
+            }
+        }
+        warn!("Sender {:?} is filtered out by NAT", from);
+        false
     }
 
     pub fn pop_outbound(&mut self) -> Option<(SocketAddr, Vec<u8>)> {
@@ -91,17 +122,20 @@ impl Socket for MockSocket {
             buffer[0..data.len()].copy_from_slice(&data);
             Ok((data.len(), addr))
         } else {
-            Err(io::Error::from(ErrorKind::UnexpectedEof))
+            Err(io::Error::new(ErrorKind::Other, "nothing in queue"))
         }
     }
     fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error> {
         self.outbound.push_back((addr, data.to_owned()));
+        if self.nat {
+            self.nat_peers.insert(addr, MockTimeSource::now() + 300);
+        }
         Ok(data.len())
     }
     fn address(&self) -> Result<SocketAddr, io::Error> {
         Ok(self.address)
     }
-    fn detect_nat() -> bool {
-        false
+    fn detect_nat(&self) -> bool {
+        self.nat
     }
 }

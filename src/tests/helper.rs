@@ -39,6 +39,20 @@ macro_rules! simulate {
     };
 }
 
+macro_rules! simulate_time {
+    ($time:expr, $($node: expr => $addr: expr),*) => {
+        for _ in 0..$time {
+            use crate::util::{MockTimeSource, TimeSource};
+            MockTimeSource::set_time(MockTimeSource::now()+1);
+            $(
+                $node.trigger_housekeep();
+            )*
+            simulate(&mut [$((&mut $node, $addr)),*]);
+        }
+    };
+}
+
+
 macro_rules! assert_connected {
     ($($node:expr),*) => {
         for node1 in [$(&$node),*].iter() {

@@ -6,9 +6,9 @@ use super::*;
 
 #[test]
 fn ethernet_delivers() {
-    let mut node1 = create_tap_node();
+    let mut node1 = create_tap_node(false);
     let node1_addr = addr!("1.2.3.4:5678");
-    let mut node2 = create_tap_node();
+    let mut node2 = create_tap_node(false);
     let node2_addr = addr!("2.3.4.5:6789");
 
     node1.connect("2.3.4.5:6789").unwrap();
@@ -28,11 +28,11 @@ fn ethernet_delivers() {
 
 #[test]
 fn switch_learns() {
-    let mut node1 = create_tap_node();
+    let mut node1 = create_tap_node(false);
     let node1_addr = addr!("1.2.3.4:5678");
-    let mut node2 = create_tap_node();
+    let mut node2 = create_tap_node(false);
     let node2_addr = addr!("2.3.4.5:6789");
-    let mut node3 = create_tap_node();
+    let mut node3 = create_tap_node(false);
     let node3_addr = addr!("3.4.5.6:7890");
 
     node1.connect("2.3.4.5:6789").unwrap();

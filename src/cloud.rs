@@ -256,7 +256,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             Err(err) => fail!("Failed to open ipv6 address ::{}: {}", config.port, err)
         };
         let now = TS::now();
-        let peer_timeout_publish = if S::detect_nat() {
+        let peer_timeout_publish = if socket4.detect_nat() {
             info!("Private IP detected, setting published peer timeout to 300s");
             300
         } else {

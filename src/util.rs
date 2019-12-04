@@ -91,11 +91,13 @@ macro_rules! fail {
     ($format:expr) => ( {
         use std::process;
         error!($format);
+        log::logger().flush();
         process::exit(-1);
     } );
     ($format:expr, $( $arg:expr ),+) => ( {
         use std::process;
         error!($format, $( $arg ),+ );
+        log::logger().flush();
         process::exit(-1);
     } );
 }
