@@ -102,6 +102,4 @@ contributions are very welcome:
 
 
 ### Semantic Versioning
-This project uses [semantic versioning](http://semver.org). Currently that means
-that everything can change between versions before 1.0 is finally released.
-However I am considering to release 1.0 soon.
+This project uses [semantic versioning](http://semver.org).

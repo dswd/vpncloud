@@ -6,8 +6,10 @@ This project follows [semantic versioning](http://semver.org).
 
 - [added] Exchange peer timeout and adapt keepalive accordingly
 - [added] Reducing published peer timeout to 5 min when NAT is detected
+- [added] Added more tests
 - [changed] Rust version 1.41.0
 - [changed] Updated dependencies
+- [fixed] Fixed potential startup dependency issue
 
 ### v1.0.0 (2019-03-21)
 
