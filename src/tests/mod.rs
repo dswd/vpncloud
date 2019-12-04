@@ -2,23 +2,26 @@
 // Copyright (C) 2015-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-#[macro_use] mod helper;
-mod peers;
+#[macro_use]
+mod helper;
 mod payload;
+mod peers;
 
 pub use std::net::SocketAddr;
-use std::sync::atomic::{Ordering, AtomicUsize};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-pub use super::ethernet::{self, SwitchTable};
-pub use super::util::MockTimeSource;
-pub use super::net::MockSocket;
-pub use super::device::MockDevice;
-pub use super::udpmessage::Message;
-pub use super::config::Config;
-pub use super::crypto::Crypto;
-pub use super::cloud::GenericCloud;
-pub use super::types::{Protocol, Table, Range};
-pub use super::ip::{self, RoutingTable};
+pub use super::{
+    cloud::GenericCloud,
+    config::Config,
+    crypto::Crypto,
+    device::MockDevice,
+    ethernet::{self, SwitchTable},
+    ip::{self, RoutingTable},
+    net::MockSocket,
+    types::{Protocol, Range, Table},
+    udpmessage::Message,
+    util::MockTimeSource
+};
 
 
 type TestNode<P, T> = GenericCloud<MockDevice, P, T, MockSocket, MockTimeSource>;
@@ -38,12 +41,7 @@ fn create_tap_node() -> TapTestNode {
 
 fn create_tap_node_with_config(mut config: Config) -> TapTestNode {
     config.port = NEXT_PORT.with(|p| p.fetch_add(1, Ordering::Relaxed)) as u16;
-    TestNode::new(
-        &config,
-        MockDevice::new(),
-        SwitchTable::new(1800, 10),
-        true, true, vec![], Crypto::None, None
-    )
+    TestNode::new(&config, MockDevice::new(), SwitchTable::new(1800, 10), true, true, vec![], Crypto::None, None)
 }
 
 #[allow(dead_code)]
@@ -52,7 +50,11 @@ fn create_tun_node(addresses: Vec<Range>) -> TunTestNode {
         &Config { port: NEXT_PORT.with(|p| p.fetch_add(1, Ordering::Relaxed)) as u16, ..Config::default() },
         MockDevice::new(),
         RoutingTable::new(),
-        false, false, addresses, Crypto::None, None
+        false,
+        false,
+        addresses,
+        Crypto::None,
+        None
     )
 }
 

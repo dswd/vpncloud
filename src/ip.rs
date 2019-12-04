@@ -2,14 +2,16 @@
 // Copyright (C) 2015-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use std::net::SocketAddr;
-use std::collections::{hash_map, HashMap};
-use std::hash::BuildHasherDefault;
-use std::io::{self, Write};
+use std::{
+    collections::{hash_map, HashMap},
+    hash::BuildHasherDefault,
+    io::{self, Write},
+    net::SocketAddr
+};
 
 use fnv::FnvHasher;
 
-use super::types::{Protocol, Error, Table, Address};
+use super::types::{Address, Error, Protocol, Table};
 
 
 /// An IP packet dissector
@@ -26,26 +28,26 @@ impl Protocol for Packet {
     /// This method will fail when the given data is not a valid ipv4 and ipv6 packet.
     fn parse(data: &[u8]) -> Result<(Address, Address), Error> {
         if data.is_empty() {
-            return Err(Error::Parse("Empty header"));
+            return Err(Error::Parse("Empty header"))
         }
         let version = data[0] >> 4;
         match version {
             4 => {
                 if data.len() < 20 {
-                    return Err(Error::Parse("Truncated IPv4 header"));
+                    return Err(Error::Parse("Truncated IPv4 header"))
                 }
                 let src = Address::read_from_fixed(&data[12..], 4)?;
                 let dst = Address::read_from_fixed(&data[16..], 4)?;
                 Ok((src, dst))
-            },
+            }
             6 => {
                 if data.len() < 40 {
-                    return Err(Error::Parse("Truncated IPv6 header"));
+                    return Err(Error::Parse("Truncated IPv6 header"))
                 }
                 let src = Address::read_from_fixed(&data[8..], 16)?;
                 let dst = Address::read_from_fixed(&data[24..], 16)?;
                 Ok((src, dst))
-            },
+            }
             _ => Err(Error::Parse("Invalid version"))
         }
     }
@@ -91,11 +93,13 @@ impl Table for RoutingTable {
         let mut group_bytes = [0; 16];
         group_bytes[..group_len].copy_from_slice(&addr.data[..group_len]);
         // Create an entry
-        let routing_entry = RoutingEntry{address, bytes: addr, prefix_len};
+        let routing_entry = RoutingEntry { address, bytes: addr, prefix_len };
         // Add the entry to the routing table, creating a new list of the prefix group is empty.
         match self.0.entry(group_bytes) {
             hash_map::Entry::Occupied(mut entry) => entry.get_mut().push(routing_entry),
-            hash_map::Entry::Vacant(entry) => { entry.insert(vec![routing_entry]); }
+            hash_map::Entry::Vacant(entry) => {
+                entry.insert(vec![routing_entry]);
+            }
         }
     }
 
@@ -126,7 +130,7 @@ impl Table for RoutingTable {
                             match_len += 8;
                         } else {
                             match_len += b.leading_zeros();
-                            break;
+                            break
                         }
                     }
                     // If the full prefix matches and the match is longer than the longest prefix
@@ -144,7 +148,7 @@ impl Table for RoutingTable {
 
     /// This method does not do anything.
     fn housekeep(&mut self) {
-        //nothing to do
+        // nothing to do
     }
 
     /// Write out the table
@@ -174,38 +178,49 @@ impl Table for RoutingTable {
 }
 
 
-#[cfg(test)] use std::str::FromStr;
 #[cfg(test)] use std::net::ToSocketAddrs;
+#[cfg(test)] use std::str::FromStr;
 
 
 #[test]
 fn decode_ipv4_packet() {
-    let data = [0x40,0,0,0,0,0,0,0,0,0,0,0,192,168,1,1,192,168,1,2];
+    let data = [0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 192, 168, 1, 1, 192, 168, 1, 2];
     let (src, dst) = Packet::parse(&data).unwrap();
-    assert_eq!(src, Address{data: [192,168,1,1,0,0,0,0,0,0,0,0,0,0,0,0], len: 4});
-    assert_eq!(dst, Address{data: [192,168,1,2,0,0,0,0,0,0,0,0,0,0,0,0], len: 4});
+    assert_eq!(src, Address { data: [192, 168, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], len: 4 });
+    assert_eq!(dst, Address { data: [192, 168, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], len: 4 });
 }
 
 #[test]
 fn decode_ipv6_packet() {
-    let data = [0x60,0,0,0,0,0,0,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,0,9,8,7,6,5,4,3,2,1,6,5,4,3,2,1];
+    let data = [
+        0x60, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 6, 5,
+        4, 3, 2, 1
+    ];
     let (src, dst) = Packet::parse(&data).unwrap();
-    assert_eq!(src, Address{data: [1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6], len: 16});
-    assert_eq!(dst, Address{data: [0,9,8,7,6,5,4,3,2,1,6,5,4,3,2,1], len: 16});
+    assert_eq!(src, Address { data: [1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6], len: 16 });
+    assert_eq!(dst, Address { data: [0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 6, 5, 4, 3, 2, 1], len: 16 });
 }
 
 #[test]
 fn decode_invalid_packet() {
-    assert!(Packet::parse(&[0x40,0,0,0,0,0,0,0,0,0,0,0,192,168,1,1,192,168,1,2]).is_ok());
-    assert!(Packet::parse(&[0x60,0,0,0,0,0,0,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,0,9,8,7,6,5,4,3,2,1,6,5,4,3,2,1]).is_ok());
+    assert!(Packet::parse(&[0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 192, 168, 1, 1, 192, 168, 1, 2]).is_ok());
+    assert!(Packet::parse(&[
+        0x60, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 6, 5,
+        4, 3, 2, 1
+    ])
+    .is_ok());
     // no data
     assert!(Packet::parse(&[]).is_err());
     // wrong version
     assert!(Packet::parse(&[0x20]).is_err());
     // truncated ipv4
-    assert!(Packet::parse(&[0x40,0,0,0,0,0,0,0,0,0,0,0,192,168,1,1,192,168,1]).is_err());
+    assert!(Packet::parse(&[0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 192, 168, 1, 1, 192, 168, 1]).is_err());
     // truncated ipv6
-    assert!(Packet::parse(&[0x60,0,0,0,0,0,0,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,0,9,8,7,6,5,4,3,2,1,6,5,4,3,2]).is_err());
+    assert!(Packet::parse(&[
+        0x60, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 6, 5,
+        4, 3, 2
+    ])
+    .is_err());
 }
 
 

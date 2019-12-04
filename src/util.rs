@@ -2,17 +2,17 @@
 // Copyright (C) 2015-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use std::net::{SocketAddr, ToSocketAddrs};
-use std::fmt;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::{
+    fmt,
+    net::{SocketAddr, ToSocketAddrs},
+    sync::atomic::{AtomicIsize, Ordering}
+};
 
 use super::types::Error;
 
-#[cfg(target_os = "linux")]
-use libc;
+#[cfg(target_os = "linux")] use libc;
 
-#[cfg(not(target_os = "linux"))]
-use time;
+#[cfg(not(target_os = "linux"))] use time;
 
 use signal::{trap::Trap, Signal};
 use std::time::Instant;
@@ -30,9 +30,7 @@ pub fn bytes_to_hex(bytes: &[u8]) -> String {
         v.push(HEX_CHARS[(byte >> 4) as usize]);
         v.push(HEX_CHARS[(byte & 0xf) as usize]);
     }
-    unsafe {
-        String::from_utf8_unchecked(v)
-    }
+    unsafe { String::from_utf8_unchecked(v) }
 }
 
 
@@ -52,8 +50,7 @@ impl Encoder {
 
     #[inline]
     pub fn read_u32(data: &[u8]) -> u32 {
-        (u32::from(data[0]) << 24) | (u32::from(data[1]) << 16) |
-        (u32::from(data[2]) << 8) | u32::from(data[3])
+        (u32::from(data[0]) << 24) | (u32::from(data[1]) << 16) | (u32::from(data[2]) << 8) | u32::from(data[3])
     }
 
     #[inline]
@@ -66,10 +63,14 @@ impl Encoder {
 
     #[inline]
     pub fn read_u64(data: &[u8]) -> u64 {
-        (u64::from(data[0]) << 56) | (u64::from(data[1]) << 48) |
-        (u64::from(data[2]) << 40) | (u64::from(data[3]) << 32) |
-        (u64::from(data[4]) << 24) | (u64::from(data[5]) << 16) |
-        (u64::from(data[6]) << 8) | u64::from(data[7])
+        (u64::from(data[0]) << 56)
+            | (u64::from(data[1]) << 48)
+            | (u64::from(data[2]) << 40)
+            | (u64::from(data[3]) << 32)
+            | (u64::from(data[4]) << 24)
+            | (u64::from(data[5]) << 16)
+            | (u64::from(data[6]) << 8)
+            | u64::from(data[7])
     }
 
     #[inline]
@@ -115,15 +116,17 @@ macro_rules! try_fail {
 }
 
 
-#[allow(unknown_lints,clippy::needless_pass_by_value)]
-pub fn resolve<Addr: ToSocketAddrs+fmt::Debug>(addr: Addr) -> Result<Vec<SocketAddr>, Error> {
+#[allow(unknown_lints, clippy::needless_pass_by_value)]
+pub fn resolve<Addr: ToSocketAddrs + fmt::Debug>(addr: Addr) -> Result<Vec<SocketAddr>, Error> {
     let addrs = addr.to_socket_addrs().map_err(|_| Error::Name(format!("{:?}", addr)))?;
     // Remove duplicates in addrs (why are there duplicates???)
     let mut addrs = addrs.collect::<Vec<_>>();
     // Try IPv4 first as it usually is faster
-    addrs.sort_by_key(|addr| match *addr {
-        SocketAddr::V4(_) => 4,
-        SocketAddr::V6(_) => 6
+    addrs.sort_by_key(|addr| {
+        match *addr {
+            SocketAddr::V4(_) => 4,
+            SocketAddr::V6(_) => 6
+        }
     });
     addrs.dedup();
     Ok(addrs)
@@ -131,11 +134,9 @@ pub fn resolve<Addr: ToSocketAddrs+fmt::Debug>(addr: Addr) -> Result<Vec<SocketA
 
 #[allow(unused_macros)]
 macro_rules! addr {
-    ($addr: expr) => {
-        {
-            std::net::ToSocketAddrs::to_socket_addrs($addr).unwrap().next().unwrap()
-        }
-    };
+    ($addr: expr) => {{
+        std::net::ToSocketAddrs::to_socket_addrs($addr).unwrap().next().unwrap()
+    }};
 }
 
 
@@ -147,27 +148,26 @@ impl fmt::Display for Bytes {
         if size >= 512.0 {
             size /= 1024.0;
         } else {
-            return write!(formatter, "{:.0} B", size);
+            return write!(formatter, "{:.0} B", size)
         }
         if size >= 512.0 {
             size /= 1024.0;
         } else {
-            return write!(formatter, "{:.1} KiB", size);
+            return write!(formatter, "{:.1} KiB", size)
         }
         if size >= 512.0 {
             size /= 1024.0;
         } else {
-            return write!(formatter, "{:.1} MiB", size);
+            return write!(formatter, "{:.1} MiB", size)
         }
         if size >= 512.0 {
             size /= 1024.0;
         } else {
-            return write!(formatter, "{:.1} GiB", size);
+            return write!(formatter, "{:.1} GiB", size)
         }
         write!(formatter, "{:.1} TiB", size)
     }
 }
-
 
 
 pub struct CtrlC {
@@ -205,7 +205,9 @@ impl TimeSource for SystemTimeSource {
     #[cfg(target_os = "linux")]
     fn now() -> Time {
         let mut tv = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-        unsafe { libc::clock_gettime(6, &mut tv); }
+        unsafe {
+            libc::clock_gettime(6, &mut tv);
+        }
         tv.tv_sec as Time
     }
 

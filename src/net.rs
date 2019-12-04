@@ -1,7 +1,9 @@
-use std::os::unix::io::{RawFd, AsRawFd};
-use std::net::{UdpSocket, SocketAddr, SocketAddrV4, SocketAddrV6};
-use std::io::{self, ErrorKind};
-use std::collections::VecDeque;
+use std::{
+    collections::VecDeque,
+    io::{self, ErrorKind},
+    net::{SocketAddr, SocketAddrV4, SocketAddrV6, UdpSocket},
+    os::unix::io::{AsRawFd, RawFd}
+};
 
 use net2::UdpBuilder;
 
@@ -16,13 +18,20 @@ pub trait Socket: AsRawFd + Sized {
 
 impl Socket for UdpSocket {
     fn listen_v4(host: &str, port: u16) -> Result<Self, io::Error> {
-        UdpBuilder::new_v4().expect("Failed to obtain ipv4 socket builder")
-            .reuse_address(true).expect("Failed to set so_reuseaddr").bind((host, port))
+        UdpBuilder::new_v4()
+            .expect("Failed to obtain ipv4 socket builder")
+            .reuse_address(true)
+            .expect("Failed to set so_reuseaddr")
+            .bind((host, port))
     }
     fn listen_v6(host: &str, port: u16) -> Result<Self, io::Error> {
-        UdpBuilder::new_v6().expect("Failed to obtain ipv4 socket builder")
-            .only_v6(true).expect("Failed to set only_v6")
-            .reuse_address(true).expect("Failed to set so_reuseaddr").bind((host, port))
+        UdpBuilder::new_v6()
+            .expect("Failed to obtain ipv4 socket builder")
+            .only_v6(true)
+            .expect("Failed to set only_v6")
+            .reuse_address(true)
+            .expect("Failed to set so_reuseaddr")
+            .bind((host, port))
     }
     fn receive(&mut self, buffer: &mut [u8]) -> Result<(usize, SocketAddr), io::Error> {
         self.recv_from(buffer)

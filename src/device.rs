@@ -2,15 +2,16 @@
 // Copyright (C) 2015-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use std::os::unix::io::{AsRawFd, RawFd};
-use std::io::{self, Error as IoError, ErrorKind, Read, Write};
-use std::fs;
-use std::fmt;
-use std::collections::VecDeque;
+use std::{
+    collections::VecDeque,
+    fmt, fs,
+    io::{self, Error as IoError, ErrorKind, Read, Write},
+    os::unix::io::{AsRawFd, RawFd}
+};
 
 use super::types::Error;
 
-extern {
+extern "C" {
     fn setup_tap_device(fd: i32, ifname: *mut u8) -> i32;
     fn setup_tun_device(fd: i32, ifname: *mut u8) -> i32;
 }
@@ -78,7 +79,7 @@ pub trait Device: AsRawFd {
 pub struct TunTapDevice {
     fd: fs::File,
     ifname: String,
-    type_: Type,
+    type_: Type
 }
 
 
@@ -94,18 +95,16 @@ impl TunTapDevice {
     ///
     /// # Errors
     /// This method will return an error when the underlying system call fails. Common cases are:
-    /// - The special device file `/dev/net/tun` does not exist or is not accessible by the current
-    ///   user.
+    /// - The special device file `/dev/net/tun` does not exist or is not accessible by the current user.
     /// - The interface name is invalid or already in use.
-    /// - The current user does not have enough permissions to create tun/tap devices (this
-    ///   requires root permissions).
+    /// - The current user does not have enough permissions to create tun/tap devices (this requires root permissions).
     ///
     /// # Panics
     /// This method panics if the interface name is longer than 31 bytes.
     pub fn new(ifname: &str, type_: Type, path: Option<&str>) -> io::Result<Self> {
         let path = path.unwrap_or_else(|| Self::default_path(type_));
         if type_ == Type::Dummy {
-            return Self::dummy(ifname, path, type_);
+            return Self::dummy(ifname, path, type_)
         }
         let fd = fs::OpenOptions::new().read(true).write(true).open(path)?;
         // Add trailing \0 to interface name
@@ -125,8 +124,8 @@ impl TunTapDevice {
                 while ifname_c.last() == Some(&0) {
                     ifname_c.pop();
                 }
-                Ok(Self{fd, ifname: String::from_utf8(ifname_c).unwrap(), type_})
-            },
+                Ok(Self { fd, ifname: String::from_utf8(ifname_c).unwrap(), type_ })
+            }
             _ => Err(IoError::last_os_error())
         }
     }
@@ -155,7 +154,7 @@ impl TunTapDevice {
     /// This method will return an error if the file can not be opened for reading and writing.
     #[allow(dead_code)]
     pub fn dummy(ifname: &str, path: &str, type_: Type) -> io::Result<Self> {
-        Ok(TunTapDevice{
+        Ok(TunTapDevice {
             fd: fs::OpenOptions::new().create(true).read(true).write(true).open(path)?,
             ifname: ifname.to_string(),
             type_
@@ -168,15 +167,21 @@ impl TunTapDevice {
         (start, read)
     }
 
-    #[cfg(any(target_os = "bitrig", target_os = "dragonfly",
-        target_os = "freebsd", target_os = "ios", target_os = "macos",
-        target_os = "netbsd", target_os = "openbsd"))]
+    #[cfg(any(
+        target_os = "bitrig",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
     #[inline]
     fn correct_data_after_read(&mut self, buffer: &mut [u8], start: usize, read: usize) -> (usize, usize) {
         if self.type_ == Type::Tun {
             // BSD-based systems add a 4-byte header containing the Ethertype for TUN
-            assert!(read>=4);
-            (start+4, read-4)
+            assert!(read >= 4);
+            (start + 4, read - 4)
         } else {
             (start, read)
         }
@@ -188,20 +193,27 @@ impl TunTapDevice {
         start
     }
 
-    #[cfg(any(target_os = "bitrig", target_os = "dragonfly",
-        target_os = "freebsd", target_os = "ios", target_os = "macos",
-        target_os = "netbsd", target_os = "openbsd"))]
+    #[cfg(any(
+        target_os = "bitrig",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "ios",
+        target_os = "macos",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
     #[inline]
     fn correct_data_before_write(&mut self, buffer: &mut [u8], start: usize) -> usize {
         if self.type_ == Type::Tun {
             // BSD-based systems add a 4-byte header containing the Ethertype for TUN
-            assert!(start>=4);
-            match buffer[start] >> 4 { // IP version
-                4 => buffer[start-4..start].copy_from_slice(&[0x00, 0x00, 0x08, 0x00]),
-                6 => buffer[start-4..start].copy_from_slice(&[0x00, 0x00, 0x86, 0xdd]),
+            assert!(start >= 4);
+            match buffer[start] >> 4 {
+                // IP version
+                4 => buffer[start - 4..start].copy_from_slice(&[0x00, 0x00, 0x08, 0x00]),
+                6 => buffer[start - 4..start].copy_from_slice(&[0x00, 0x00, 0x86, 0xdd]),
                 _ => unreachable!()
             }
-            start-4
+            start - 4
         } else {
             start
         }
@@ -230,7 +242,6 @@ impl Device for TunTapDevice {
             Err(e) => Err(Error::TunTapDev("Write error", e))
         }
     }
-
 }
 
 impl AsRawFd for TunTapDevice {

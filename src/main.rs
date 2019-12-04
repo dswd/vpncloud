@@ -10,42 +10,49 @@
 #[cfg(test)] extern crate tempfile;
 #[cfg(feature = "bench")] extern crate test;
 
-#[macro_use] pub mod util;
-#[cfg(test)] #[macro_use] mod tests;
-pub mod types;
+#[macro_use]
+pub mod util;
+#[cfg(test)]
+#[macro_use]
+mod tests;
+pub mod beacon;
+#[cfg(feature = "bench")] mod benches;
+pub mod cloud;
+pub mod config;
 pub mod crypto;
-pub mod udpmessage;
+pub mod device;
 pub mod ethernet;
 pub mod ip;
-pub mod cloud;
-pub mod device;
+pub mod net;
 pub mod poll;
-pub mod config;
 pub mod port_forwarding;
 pub mod traffic;
-pub mod beacon;
-pub mod net;
-#[cfg(feature = "bench")] mod benches;
+pub mod types;
+pub mod udpmessage;
 
 use docopt::Docopt;
 
-use std::sync::Mutex;
-use std::str::FromStr;
-use std::process::Command;
-use std::fs::File;
-use std::path::Path;
-use std::io::{self, Write};
-use std::net::UdpSocket;
+use std::{
+    fs::File,
+    io::{self, Write},
+    net::UdpSocket,
+    path::Path,
+    process::Command,
+    str::FromStr,
+    sync::Mutex
+};
 
-use crate::device::{TunTapDevice, Device, Type};
-use crate::ethernet::SwitchTable;
-use crate::ip::RoutingTable;
-use crate::types::{Mode, Range, Protocol, HeaderMagic, Error};
-use crate::cloud::GenericCloud;
-use crate::crypto::{Crypto, CryptoMethod};
-use crate::port_forwarding::PortForwarding;
-use crate::util::{Duration, SystemTimeSource};
-use crate::config::Config;
+use crate::{
+    cloud::GenericCloud,
+    config::Config,
+    crypto::{Crypto, CryptoMethod},
+    device::{Device, TunTapDevice, Type},
+    ethernet::SwitchTable,
+    ip::RoutingTable,
+    port_forwarding::PortForwarding,
+    types::{Error, HeaderMagic, Mode, Protocol, Range},
+    util::{Duration, SystemTimeSource}
+};
 
 
 const VERSION: u8 = 1;
@@ -96,9 +103,9 @@ impl DualLogger {
     pub fn new<P: AsRef<Path>>(path: Option<P>) -> Result<Self, io::Error> {
         if let Some(path) = path {
             let file = File::create(path)?;
-            Ok(DualLogger{file: Mutex::new(Some(file))})
+            Ok(DualLogger { file: Mutex::new(Some(file)) })
         } else {
-            Ok(DualLogger{file: Mutex::new(None)})
+            Ok(DualLogger { file: Mutex::new(None) })
         }
     }
 }
@@ -116,7 +123,8 @@ impl log::Log for DualLogger {
             let mut file = self.file.lock().expect("Lock poisoned");
             if let Some(ref mut file) = *file {
                 let time = time::strftime("%F %T", &time::now()).expect("Failed to format timestamp");
-                writeln!(file, "{} - {} - {}", time, record.level(), record.args()).expect("Failed to write to logfile");
+                writeln!(file, "{} - {} - {}", time, record.level(), record.args())
+                    .expect("Failed to write to logfile");
             }
         }
     }
@@ -135,9 +143,11 @@ fn run_script(script: &str, ifname: &str) {
     cmd.arg("-c").arg(&script).env("IFNAME", ifname);
     debug!("Running script: {:?}", cmd);
     match cmd.status() {
-        Ok(status) => if !status.success() {
-            error!("Script returned with error: {:?}", status.code())
-        },
+        Ok(status) => {
+            if !status.success() {
+                error!("Script returned with error: {:?}", status.code())
+            }
+        }
         Err(e) => error!("Failed to execute script {:?}: {}", script, e)
     }
 }
@@ -154,16 +164,35 @@ enum AnyCloud<P: Protocol> {
 
 impl<P: Protocol> AnyCloud<P> {
     #[allow(unknown_lints, clippy::too_many_arguments)]
-    fn new(config: &Config, device: TunTapDevice, table: AnyTable,
-            learning: bool, broadcast: bool, addresses: Vec<Range>,
-            crypto: Crypto, port_forwarding: Option<PortForwarding>) -> Self {
+    fn new(
+        config: &Config, device: TunTapDevice, table: AnyTable, learning: bool, broadcast: bool, addresses: Vec<Range>,
+        crypto: Crypto, port_forwarding: Option<PortForwarding>
+    ) -> Self
+    {
         match table {
-            AnyTable::Switch(t) => AnyCloud::Switch(GenericCloud::<TunTapDevice, P, SwitchTable<SystemTimeSource>, UdpSocket, SystemTimeSource>::new(
-                config, device,t, learning, broadcast, addresses, crypto, port_forwarding
-            )),
-            AnyTable::Routing(t) => AnyCloud::Routing(GenericCloud::<TunTapDevice, P, RoutingTable, UdpSocket, SystemTimeSource>::new(
-                config, device,t, learning, broadcast, addresses, crypto, port_forwarding
-            ))
+            AnyTable::Switch(t) => {
+                AnyCloud::Switch(GenericCloud::<
+                    TunTapDevice,
+                    P,
+                    SwitchTable<SystemTimeSource>,
+                    UdpSocket,
+                    SystemTimeSource
+                >::new(
+                    config, device, t, learning, broadcast, addresses, crypto, port_forwarding
+                ))
+            }
+            AnyTable::Routing(t) => {
+                AnyCloud::Routing(GenericCloud::<TunTapDevice, P, RoutingTable, UdpSocket, SystemTimeSource>::new(
+                    config,
+                    device,
+                    t,
+                    learning,
+                    broadcast,
+                    addresses,
+                    crypto,
+                    port_forwarding
+                ))
+            }
         }
     }
 
@@ -197,9 +226,13 @@ impl<P: Protocol> AnyCloud<P> {
 }
 
 
-fn run<P: Protocol> (config: Config) {
-    let device = try_fail!(TunTapDevice::new(&config.device_name, config.device_type, config.device_path.as_ref().map(|s| s as &str)),
-        "Failed to open virtual {} interface {}: {}", config.device_type, config.device_name);
+fn run<P: Protocol>(config: Config) {
+    let device = try_fail!(
+        TunTapDevice::new(&config.device_name, config.device_type, config.device_path.as_ref().map(|s| s as &str)),
+        "Failed to open virtual {} interface {}: {}",
+        config.device_type,
+        config.device_name
+    );
     info!("Opened device {}", device.ifname());
     let mut ranges = Vec::with_capacity(config.subnets.len());
     for s in &config.subnets {
@@ -207,11 +240,13 @@ fn run<P: Protocol> (config: Config) {
     }
     let dst_timeout = config.dst_timeout;
     let (learning, broadcasting, table) = match config.mode {
-        Mode::Normal => match config.device_type {
-            Type::Tap => (true, true, AnyTable::Switch(SwitchTable::new(dst_timeout, 10))),
-            Type::Tun => (false, false, AnyTable::Routing(RoutingTable::new())),
-            Type::Dummy => (false, false, AnyTable::Switch(SwitchTable::new(dst_timeout, 10)))
-        },
+        Mode::Normal => {
+            match config.device_type {
+                Type::Tap => (true, true, AnyTable::Switch(SwitchTable::new(dst_timeout, 10))),
+                Type::Tun => (false, false, AnyTable::Routing(RoutingTable::new())),
+                Type::Dummy => (false, false, AnyTable::Switch(SwitchTable::new(dst_timeout, 10)))
+            }
+        }
         Mode::Router => (false, false, AnyTable::Routing(RoutingTable::new())),
         Mode::Switch => (true, true, AnyTable::Switch(SwitchTable::new(dst_timeout, 10))),
         Mode::Hub => (false, true, AnyTable::Switch(SwitchTable::new(dst_timeout, 10)))
@@ -220,12 +255,8 @@ fn run<P: Protocol> (config: Config) {
         Some(ref key) => Crypto::from_shared_key(config.crypto, key),
         None => Crypto::None
     };
-    let port_forwarding = if config.port_forwarding {
-        PortForwarding::new(config.port)
-    } else {
-        None
-    };
-    let mut cloud = AnyCloud::<P>::new(&config, device, table, learning,broadcasting,ranges, crypto, port_forwarding);
+    let port_forwarding = if config.port_forwarding { PortForwarding::new(config.port) } else { None };
+    let mut cloud = AnyCloud::<P>::new(&config, device, table, learning, broadcasting, ranges, crypto, port_forwarding);
     if let Some(script) = config.ifup {
         run_script(&script, cloud.ifname());
     }
@@ -256,24 +287,19 @@ fn run<P: Protocol> (config: Config) {
 fn main() {
     let args: Args = Docopt::new(USAGE).and_then(|d| d.deserialize()).unwrap_or_else(|e| e.exit());
     if args.flag_version {
-        println!("VpnCloud v{}, protocol version {}",
-            env!("CARGO_PKG_VERSION"),
-            VERSION
-        );
-        return;
+        println!("VpnCloud v{}, protocol version {}", env!("CARGO_PKG_VERSION"), VERSION);
+        return
     }
     let logger = try_fail!(DualLogger::new(args.flag_log_file.as_ref()), "Failed to open logfile: {}");
     log::set_boxed_logger(Box::new(logger)).unwrap();
     assert!(!args.flag_verbose || !args.flag_quiet);
-    log::set_max_level(
-        if args.flag_verbose {
-            log::LevelFilter::Debug
-        } else if args.flag_quiet {
-            log::LevelFilter::Error
-        } else {
-            log::LevelFilter::Info
-        }
-    );
+    log::set_max_level(if args.flag_verbose {
+        log::LevelFilter::Debug
+    } else if args.flag_quiet {
+        log::LevelFilter::Error
+    } else {
+        log::LevelFilter::Info
+    });
     let mut config = Config::default();
     if let Some(ref file) = args.flag_config {
         info!("Reading config file '{}'", file);

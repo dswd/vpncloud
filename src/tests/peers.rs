@@ -97,9 +97,11 @@ fn cross_connect() {
 fn connect_via_beacons() {
     MockTimeSource::set_time(0);
     let beacon_path = "target/.vpncloud_test";
-    let mut node1 = create_tap_node_with_config(Config { beacon_store: Some(beacon_path.to_string()), ..Config::default()});
+    let mut node1 =
+        create_tap_node_with_config(Config { beacon_store: Some(beacon_path.to_string()), ..Config::default() });
     let node1_addr = node1.address().unwrap().0;
-    let mut node2 = create_tap_node_with_config(Config { beacon_load: Some(beacon_path.to_string()), ..Config::default()});
+    let mut node2 =
+        create_tap_node_with_config(Config { beacon_load: Some(beacon_path.to_string()), ..Config::default() });
     let node2_addr = addr!("2.2.2.2:2222");
 
     assert!(!node1.peers().contains_node(&node2.node_id()));
@@ -164,14 +166,14 @@ fn lost_init1() {
     simulate!(node1 => node1_addr, node2 => node2_addr);
 
     assert_connected!(node1, node2);
-
 }
 
 #[test]
 fn wrong_magic() {
     let mut node1 = create_tap_node();
     let node1_addr = addr!("1.2.3.4:5678");
-    let mut node2 = create_tap_node_with_config(Config { magic: Some("hash:different".to_string()), ..Config::default()});
+    let mut node2 =
+        create_tap_node_with_config(Config { magic: Some("hash:different".to_string()), ..Config::default() });
     let node2_addr = addr!("2.3.4.5:6789");
     node1.connect("2.3.4.5:6789").unwrap();
 
@@ -185,21 +187,20 @@ fn wrong_magic() {
 
 #[test]
 fn peer_exchange() {
-    //TODO
+    // TODO
 }
 
 #[test]
 fn lost_peer_exchange() {
-    //TODO
+    // TODO
 }
 
 #[test]
 fn remove_dead_peers() {
-    //TODO
+    // TODO
 }
 
 #[test]
 fn update_primary_address() {
-    //TODO
+    // TODO
 }
-

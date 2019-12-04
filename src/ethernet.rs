@@ -2,17 +2,20 @@
 // Copyright (C) 2015-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use std::net::SocketAddr;
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
-use std::hash::BuildHasherDefault;
-use std::io::{self, Write};
-use std::marker::PhantomData;
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    hash::BuildHasherDefault,
+    io::{self, Write},
+    marker::PhantomData,
+    net::SocketAddr
+};
 
 use fnv::FnvHasher;
 
-use super::types::{Error, Table, Protocol, Address};
-use super::util::{TimeSource, Time, Duration};
+use super::{
+    types::{Address, Error, Protocol, Table},
+    util::{Duration, Time, TimeSource}
+};
 
 /// An ethernet frame dissector
 ///
@@ -29,25 +32,27 @@ impl Protocol for Frame {
     /// This method will fail when the given data is not a valid ethernet frame.
     fn parse(data: &[u8]) -> Result<(Address, Address), Error> {
         if data.len() < 14 {
-            return Err(Error::Parse("Frame is too short"));
+            return Err(Error::Parse("Frame is too short"))
         }
         let mut pos = 0;
-        let dst_data = &data[pos..pos+6];
+        let dst_data = &data[pos..pos + 6];
         pos += 6;
-        let src_data = &data[pos..pos+6];
+        let src_data = &data[pos..pos + 6];
         pos += 6;
-        if data[pos] == 0x81 && data[pos+1] == 0x00 {
+        if data[pos] == 0x81 && data[pos + 1] == 0x00 {
             pos += 2;
             if data.len() < pos + 2 {
-                return Err(Error::Parse("Vlan frame is too short"));
+                return Err(Error::Parse("Vlan frame is too short"))
             }
             let mut src = [0; 16];
             let mut dst = [0; 16];
-            src[0] = data[pos]; src[1] = data[pos+1];
-            dst[0] = data[pos]; dst[1] = data[pos+1];
+            src[0] = data[pos];
+            src[1] = data[pos + 1];
+            dst[0] = data[pos];
+            dst[1] = data[pos + 1];
             src[2..8].copy_from_slice(src_data);
             dst[2..8].copy_from_slice(dst_data);
-            Ok((Address{data: src, len: 8}, Address{data: dst, len: 8}))
+            Ok((Address { data: src, len: 8 }, Address { data: dst, len: 8 }))
         } else {
             let src = Address::read_from_fixed(src_data, 6)?;
             let dst = Address::read_from_fixed(dst_data, 6)?;
@@ -82,7 +87,7 @@ pub struct SwitchTable<TS> {
 impl<TS: TimeSource> SwitchTable<TS> {
     /// Creates a new switch table
     pub fn new(timeout: Duration, protection_period: Duration) -> Self {
-        Self{table: HashMap::default(), timeout, protection_period, _dummy_ts: PhantomData}
+        Self { table: HashMap::default(), timeout, protection_period, _dummy_ts: PhantomData }
     }
 }
 
@@ -118,9 +123,9 @@ impl<TS: TimeSource> Table for SwitchTable<TS> {
         let deadline = TS::now() + Time::from(self.timeout);
         match self.table.entry(key) {
             Entry::Vacant(entry) => {
-                entry.insert(SwitchTableValue{address: addr, timeout: deadline});
+                entry.insert(SwitchTableValue { address: addr, timeout: deadline });
                 info!("Learned address {} => {}", key, addr);
-            },
+            }
             Entry::Occupied(mut entry) => {
                 let mut entry = entry.get_mut();
                 if entry.timeout + Time::from(self.protection_period) > deadline {
@@ -163,33 +168,33 @@ impl<TS: TimeSource> Table for SwitchTable<TS> {
 }
 
 
-#[cfg(test)] use std::str::FromStr;
-#[cfg(test)] use std::net::ToSocketAddrs;
 #[cfg(test)] use super::util::MockTimeSource;
+#[cfg(test)] use std::net::ToSocketAddrs;
+#[cfg(test)] use std::str::FromStr;
 
 #[test]
 fn decode_frame_without_vlan() {
-    let data = [6,5,4,3,2,1,1,2,3,4,5,6,1,2,3,4,5,6,7,8];
+    let data = [6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 7, 8];
     let (src, dst) = Frame::parse(&data).unwrap();
-    assert_eq!(src, Address{data: [1,2,3,4,5,6,0,0,0,0,0,0,0,0,0,0], len: 6});
-    assert_eq!(dst, Address{data: [6,5,4,3,2,1,0,0,0,0,0,0,0,0,0,0], len: 6});
+    assert_eq!(src, Address { data: [1, 2, 3, 4, 5, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], len: 6 });
+    assert_eq!(dst, Address { data: [6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], len: 6 });
 }
 
 #[test]
 fn decode_frame_with_vlan() {
-    let data = [6,5,4,3,2,1,1,2,3,4,5,6,0x81,0,4,210,1,2,3,4,5,6,7,8];
+    let data = [6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 0x81, 0, 4, 210, 1, 2, 3, 4, 5, 6, 7, 8];
     let (src, dst) = Frame::parse(&data).unwrap();
-    assert_eq!(src, Address{data: [4,210,1,2,3,4,5,6,0,0,0,0,0,0,0,0], len: 8});
-    assert_eq!(dst, Address{data: [4,210,6,5,4,3,2,1,0,0,0,0,0,0,0,0], len: 8});
+    assert_eq!(src, Address { data: [4, 210, 1, 2, 3, 4, 5, 6, 0, 0, 0, 0, 0, 0, 0, 0], len: 8 });
+    assert_eq!(dst, Address { data: [4, 210, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0], len: 8 });
 }
 
 #[test]
 fn decode_invalid_frame() {
-    assert!(Frame::parse(&[6,5,4,3,2,1,1,2,3,4,5,6,1,2,3,4,5,6,7,8]).is_ok());
+    assert!(Frame::parse(&[6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 7, 8]).is_ok());
     // truncated frame
     assert!(Frame::parse(&[]).is_err());
     // truncated vlan frame
-    assert!(Frame::parse(&[6,5,4,3,2,1,1,2,3,4,5,6,0x81,0x00]).is_err());
+    assert!(Frame::parse(&[6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 0x81, 0x00]).is_err());
 }
 
 #[test]

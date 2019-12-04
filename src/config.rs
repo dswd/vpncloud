@@ -2,15 +2,17 @@
 // Copyright (C) 2015-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use super::{MAGIC, Args};
+use super::{Args, MAGIC};
 
-use super::device::Type;
-use super::types::{Mode, HeaderMagic};
-use super::crypto::CryptoMethod;
-use super::util::{Encoder, Duration};
+use super::{
+    crypto::CryptoMethod,
+    device::Type,
+    types::{HeaderMagic, Mode},
+    util::{Duration, Encoder}
+};
 
-use std::hash::{Hash, Hasher};
 use siphasher::sip::SipHasher24;
+use std::hash::{Hash, Hasher};
 
 
 const HASH_PREFIX: &str = "hash:";
@@ -47,13 +49,23 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            device_type: Type::Tap, device_name: "vpncloud%d".to_string(), device_path: None,
-            ifup: None, ifdown: None,
-            crypto: CryptoMethod::ChaCha20, shared_key: None,
+            device_type: Type::Tap,
+            device_name: "vpncloud%d".to_string(),
+            device_path: None,
+            ifup: None,
+            ifdown: None,
+            crypto: CryptoMethod::ChaCha20,
+            shared_key: None,
             magic: None,
-            port: 3210, peers: vec![], peer_timeout: 1800, keepalive: None,
-            beacon_store: None, beacon_load: None, beacon_interval: 3600,
-            mode: Mode::Normal, dst_timeout: 300,
+            port: 3210,
+            peers: vec![],
+            peer_timeout: 1800,
+            keepalive: None,
+            beacon_store: None,
+            beacon_load: None,
+            beacon_interval: 3600,
+            mode: Mode::Normal,
+            dst_timeout: 300,
             subnets: vec![],
             port_forwarding: true,
             daemonize: false,
@@ -235,7 +247,7 @@ impl Config {
     pub fn get_keepalive(&self) -> Duration {
         match self.keepalive {
             Some(dur) => dur,
-            None => self.peer_timeout/2-60
+            None => self.peer_timeout / 2 - 60
         }
     }
 }
@@ -265,7 +277,7 @@ pub struct ConfigFile {
     pub pid_file: Option<String>,
     pub stats_file: Option<String>,
     pub user: Option<String>,
-    pub group: Option<String>,
+    pub group: Option<String>
 }
 
 
@@ -299,7 +311,7 @@ group: nogroup
 pid_file: /run/vpncloud.run
 stats_file: /var/log/vpncloud.stats
     ";
-    assert_eq!(serde_yaml::from_str::<ConfigFile>(config_file).unwrap(), ConfigFile{
+    assert_eq!(serde_yaml::from_str::<ConfigFile>(config_file).unwrap(), ConfigFile {
         device_type: Some(Type::Tun),
         device_name: Some("vpncloud%d".to_string()),
         device_path: Some("/dev/net/tun".to_string()),
@@ -329,7 +341,7 @@ stats_file: /var/log/vpncloud.stats
 #[test]
 fn config_merge() {
     let mut config = Config::default();
-    config.merge_file(ConfigFile{
+    config.merge_file(ConfigFile {
         device_type: Some(Type::Tun),
         device_name: Some("vpncloud%d".to_string()),
         device_path: None,
@@ -354,7 +366,7 @@ fn config_merge() {
         pid_file: Some("/run/vpncloud.run".to_string()),
         stats_file: Some("/var/log/vpncloud.stats".to_string())
     });
-    assert_eq!(config, Config{
+    assert_eq!(config, Config {
         device_type: Type::Tun,
         device_name: "vpncloud%d".to_string(),
         device_path: None,
@@ -380,7 +392,7 @@ fn config_merge() {
         stats_file: Some("/var/log/vpncloud.stats".to_string()),
         ..Default::default()
     });
-    config.merge_args(Args{
+    config.merge_args(Args {
         flag_type: Some(Type::Tap),
         flag_device: Some("vpncloud0".to_string()),
         flag_device_path: Some("/dev/null".to_string()),
@@ -407,7 +419,7 @@ fn config_merge() {
         flag_group: Some("root".to_string()),
         ..Default::default()
     });
-    assert_eq!(config, Config{
+    assert_eq!(config, Config {
         device_type: Type::Tap,
         device_name: "vpncloud0".to_string(),
         device_path: Some("/dev/null".to_string()),
@@ -417,7 +429,11 @@ fn config_merge() {
         crypto: CryptoMethod::ChaCha20,
         shared_key: Some("anothersecret".to_string()),
         port: 3211,
-        peers: vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string(), "another:3210".to_string()],
+        peers: vec![
+            "remote.machine.foo:3210".to_string(),
+            "remote.machine.bar:3210".to_string(),
+            "another:3210".to_string()
+        ],
         peer_timeout: 1801,
         keepalive: Some(850),
         dst_timeout: 301,

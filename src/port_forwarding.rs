@@ -2,8 +2,10 @@
 // Copyright (C) 2015-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use std::net::{SocketAddrV4, UdpSocket, SocketAddr};
-use std::io;
+use std::{
+    io,
+    net::{SocketAddr, SocketAddrV4, UdpSocket}
+};
 
 use igd::*;
 
@@ -17,17 +19,18 @@ pub struct PortForwarding {
     pub internal_addr: SocketAddrV4,
     pub external_addr: SocketAddrV4,
     pub gateway: Gateway,
-    pub next_extension: Option<Time>,
+    pub next_extension: Option<Time>
 }
 
 impl PortForwarding {
     pub fn new(port: u16) -> Option<Self> {
         // Get the gateway
-        let gateway = match search_gateway() {
+        let gateway = match search_gateway(Default::default()) {
             Ok(gateway) => gateway,
             Err(err) => {
                 if let SearchError::IoError(ref err) = err {
-                    if err.kind() == io::ErrorKind::WouldBlock { // Why this code?
+                    if err.kind() == io::ErrorKind::WouldBlock {
+                        // Why this code?
                         warn!("Port-forwarding: no router found");
                         return None
                     }
@@ -60,46 +63,49 @@ impl PortForwarding {
         // - If the port is used, request any port
         // - If timeout is denied, try permanent forwarding
         info!("Port-forwarding: external IP is {}", external_ip);
-        let (external_addr, timeout) = match gateway.add_port(PortMappingProtocol::UDP, internal_addr.port(), internal_addr, LEASE_TIME, DESCRIPTION) {
+        let (external_addr, timeout) = match gateway.add_port(
+            PortMappingProtocol::UDP,
+            internal_addr.port(),
+            internal_addr,
+            LEASE_TIME,
+            DESCRIPTION
+        ) {
             Ok(()) => (SocketAddrV4::new(external_ip, internal_addr.port()), LEASE_TIME),
-            Err(AddPortError::PortInUse) => match gateway.add_any_port(PortMappingProtocol::UDP, internal_addr, LEASE_TIME, DESCRIPTION) {
-                Ok(port) => (SocketAddrV4::new(external_ip, port), LEASE_TIME),
-                Err(AddAnyPortError::OnlyPermanentLeasesSupported) => match gateway.add_any_port(PortMappingProtocol::UDP, internal_addr, 0, DESCRIPTION) {
-                    Ok(port) => (SocketAddrV4::new(external_ip, port), 0),
+            Err(AddPortError::PortInUse) => {
+                match gateway.add_any_port(PortMappingProtocol::UDP, internal_addr, LEASE_TIME, DESCRIPTION) {
+                    Ok(port) => (SocketAddrV4::new(external_ip, port), LEASE_TIME),
+                    Err(AddAnyPortError::OnlyPermanentLeasesSupported) => {
+                        match gateway.add_any_port(PortMappingProtocol::UDP, internal_addr, 0, DESCRIPTION) {
+                            Ok(port) => (SocketAddrV4::new(external_ip, port), 0),
+                            Err(err) => {
+                                error!("Port-forwarding: failed to activate port forwarding: {}", err);
+                                return None
+                            }
+                        }
+                    }
                     Err(err) => {
                         error!("Port-forwarding: failed to activate port forwarding: {}", err);
                         return None
                     }
-                },
-                Err(err) => {
-                    error!("Port-forwarding: failed to activate port forwarding: {}", err);
-                    return None
                 }
-            },
-            Err(AddPortError::OnlyPermanentLeasesSupported) => match gateway.add_port(PortMappingProtocol::UDP, internal_addr.port(), internal_addr, 0, DESCRIPTION) {
-                Ok(()) => (SocketAddrV4::new(external_ip, internal_addr.port()), 0),
-                Err(err) => {
-                    error!("Port-forwarding: failed to activate port forwarding: {}", err);
-                    return None
+            }
+            Err(AddPortError::OnlyPermanentLeasesSupported) => {
+                match gateway.add_port(PortMappingProtocol::UDP, internal_addr.port(), internal_addr, 0, DESCRIPTION) {
+                    Ok(()) => (SocketAddrV4::new(external_ip, internal_addr.port()), 0),
+                    Err(err) => {
+                        error!("Port-forwarding: failed to activate port forwarding: {}", err);
+                        return None
+                    }
                 }
-            },
+            }
             Err(err) => {
                 error!("Port-forwarding: failed to activate port forwarding: {}", err);
                 return None
             }
         };
         info!("Port-forwarding: sucessfully activated port forward on {}, timeout: {}", external_addr, timeout);
-        let next_extension = if timeout > 0 {
-            Some(SystemTimeSource::now() + Time::from(timeout) - 60)
-        } else {
-            None
-        };
-        Some(PortForwarding {
-            internal_addr,
-            external_addr,
-            gateway,
-            next_extension
-        })
+        let next_extension = if timeout > 0 { Some(SystemTimeSource::now() + Time::from(timeout) - 60) } else { None };
+        Some(PortForwarding { internal_addr, external_addr, gateway, next_extension })
     }
 
     pub fn check_extend(&mut self) {
@@ -110,7 +116,13 @@ impl PortForwarding {
         } else {
             return
         }
-        match self.gateway.add_port(PortMappingProtocol::UDP, self.external_addr.port(), self.internal_addr, LEASE_TIME, DESCRIPTION) {
+        match self.gateway.add_port(
+            PortMappingProtocol::UDP,
+            self.external_addr.port(),
+            self.internal_addr,
+            LEASE_TIME,
+            DESCRIPTION
+        ) {
             Ok(()) => debug!("Port-forwarding: extended port forwarding"),
             Err(err) => error!("Port-forwarding: failed to extend port forwarding: {}", err)
         };

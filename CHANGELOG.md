@@ -2,6 +2,11 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### Unreleased
+
+- [changed] Rust version 1.41.0
+- [changed] Updated dependencies
+
 ### v1.0.0 (2019-03-21)
 
 - [added] Added ability to publish small beacons for rendezvous

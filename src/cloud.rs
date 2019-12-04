@@ -2,30 +2,34 @@
 // Copyright (C) 2015-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use std::net::{SocketAddr, ToSocketAddrs};
-use std::collections::HashMap;
-use std::io::{self, Write};
-use std::fmt;
-use std::marker::PhantomData;
-use std::hash::BuildHasherDefault;
-use std::cmp::min;
-use std::fs::{self, File, Permissions};
-use std::os::unix::fs::PermissionsExt;
+use std::{
+    cmp::min,
+    collections::HashMap,
+    fmt,
+    fs::{self, File, Permissions},
+    hash::BuildHasherDefault,
+    io::{self, Write},
+    marker::PhantomData,
+    net::{SocketAddr, ToSocketAddrs},
+    os::unix::fs::PermissionsExt
+};
 
 use fnv::FnvHasher;
 use rand::{prelude::*, random, thread_rng};
 
-use super::config::Config;
-use super::types::{Table, Protocol, Range, Error, HeaderMagic, NodeId};
-use super::device::Device;
-use super::udpmessage::{encode, decode, Message};
-use super::crypto::Crypto;
-use super::port_forwarding::PortForwarding;
-use super::util::{TimeSource, Time, Duration, resolve, CtrlC};
-use super::poll::{WaitImpl, WaitResult};
-use super::traffic::TrafficStats;
-use super::beacon::BeaconSerializer;
-use super::net::Socket;
+use super::{
+    beacon::BeaconSerializer,
+    config::Config,
+    crypto::Crypto,
+    device::Device,
+    net::Socket,
+    poll::{WaitImpl, WaitResult},
+    port_forwarding::PortForwarding,
+    traffic::TrafficStats,
+    types::{Error, HeaderMagic, NodeId, Protocol, Range, Table},
+    udpmessage::{decode, encode, Message},
+    util::{resolve, CtrlC, Duration, Time, TimeSource}
+};
 
 pub type Hash = BuildHasherDefault<FnvHasher>;
 
@@ -37,7 +41,7 @@ pub const STATS_INTERVAL: Time = 60;
 struct PeerData {
     timeout: Time,
     node_id: NodeId,
-    alt_addrs: Vec<SocketAddr>,
+    alt_addrs: Vec<SocketAddr>
 }
 
 pub struct PeerList<TS: TimeSource> {
@@ -50,7 +54,7 @@ pub struct PeerList<TS: TimeSource> {
 
 impl<TS: TimeSource> PeerList<TS> {
     fn new(timeout: Duration) -> PeerList<TS> {
-        PeerList{
+        PeerList {
             peers: HashMap::default(),
             timeout,
             nodes: HashMap::default(),
@@ -86,10 +90,10 @@ impl<TS: TimeSource> PeerList<TS> {
     }
 
     #[inline]
-    pub fn is_connected<Addr: ToSocketAddrs+fmt::Debug>(&self, addr: Addr) -> Result<bool, Error> {
+    pub fn is_connected<Addr: ToSocketAddrs + fmt::Debug>(&self, addr: Addr) -> Result<bool, Error> {
         for addr in resolve(&addr)? {
             if self.contains_addr(&addr) {
-                return Ok(true);
+                return Ok(true)
             }
         }
         Ok(false)
@@ -117,7 +121,7 @@ impl<TS: TimeSource> PeerList<TS> {
     #[inline]
     fn refresh(&mut self, addr: &SocketAddr) {
         if let Some(ref mut data) = self.peers.get_mut(addr) {
-            data.timeout = TS::now()+Time::from(self.timeout);
+            data.timeout = TS::now() + Time::from(self.timeout);
         }
     }
 
@@ -184,7 +188,7 @@ impl<TS: TimeSource> PeerList<TS> {
         writeln!(out, "Peers:")?;
         let now = TS::now();
         for (addr, data) in &self.peers {
-            writeln!(out, " - {} (ttl: {} s)", addr, data.timeout-now)?;
+            writeln!(out, " - {} (ttl: {} s)", addr, data.timeout - now)?;
         }
         Ok(())
     }
@@ -218,7 +222,7 @@ pub struct GenericCloud<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSou
     crypto: Crypto,
     next_peerlist: Time,
     update_freq: Duration,
-    buffer_out: [u8; 64*1024],
+    buffer_out: [u8; 64 * 1024],
     next_housekeep: Time,
     next_stats_out: Time,
     next_beacon: Time,
@@ -231,10 +235,11 @@ pub struct GenericCloud<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSou
 
 impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D, P, T, S, TS> {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(config: &Config, device: D, table: T,
-        learning: bool, broadcast: bool, addresses: Vec<Range>,
-        crypto: Crypto, port_forwarding: Option<PortForwarding>
-    ) -> Self {
+    pub fn new(
+        config: &Config, device: D, table: T, learning: bool, broadcast: bool, addresses: Vec<Range>, crypto: Crypto,
+        port_forwarding: Option<PortForwarding>
+    ) -> Self
+    {
         let socket4 = match S::listen_v4("0.0.0.0", config.port) {
             Ok(socket) => socket,
             Err(err) => fail!("Failed to open ipv4 address 0.0.0.0:{}: {}", config.port, err)
@@ -244,7 +249,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             Err(err) => fail!("Failed to open ipv6 address ::{}: {}", config.port, err)
         };
         let now = TS::now();
-        let mut res = GenericCloud{
+        let mut res = GenericCloud {
             magic: config.get_magic(),
             node_id: random(),
             peers: PeerList::new(config.peer_timeout),
@@ -259,7 +264,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             device,
             next_peerlist: now,
             update_freq: config.get_keepalive(),
-            buffer_out: [0; 64*1024],
+            buffer_out: [0; 64 * 1024],
             next_housekeep: now,
             next_stats_out: now + STATS_INTERVAL,
             next_beacon: now,
@@ -299,7 +304,9 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             };
             match socket.send(msg_data, *addr) {
                 Ok(written) if written == msg_data.len() => Ok(()),
-                Ok(_) => Err(Error::Socket("Sent out truncated packet", io::Error::new(io::ErrorKind::Other, "truncated"))),
+                Ok(_) => {
+                    Err(Error::Socket("Sent out truncated packet", io::Error::new(io::ErrorKind::Other, "truncated")))
+                }
                 Err(e) => Err(Error::Socket("IOError when sending", e))
             }?
         }
@@ -352,7 +359,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     /// connect to the peer if it is not already connected.
     pub fn add_reconnect_peer(&mut self, add: String) {
         let now = TS::now();
-        let resolved =  match resolve(&add as &str) {
+        let resolved = match resolve(&add as &str) {
             Ok(addrs) => addrs,
             Err(err) => {
                 warn!("Failed to resolve {}: {:?}", add, err);
@@ -363,7 +370,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             address: add,
             tries: 0,
             timeout: 1,
-            resolved: resolved,
+            resolved,
             next_resolve: now,
             next: now
         })
@@ -374,10 +381,10 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     /// # Errors
     /// Returns an `Error::SocketError` if the given address is a name that failed to resolve to
     /// actual addresses.
-    fn is_own_address<Addr: ToSocketAddrs+fmt::Debug>(&self, addr: Addr) -> Result<bool, Error> {
+    fn is_own_address<Addr: ToSocketAddrs + fmt::Debug>(&self, addr: Addr) -> Result<bool, Error> {
         for addr in resolve(&addr)? {
             if self.own_addresses.contains(&addr) {
-                return Ok(true);
+                return Ok(true)
             }
         }
         Ok(false)
@@ -391,7 +398,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     ///
     /// # Errors
     /// This method returns `Error::NameError` if the address is a name that fails to resolve.
-    pub fn connect<Addr: ToSocketAddrs+fmt::Debug+Clone>(&mut self, addr: Addr) -> Result<(), Error> {
+    pub fn connect<Addr: ToSocketAddrs + fmt::Debug + Clone>(&mut self, addr: Addr) -> Result<(), Error> {
         if self.peers.is_connected(addr.clone())? || self.is_own_address(addr.clone())? {
             return Ok(())
         }
@@ -523,11 +530,15 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     /// Stores the beacon
     fn store_beacon(&mut self) -> Result<(), Error> {
         if let Some(ref path) = self.config.beacon_store {
-            let peers: Vec<_> = self.own_addresses.choose_multiple(&mut thread_rng(),3).cloned().collect();
+            let peers: Vec<_> = self.own_addresses.choose_multiple(&mut thread_rng(), 3).cloned().collect();
             if path.starts_with('|') {
-                self.beacon_serializer.write_to_cmd(&peers, &path[1..]).map_err(|e| Error::Beacon("Failed to call beacon command", e))?;
+                self.beacon_serializer
+                    .write_to_cmd(&peers, &path[1..])
+                    .map_err(|e| Error::Beacon("Failed to call beacon command", e))?;
             } else {
-                self.beacon_serializer.write_to_file(&peers, &path).map_err(|e| Error::Beacon("Failed to write beacon to file", e))?;
+                self.beacon_serializer
+                    .write_to_file(&peers, &path)
+                    .map_err(|e| Error::Beacon("Failed to write beacon to file", e))?;
             }
         }
         Ok(())
@@ -538,10 +549,15 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         let peers;
         if let Some(ref path) = self.config.beacon_load {
             if path.starts_with('|') {
-                self.beacon_serializer.read_from_cmd(&path[1..], Some(50)).map_err(|e| Error::Beacon("Failed to call beacon command", e))?;
+                self.beacon_serializer
+                    .read_from_cmd(&path[1..], Some(50))
+                    .map_err(|e| Error::Beacon("Failed to call beacon command", e))?;
                 return Ok(())
             } else {
-                peers = self.beacon_serializer.read_from_file(&path, Some(50)).map_err(|e| Error::Beacon("Failed to read beacon from file", e))?;
+                peers = self
+                    .beacon_serializer
+                    .read_from_file(&path, Some(50))
+                    .map_err(|e| Error::Beacon("Failed to read beacon from file", e))?;
             }
         } else {
             return Ok(())
@@ -555,7 +571,9 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
 
     /// Calculates, resets and writes out the statistics to a file
     fn write_out_stats(&mut self) -> Result<(), io::Error> {
-        if self.config.stats_file.is_none() { return Ok(()) }
+        if self.config.stats_file.is_none() {
+            return Ok(())
+        }
         debug!("Writing out stats");
         let mut f = File::create(self.config.stats_file.as_ref().unwrap())?;
         self.peers.write_out(&mut f)?;
@@ -586,10 +604,11 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     /// - with `Error::SocketError` if sending a message fails
     pub fn handle_interface_data(&mut self, payload: &mut [u8], start: usize, end: usize) -> Result<(), Error> {
         let (src, dst) = P::parse(&payload[start..end])?;
-        debug!("Read data from interface: src: {}, dst: {}, {} bytes", src, dst, end-start);
-        self.traffic.count_out_payload(dst, src, end-start);
+        debug!("Read data from interface: src: {}, dst: {}, {} bytes", src, dst, end - start);
+        self.traffic.count_out_payload(dst, src, end - start);
         match self.table.lookup(&dst) {
-            Some(addr) => { // Peer found for destination
+            Some(addr) => {
+                // Peer found for destination
                 debug!("Found destination for {} => {}", dst, addr);
                 self.send_msg(addr, &mut Message::Data(payload, start, end))?;
                 if !self.peers.contains_addr(&addr) {
@@ -599,7 +618,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                     self.table.remove(&dst);
                     self.connect_sock(addr)?;
                 }
-            },
+            }
             None => {
                 if self.broadcast {
                     debug!("No destination for {} found, broadcasting", dst);
@@ -651,18 +670,18 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         match msg {
             Message::Data(payload, start, end) => {
                 let (src, dst) = P::parse(&payload[start..end])?;
-                debug!("Writing data to device: {} bytes", end-start);
-                self.traffic.count_in_payload(src, dst, end-start);
+                debug!("Writing data to device: {} bytes", end - start);
+                self.traffic.count_in_payload(src, dst, end - start);
                 if let Err(e) = self.device.write(&mut payload[..end], start) {
                     error!("Failed to send via device: {}", e);
-                    return Err(e);
+                    return Err(e)
                 }
                 if self.learning {
                     // Learn single address
                     self.table.learn(src, None, peer);
                 }
                 // Not adding peer in this case to increase performance
-            },
+            }
             Message::Peers(peers) => {
                 // Connect to sender if not connected
                 if !self.peers.contains_addr(&peer) {
@@ -677,7 +696,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                 }
                 // Refresh peer
                 self.peers.refresh(&peer);
-            },
+            }
             Message::Init(stage, node_id, ranges) => {
                 // Avoid connecting to self
                 if node_id == self.node_id {
@@ -697,12 +716,12 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                 if stage == 0 {
                     let own_addrs = self.addresses.clone();
                     let own_node_id = self.node_id;
-                    self.send_msg(peer, &mut Message::Init(stage+1, own_node_id, own_addrs))?;
+                    self.send_msg(peer, &mut Message::Init(stage + 1, own_node_id, own_addrs))?;
                 }
                 // Send peers in any case
                 let peers = self.peers.as_vec();
                 self.send_msg(peer, &mut Message::Peers(peers))?;
-            },
+            }
             Message::Close => {
                 self.peers.remove(&peer);
                 self.table.remove_all(&peer);
@@ -745,7 +764,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         let mut start = 64;
         let (offset, size) = try_fail!(self.device.read(&mut buffer[start..]), "Failed to read from tap device: {}");
         start += offset;
-        if let Err(e) = self.handle_interface_data(buffer, start, start+size) {
+        if let Err(e) = self.handle_interface_data(buffer, start, start + size) {
             error!("Error: {}", e);
         }
     }
@@ -759,8 +778,9 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     /// Also, this method will call `housekeep` every second.
     pub fn run(&mut self) {
         let ctrlc = CtrlC::new();
-        let waiter = try_fail!(WaitImpl::new(&self.socket4, &self.socket6, &self.device, 1000), "Failed to setup poll: {}");
-        let mut buffer = [0; 64*1024];
+        let waiter =
+            try_fail!(WaitImpl::new(&self.socket4, &self.socket6, &self.device, 1000), "Failed to setup poll: {}");
+        let mut buffer = [0; 64 * 1024];
         let mut poll_error = false;
         for evt in waiter {
             match evt {
@@ -770,8 +790,8 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                     }
                     error!("Poll wait failed: {}, retrying...", err);
                     poll_error = true;
-                },
-                WaitResult::Timeout => {},
+                }
+                WaitResult::Timeout => {}
                 WaitResult::SocketV4 => self.handle_socket_v4_event(&mut buffer),
                 WaitResult::SocketV6 => self.handle_socket_v6_event(&mut buffer),
                 WaitResult::Device => self.handle_device_event(&mut buffer)
@@ -793,9 +813,9 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
 }
 
 
+#[cfg(test)] use super::device::MockDevice;
 #[cfg(test)] use super::net::MockSocket;
 #[cfg(test)] use super::util::MockTimeSource;
-#[cfg(test)] use super::device::MockDevice;
 
 #[cfg(test)]
 impl<P: Protocol, T: Table> GenericCloud<MockDevice, P, T, MockSocket, MockTimeSource> {
@@ -812,17 +832,17 @@ impl<P: Protocol, T: Table> GenericCloud<MockDevice, P, T, MockSocket, MockTimeS
     }
 
     pub fn trigger_socket_v4_event(&mut self) {
-        let mut buffer = [0; 64*1024];
+        let mut buffer = [0; 64 * 1024];
         self.handle_socket_v4_event(&mut buffer);
     }
 
     pub fn trigger_socket_v6_event(&mut self) {
-        let mut buffer = [0; 64*1024];
+        let mut buffer = [0; 64 * 1024];
         self.handle_socket_v6_event(&mut buffer);
     }
 
     pub fn trigger_device_event(&mut self) {
-        let mut buffer = [0; 64*1024];
+        let mut buffer = [0; 64 * 1024];
         self.handle_device_event(&mut buffer);
     }
 

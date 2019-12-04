@@ -4,13 +4,9 @@
 
 use std::num::NonZeroU32;
 
-use ring::aead::*;
-use ring::pbkdf2;
-use ring::rand::*;
-use ring::digest::*;
+use ring::{aead::*, pbkdf2, rand::*};
 
 use super::types::Error;
-
 
 const SALT: &[u8; 32] = b"vpncloudVPNCLOUDvpncl0udVpnCloud";
 const HEX_PREFIX: &str = "hex:";
@@ -25,8 +21,7 @@ pub enum CryptoMethod {
 }
 
 pub struct CryptoData {
-    sealing_key: SealingKey,
-    opening_key: OpeningKey,
+    crypto_key: LessSafeKey,
     nonce: Vec<u8>,
     key: Vec<u8>
 }
@@ -51,14 +46,13 @@ fn inc_nonce(nonce: &mut [u8]) {
     warn!("Nonce overflowed");
 }
 
-
 impl Crypto {
     #[inline]
     pub fn method(&self) -> u8 {
         match *self {
             Crypto::None => 0,
-            Crypto::ChaCha20Poly1305{..} => 1,
-            Crypto::AES256GCM{..} => 2
+            Crypto::ChaCha20Poly1305 { .. } => 1,
+            Crypto::AES256GCM { .. } => 2
         }
     }
 
@@ -66,7 +60,7 @@ impl Crypto {
     pub fn nonce_bytes(&self) -> usize {
         match *self {
             Crypto::None => 0,
-            Crypto::ChaCha20Poly1305(ref data) | Crypto::AES256GCM(ref data) => data.sealing_key.algorithm().nonce_len()
+            Crypto::ChaCha20Poly1305(ref data) | Crypto::AES256GCM(ref data) => data.crypto_key.algorithm().nonce_len()
         }
     }
 
@@ -79,11 +73,11 @@ impl Crypto {
     }
 
     #[inline]
-    #[allow(unknown_lints,clippy::match_same_arms)]
+    #[allow(unknown_lints, clippy::match_same_arms)]
     pub fn additional_bytes(&self) -> usize {
         match *self {
             Crypto::None => 0,
-            Crypto::ChaCha20Poly1305(ref data) | Crypto::AES256GCM(ref data) => data.sealing_key.algorithm().tag_len()
+            Crypto::ChaCha20Poly1305(ref data) | Crypto::AES256GCM(ref data) => data.crypto_key.algorithm().tag_len()
         }
     }
 
@@ -102,18 +96,22 @@ impl Crypto {
                 fail!("Raw secret key must be exactly {} bytes long", algo.key_len());
             }
             for i in 0..algo.key_len() {
-                key[i] = try_fail!(u8::from_str_radix(&password[2*i..=2*i+1], 16), "Failed to parse raw secret key: {}");
+                key[i] = try_fail!(
+                    u8::from_str_radix(&password[2 * i..=2 * i + 1], 16),
+                    "Failed to parse raw secret key: {}"
+                );
             }
         } else {
-            let password = if password.starts_with(HASH_PREFIX) {
-                &password[HASH_PREFIX.len()..]
-            } else {
-                password
-            };
-            pbkdf2::derive(&SHA256, NonZeroU32::new(4096).unwrap(), SALT, password.as_bytes(), &mut key);
+            let password = if password.starts_with(HASH_PREFIX) { &password[HASH_PREFIX.len()..] } else { password };
+            pbkdf2::derive(
+                pbkdf2::PBKDF2_HMAC_SHA256,
+                NonZeroU32::new(4096).unwrap(),
+                SALT,
+                password.as_bytes(),
+                &mut key
+            );
         }
-        let sealing_key = SealingKey::new(algo, &key[..algo.key_len()]).expect("Failed to create key");
-        let opening_key = OpeningKey::new(algo, &key[..algo.key_len()]).expect("Failed to create key");
+        let crypto_key = LessSafeKey::new(UnboundKey::new(algo, &key[..algo.key_len()]).expect("Failed to create key"));
         let mut nonce: Vec<u8> = Vec::with_capacity(algo.nonce_len());
         for _ in 0..algo.nonce_len() {
             nonce.push(0);
@@ -122,7 +120,7 @@ impl Crypto {
         if SystemRandom::new().fill(&mut nonce[1..]).is_err() {
             fail!("Randomizing nonce failed");
         }
-        let data = CryptoData { sealing_key, opening_key, nonce, key };
+        let data = CryptoData { crypto_key, nonce, key };
         match method {
             CryptoMethod::ChaCha20 => Crypto::ChaCha20Poly1305(data),
             CryptoMethod::AES256 => Crypto::AES256GCM(data)
@@ -134,9 +132,9 @@ impl Crypto {
             Crypto::None => Ok(buf.len()),
             Crypto::ChaCha20Poly1305(ref data) | Crypto::AES256GCM(ref data) => {
                 let nonce = Nonce::try_assume_unique_for_key(nonce).unwrap();
-                match open_in_place(&data.opening_key, nonce, Aad::from(header), 0, buf) {
-                   Ok(plaintext) => Ok(plaintext.len()),
-                   Err(_) => Err(Error::Crypto("Failed to decrypt"))
+                match data.crypto_key.open_in_place(nonce, Aad::from(header), buf) {
+                    Ok(plaintext) => Ok(plaintext.len()),
+                    Err(_) => Err(Error::Crypto("Failed to decrypt"))
                 }
             }
         }
@@ -149,17 +147,18 @@ impl Crypto {
             Crypto::ChaCha20Poly1305(ref mut data) | Crypto::AES256GCM(ref mut data) => {
                 inc_nonce(&mut data.nonce);
                 assert!(buf.len() - mlen >= tag_len);
-                let buf = &mut buf[.. mlen + tag_len];
                 let nonce = Nonce::try_assume_unique_for_key(&data.nonce).unwrap();
-                let new_len = seal_in_place(&data.sealing_key, nonce, Aad::from(header), buf, tag_len).expect("Failed to encrypt");
+                let tag = data
+                    .crypto_key
+                    .seal_in_place_separate_tag(nonce, Aad::from(header), &mut buf[..mlen])
+                    .expect("Failed to encrypt");
+                buf[mlen..mlen + tag_len].copy_from_slice(tag.as_ref());
                 nonce_bytes.clone_from_slice(&data.nonce);
-                new_len
+                mlen + tag_len
             }
         }
     }
 }
-
-
 
 #[test]
 fn encrypt_decrypt_chacha20poly1305() {

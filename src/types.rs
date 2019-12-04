@@ -2,11 +2,13 @@
 // Copyright (C) 2015-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use std::net::{SocketAddr, Ipv4Addr, Ipv6Addr};
-use std::fmt;
-use std::str::FromStr;
-use std::hash::{Hash, Hasher};
-use std::io::{self, Write};
+use std::{
+    fmt,
+    hash::{Hash, Hasher},
+    io::{self, Write},
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr},
+    str::FromStr
+};
 
 use super::util::{bytes_to_hex, Encoder};
 
@@ -26,7 +28,7 @@ impl Address {
     #[inline]
     pub fn read_from(data: &[u8]) -> Result<(Address, usize), Error> {
         if data.is_empty() {
-            return Err(Error::Parse("Address too short"));
+            return Err(Error::Parse("Address too short"))
         }
         let len = data[0] as usize;
         let addr = Address::read_from_fixed(&data[1..], len)?;
@@ -36,18 +38,18 @@ impl Address {
     #[inline]
     pub fn read_from_fixed(data: &[u8], len: usize) -> Result<Address, Error> {
         if len > 16 {
-            return Err(Error::Parse("Invalid address, too long"));
+            return Err(Error::Parse("Invalid address, too long"))
         }
         if data.len() < len {
-            return Err(Error::Parse("Address too short"));
+            return Err(Error::Parse("Address too short"))
         }
         let mut bytes = [0; 16];
         bytes[0..len].copy_from_slice(&data[0..len]);
-        Ok(Address{data: bytes, len: len as u8})
+        Ok(Address { data: bytes, len: len as u8 })
     }
 
     #[inline]
-    pub fn write_to(&self, data: &mut[u8]) -> usize {
+    pub fn write_to(&self, data: &mut [u8]) -> usize {
         assert!(data.len() > self.len as usize);
         data[0] = self.len;
         let len = self.len as usize;
@@ -99,23 +101,23 @@ impl fmt::Debug for Address {
 }
 
 impl FromStr for Address {
-    type Err=Error;
+    type Err = Error;
 
-    #[allow(unknown_lints,clippy::needless_range_loop)]
+    #[allow(unknown_lints, clippy::needless_range_loop)]
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         if let Ok(addr) = Ipv4Addr::from_str(text) {
             let ip = addr.octets();
             let mut res = [0; 16];
             res[0..4].copy_from_slice(&ip);
-            return Ok(Address{data: res, len: 4});
+            return Ok(Address { data: res, len: 4 })
         }
         if let Ok(addr) = Ipv6Addr::from_str(text) {
             let segments = addr.segments();
             let mut res = [0; 16];
             for i in 0..8 {
-                Encoder::write_u16(segments[i], &mut res[2*i..]);
+                Encoder::write_u16(segments[i], &mut res[2 * i..]);
             }
-            return Ok(Address{data: res, len: 16});
+            return Ok(Address { data: res, len: 16 })
         }
         let parts: Vec<&str> = text.split(':').collect();
         if parts.len() == 6 {
@@ -123,7 +125,7 @@ impl FromStr for Address {
             for i in 0..6 {
                 bytes[i] = u8::from_str_radix(parts[i], 16).map_err(|_| Error::Parse("Failed to parse mac"))?;
             }
-            return Ok(Address{data: bytes, len: 6});
+            return Ok(Address { data: bytes, len: 6 })
         }
         Err(Error::Parse("Failed to parse address"))
     }
@@ -141,14 +143,14 @@ impl Range {
     pub fn read_from(data: &[u8]) -> Result<(Range, usize), Error> {
         let (address, read) = Address::read_from(data)?;
         if data.len() < read + 1 {
-            return Err(Error::Parse("Range too short"));
+            return Err(Error::Parse("Range too short"))
         }
         let prefix_len = data[read];
-        Ok((Range{base: address, prefix_len}, read + 1))
+        Ok((Range { base: address, prefix_len }, read + 1))
     }
 
     #[inline]
-    pub fn write_to(&self, data: &mut[u8]) -> usize {
+    pub fn write_to(&self, data: &mut [u8]) -> usize {
         let pos = self.base.write_to(data);
         assert!(data.len() > pos);
         data[pos] = self.prefix_len;
@@ -157,17 +159,16 @@ impl Range {
 }
 
 impl FromStr for Range {
-    type Err=Error;
+    type Err = Error;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let pos = match text.find('/') {
             Some(pos) => pos,
             None => return Err(Error::Parse("Invalid range format"))
         };
-        let prefix_len = u8::from_str(&text[pos+1..])
-            .map_err(|_| Error::Parse("Failed to parse prefix length"))?;
+        let prefix_len = u8::from_str(&text[pos + 1..]).map_err(|_| Error::Parse("Failed to parse prefix length"))?;
         let base = Address::from_str(&text[..pos])?;
-        Ok(Range{base, prefix_len})
+        Ok(Range { base, prefix_len })
     }
 }
 
@@ -201,7 +202,7 @@ impl fmt::Display for Mode {
             Mode::Normal => write!(formatter, "normal"),
             Mode::Hub => write!(formatter, "hub"),
             Mode::Switch => write!(formatter, "switch"),
-            Mode::Router => write!(formatter, "router"),
+            Mode::Router => write!(formatter, "router")
         }
     }
 }
@@ -250,9 +251,15 @@ impl fmt::Display for Error {
 fn address_parse_fmt() {
     assert_eq!(format!("{}", Address::from_str("120.45.22.5").unwrap()), "120.45.22.5");
     assert_eq!(format!("{}", Address::from_str("78:2d:16:05:01:02").unwrap()), "78:2d:16:05:01:02");
-    assert_eq!(format!("{}", Address{data: [3,56,120,45,22,5,1,2,0,0,0,0,0,0,0,0], len: 8}), "vlan824/78:2d:16:05:01:02");
-    assert_eq!(format!("{}", Address::from_str("0001:0203:0405:0607:0809:0a0b:0c0d:0e0f").unwrap()), "0001:0203:0405:0607:0809:0a0b:0c0d:0e0f");
-    assert_eq!(format!("{:?}", Address{data: [1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0], len: 2}), "0102");
+    assert_eq!(
+        format!("{}", Address { data: [3, 56, 120, 45, 22, 5, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0], len: 8 }),
+        "vlan824/78:2d:16:05:01:02"
+    );
+    assert_eq!(
+        format!("{}", Address::from_str("0001:0203:0405:0607:0809:0a0b:0c0d:0e0f").unwrap()),
+        "0001:0203:0405:0607:0809:0a0b:0c0d:0e0f"
+    );
+    assert_eq!(format!("{:?}", Address { data: [1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], len: 2 }), "0102");
     assert!(Address::from_str("").is_err()); // Failed to parse address
 }
 
@@ -278,16 +285,29 @@ fn address_decode_encode() {
 
 #[test]
 fn address_eq() {
-    assert_eq!(Address::read_from_fixed(&[1,2,3,4], 4).unwrap(), Address::read_from_fixed(&[1,2,3,4], 4).unwrap());
-    assert_ne!(Address::read_from_fixed(&[1,2,3,4], 4).unwrap(), Address::read_from_fixed(&[1,2,3,5], 4).unwrap());
-    assert_eq!(Address::read_from_fixed(&[1,2,3,4], 3).unwrap(), Address::read_from_fixed(&[1,2,3,5], 3).unwrap());
-    assert_ne!(Address::read_from_fixed(&[1,2,3,4], 3).unwrap(), Address::read_from_fixed(&[1,2,3,4], 4).unwrap());
+    assert_eq!(
+        Address::read_from_fixed(&[1, 2, 3, 4], 4).unwrap(),
+        Address::read_from_fixed(&[1, 2, 3, 4], 4).unwrap()
+    );
+    assert_ne!(
+        Address::read_from_fixed(&[1, 2, 3, 4], 4).unwrap(),
+        Address::read_from_fixed(&[1, 2, 3, 5], 4).unwrap()
+    );
+    assert_eq!(
+        Address::read_from_fixed(&[1, 2, 3, 4], 3).unwrap(),
+        Address::read_from_fixed(&[1, 2, 3, 5], 3).unwrap()
+    );
+    assert_ne!(
+        Address::read_from_fixed(&[1, 2, 3, 4], 3).unwrap(),
+        Address::read_from_fixed(&[1, 2, 3, 4], 4).unwrap()
+    );
 }
 
 #[test]
 fn address_range_decode_encode() {
     let mut buf = [0; 32];
-    let range = Range{base: Address{data: [0,1,2,3,0,0,0,0,0,0,0,0,0,0,0,0], len: 4}, prefix_len: 24};
+    let range =
+        Range { base: Address { data: [0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], len: 4 }, prefix_len: 24 };
     assert_eq!(range.write_to(&mut buf), 6);
     assert_eq!(&buf[0..6], &[4, 0, 1, 2, 3, 24]);
     assert_eq!((range, 6), Range::read_from(&buf).unwrap());

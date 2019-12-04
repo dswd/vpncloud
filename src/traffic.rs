@@ -2,13 +2,13 @@
 // Copyright (C) 2018-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use std::net::SocketAddr;
-use std::collections::HashMap;
-use std::io::{self, Write};
+use std::{
+    collections::HashMap,
+    io::{self, Write},
+    net::SocketAddr
+};
 
-use super::types::Address;
-use super::cloud::Hash;
-use super::util::Bytes;
+use super::{cloud::Hash, types::Address, util::Bytes};
 
 
 #[derive(Default)]
@@ -95,11 +95,11 @@ impl TrafficStats {
         }
     }
 
-    pub fn get_peer_traffic(&self) -> impl Iterator<Item=(&SocketAddr, &TrafficEntry)> {
+    pub fn get_peer_traffic(&self) -> impl Iterator<Item = (&SocketAddr, &TrafficEntry)> {
         self.peers.iter()
     }
 
-    pub fn get_payload_traffic(&self) -> impl Iterator<Item=(&(Address, Address), &TrafficEntry)> {
+    pub fn get_payload_traffic(&self) -> impl Iterator<Item = (&(Address, Address), &TrafficEntry)> {
         self.payload.iter()
     }
 
@@ -109,14 +109,21 @@ impl TrafficStats {
         let mut peers: Vec<_> = self.get_peer_traffic().collect();
         peers.sort_unstable_by_key(|(_, data)| (data.out_bytes + data.in_bytes));
         for (addr, data) in peers.iter().rev() {
-            writeln!(out, " - {}: in={}/s, out={}/s", addr, Bytes(data.in_bytes/60), Bytes(data.out_bytes/60))?;
+            writeln!(out, " - {}: in={}/s, out={}/s", addr, Bytes(data.in_bytes / 60), Bytes(data.out_bytes / 60))?;
         }
         writeln!(out)?;
         writeln!(out, "Payload traffic:")?;
         let mut payload: Vec<_> = self.get_payload_traffic().collect();
         payload.sort_unstable_by_key(|(_, data)| (data.out_bytes + data.in_bytes));
         for ((remote, local), data) in payload.iter().rev() {
-            writeln!(out, " - {} <-> {}: in={}/s, out={}/s", remote, local, Bytes(data.in_bytes/60), Bytes(data.out_bytes/60))?;
+            writeln!(
+                out,
+                " - {} <-> {}: in={}/s, out={}/s",
+                remote,
+                local,
+                Bytes(data.in_bytes / 60),
+                Bytes(data.out_bytes / 60)
+            )?;
         }
         Ok(())
     }
