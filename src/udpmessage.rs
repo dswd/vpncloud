@@ -53,9 +53,9 @@ impl TopHeader {
 }
 
 pub enum Message<'a> {
-    Data(&'a mut [u8], usize, usize), // data, start, end
-    Peers(Vec<SocketAddr>),           // peers
-    Init(u8, NodeId, Vec<Range>),     // step, node_id, ranges
+    Data(&'a mut [u8], usize, usize),  // data, start, end
+    Peers(Vec<SocketAddr>),            // peers
+    Init(u8, NodeId, Vec<Range>, u16), // step, node_id, ranges
     Close
 }
 
@@ -64,7 +64,7 @@ impl<'a> Message<'a> {
         match self {
             Message::Data(_, start, end) => Message::Data(&mut [], start, end),
             Message::Peers(peers) => Message::Peers(peers),
-            Message::Init(step, node_id, ranges) => Message::Init(step, node_id, ranges),
+            Message::Init(step, node_id, ranges, timeout) => Message::Init(step, node_id, ranges, timeout),
             Message::Close => Message::Close
         }
     }
@@ -86,8 +86,15 @@ impl<'a> fmt::Debug for Message<'a> {
                 }
                 write!(formatter, "]")
             }
-            Message::Init(stage, ref node_id, ref peers) => {
-                write!(formatter, "Init(stage={}, node_id={}, {:?})", stage, bytes_to_hex(node_id), peers)
+            Message::Init(stage, ref node_id, ref peers, ref peer_timeout) => {
+                write!(
+                    formatter,
+                    "Init(stage={}, node_id={}, peer_timeout={}, {:?})",
+                    stage,
+                    bytes_to_hex(node_id),
+                    peer_timeout,
+                    peers
+                )
             }
             Message::Close => write!(formatter, "Close")
         }
@@ -183,7 +190,12 @@ pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &Crypto) -> Re
                 pos += read;
                 addrs.push(range);
             }
-            Message::Init(stage, node_id, addrs)
+            let mut peer_timeout = 1800;
+            if data.len() >= pos + 2 {
+                peer_timeout = Encoder::read_u16(&data[pos..]);
+                // pos += 2; never read
+            }
+            Message::Init(stage, node_id, addrs, peer_timeout)
         }
         3 => Message::Close,
         _ => return Err(Error::Parse("Unknown message type"))
@@ -198,7 +210,7 @@ pub fn encode<'a>(
     let header_type = match msg {
         Message::Data(_, _, _) => 0,
         Message::Peers(_) => 1,
-        Message::Init(_, _, _) => 2,
+        Message::Init(_, _, _, _) => 2,
         Message::Close => 3
     };
     let mut start = 64;
@@ -244,7 +256,7 @@ pub fn encode<'a>(
             }
             end = pos;
         }
-        Message::Init(stage, ref node_id, ref ranges) => {
+        Message::Init(stage, ref node_id, ref ranges, peer_timeout) => {
             let mut pos = start;
             assert!(buf.len() >= pos + 2 + NODE_ID_BYTES);
             buf[pos] = stage;
@@ -257,6 +269,8 @@ pub fn encode<'a>(
             for range in ranges {
                 pos += range.write_to(&mut buf[pos..]);
             }
+            Encoder::write_u16(peer_timeout, &mut buf[pos..]);
+            pos += 2;
             end = pos;
         }
         Message::Close => {}
@@ -299,9 +313,9 @@ impl<'a> PartialEq for Message<'a> {
                     false
                 }
             }
-            Message::Init(step1, node_id1, ref ranges1) => {
-                if let Message::Init(step2, node_id2, ref ranges2) = *other {
-                    step1 == step2 && node_id1 == node_id2 && ranges1 == ranges2
+            Message::Init(step1, node_id1, ref ranges1, peer_timeout1) => {
+                if let Message::Init(step2, node_id2, ref ranges2, peer_timeout2) = *other {
+                    step1 == step2 && node_id1 == node_id2 && ranges1 == ranges2 && peer_timeout1 == peer_timeout2
                 } else {
                     false
                 }
@@ -421,15 +435,15 @@ fn udpmessage_init() {
         Range { base: Address { data: [0, 1, 2, 3, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], len: 6 }, prefix_len: 16 },
     ];
     let node_id = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-    let mut msg = Message::Init(0, node_id, addrs);
+    let mut msg = Message::Init(0, node_id, addrs, 1800);
     let mut should = [
         118, 112, 110, 1, 0, 0, 0, 2, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 2, 4, 0, 1, 2, 3, 24, 6,
-        0, 1, 2, 3, 4, 5, 16
+        0, 1, 2, 3, 4, 5, 16, 7, 8
     ];
     {
         let mut buf = [0; 1024];
         let res = encode(&mut msg, &mut buf[..], MAGIC, &mut crypto);
-        assert_eq!(res.len(), 40);
+        assert_eq!(res.len(), 42);
         for i in 0..res.len() {
             assert_eq!(res[i], should[i]);
         }
@@ -502,9 +516,9 @@ fn message_fmt() {
                     base: Address { data: [0, 1, 2, 3, 4, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], len: 6 },
                     prefix_len: 16
                 }
-            ])
+            ], 1800)
         ),
-        "Init(stage=0, node_id=000102030405060708090a0b0c0d0e0f, [0.1.2.3/24, 00:01:02:03:04:05/16])"
+        "Init(stage=0, node_id=000102030405060708090a0b0c0d0e0f, peer_timeout=1800, [0.1.2.3/24, 00:01:02:03:04:05/16])"
     );
     assert_eq!(format!("{:?}", Message::Close), "Close");
 }

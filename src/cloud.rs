@@ -40,6 +40,7 @@ pub const STATS_INTERVAL: Time = 60;
 
 struct PeerData {
     timeout: Time,
+    peer_timeout: u16,
     node_id: NodeId,
     alt_addrs: Vec<SocketAddr>
 }
@@ -84,6 +85,10 @@ impl<TS: TimeSource> PeerList<TS> {
         del
     }
 
+    pub fn min_peer_timeout(&self) -> u16 {
+        self.peers.iter().map(|p| p.1.peer_timeout).min().unwrap_or(1800)
+    }
+
     #[inline]
     pub fn contains_addr(&self, addr: &SocketAddr) -> bool {
         self.addresses.contains_key(addr)
@@ -106,13 +111,14 @@ impl<TS: TimeSource> PeerList<TS> {
 
 
     #[inline]
-    fn add(&mut self, node_id: NodeId, addr: SocketAddr) {
+    fn add(&mut self, node_id: NodeId, addr: SocketAddr, peer_timeout: u16) {
         if self.nodes.insert(node_id, addr).is_none() {
             info!("New peer: {}", addr);
             self.peers.insert(addr, PeerData {
                 timeout: TS::now() + Time::from(self.timeout),
                 node_id,
-                alt_addrs: vec![]
+                alt_addrs: vec![],
+                peer_timeout
             });
             self.addresses.insert(addr, node_id);
         }
@@ -221,7 +227,7 @@ pub struct GenericCloud<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSou
     device: D,
     crypto: Crypto,
     next_peerlist: Time,
-    update_freq: Duration,
+    update_freq: u16,
     buffer_out: [u8; 64 * 1024],
     next_housekeep: Time,
     next_stats_out: Time,
@@ -252,7 +258,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         let mut res = GenericCloud {
             magic: config.get_magic(),
             node_id: random(),
-            peers: PeerList::new(config.peer_timeout),
+            peers: PeerList::new(config.peer_timeout as Duration),
             addresses,
             learning,
             broadcast,
@@ -263,7 +269,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             socket6,
             device,
             next_peerlist: now,
-            update_freq: config.get_keepalive(),
+            update_freq: config.get_keepalive() as u16,
             buffer_out: [0; 64 * 1024],
             next_housekeep: now,
             next_stats_out: now + STATS_INTERVAL,
@@ -408,7 +414,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         // Send a message to each resolved address
         for a in resolve(&addr)? {
             // Ignore error this time
-            let mut msg = Message::Init(0, node_id, subnets.clone());
+            let mut msg = Message::Init(0, node_id, subnets.clone(), self.config.peer_timeout as u16);
             self.send_msg(a, &mut msg).ok();
         }
         Ok(())
@@ -429,7 +435,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         debug!("Connecting to {:?}", addr);
         let subnets = self.addresses.clone();
         let node_id = self.node_id;
-        let mut msg = Message::Init(0, node_id, subnets.clone());
+        let mut msg = Message::Init(0, node_id, subnets.clone(), self.config.peer_timeout as u16);
         self.send_msg(addr, &mut msg)
     }
 
@@ -466,6 +472,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             let mut msg = Message::Peers(peers);
             self.broadcast_msg(&mut msg)?;
             // Reschedule for next update
+            self.update_freq = min(self.config.get_keepalive() as u16, self.peers.min_peer_timeout());
             self.next_peerlist = now + Time::from(self.update_freq);
         }
         // Connect to those reconnect_peers that are due
@@ -697,7 +704,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                 // Refresh peer
                 self.peers.refresh(&peer);
             }
-            Message::Init(stage, node_id, ranges) => {
+            Message::Init(stage, node_id, ranges, peer_timeout) => {
                 // Avoid connecting to self
                 if node_id == self.node_id {
                     self.own_addresses.push(peer);
@@ -707,7 +714,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                 if self.peers.contains_node(&node_id) {
                     self.peers.make_primary(node_id, peer);
                 } else {
-                    self.peers.add(node_id, peer);
+                    self.peers.add(node_id, peer, peer_timeout);
                     for range in ranges {
                         self.table.learn(range.base, Some(range.prefix_len), peer);
                     }
@@ -716,7 +723,10 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                 if stage == 0 {
                     let own_addrs = self.addresses.clone();
                     let own_node_id = self.node_id;
-                    self.send_msg(peer, &mut Message::Init(stage + 1, own_node_id, own_addrs))?;
+                    self.send_msg(
+                        peer,
+                        &mut Message::Init(stage + 1, own_node_id, own_addrs, self.config.peer_timeout as u16)
+                    )?;
                 }
                 // Send peers in any case
                 let peers = self.peers.as_vec();
