@@ -249,3 +249,79 @@ impl TimeSource for MockTimeSource {
         MOCK_TIME.with(|t| t.load(Ordering::SeqCst) as Time)
     }
 }
+
+
+/// Helper function that multiplies the base62 data in buf[0..buflen] by 16 and adds m to it
+fn base62_add_mult_16(buf: &mut [u8], mut buflen: usize, m: u8) -> usize {
+    let mut d: usize = m as usize;
+    for i in 0..buflen {
+        d += buf[i] as usize * 16;
+        buf[i] = (d % 62) as u8;
+        d /= 62;
+    }
+    assert!(d < 62);
+    if d > 0 {
+        buf[buflen] = d as u8;
+        buflen += 1;
+    }
+    buflen
+}
+
+const BASE62: [char; 62] = [
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
+    'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
+];
+
+pub fn to_base62(data: &[u8]) -> String {
+    let l = data.len();
+    let mut buf = vec![0; l * 2];
+    let mut buflen = 0;
+    for b in data {
+        buflen = base62_add_mult_16(&mut buf, buflen, b / 16);
+        buflen = base62_add_mult_16(&mut buf, buflen, b % 16);
+    }
+    buf[0..buflen].reverse();
+    let mut result = String::with_capacity(buflen);
+    for b in &buf[0..buflen] {
+        result.push(BASE62[*b as usize]);
+    }
+    result
+}
+
+pub fn from_base62(data: &str) -> Result<Vec<u8>, char> {
+    let mut buf = Vec::with_capacity(data.len() / 2 + data.len() / 4);
+    for c in data.chars() {
+        let mut val = match c {
+            '0'..='9' => ((c as usize) % ('0' as usize)),
+            'A'..='Z' => ((c as usize) % ('A' as usize)) + 10,
+            'a'..='z' => ((c as usize) % ('a' as usize)) + 36,
+            _ => return Err(c)
+        };
+        for i in 0..buf.len() {
+            val += buf[i] as usize * 62;
+            buf[i] = (val % 256) as u8;
+            val /= 256;
+        }
+        if val > 0 {
+            buf.push(val as u8);
+        }
+    }
+    buf.reverse();
+    Ok(buf)
+}
+
+
+#[test]
+fn base62() {
+    assert_eq!("", to_base62(&[0]));
+    assert_eq!("z", to_base62(&[61]));
+    assert_eq!("10", to_base62(&[62]));
+    assert_eq!("48", to_base62(&[1, 0]));
+    assert_eq!("1Xp7Ke", to_base62(b"Test"));
+    assert!(from_base62("").unwrap().is_empty());
+    assert_eq!(vec![61], from_base62("z").unwrap());
+    assert_eq!(vec![62], from_base62("10").unwrap());
+    assert_eq!(vec![1, 0], from_base62("48").unwrap());
+    assert_eq!(b"Test".to_vec(), from_base62("1Xp7Ke").unwrap());
+}

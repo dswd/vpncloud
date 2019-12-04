@@ -1,6 +1,6 @@
 [package]
 name = "vpncloud"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["Dennis Schwerdel <schwerdel@googlemail.com>"]
 build = "build.rs"
 license = "GPL-3.0"
@@ -28,7 +28,6 @@ igd = "0.9"
 siphasher = "0.3"
 daemonize = "0.4"
 ring = "0.16"
-base-62 = "0.1"
 
 [build-dependencies]
 cc = "^1"

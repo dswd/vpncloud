@@ -1,3 +1,15 @@
+vpncloud (1.1.0) stable; urgency=medium
+  
+  * [added] Exchange peer timeout and adapt keepalive accordingly
+  * [added] Reducing published peer timeout to 5 min when NAT is detected
+  * [added] Added more tests
+  * [changed] Rust version 1.41.0
+  * [changed] Updated dependencies
+  * [fixed] Fixed potential startup dependency issue
+  * [fixed] Fixed wrong base62 encoding
+
+ -- Dennis Schwerdel <schwerdel@googlemail.com>  Thu, 04 Dec 2019 19:01:34 +0100
+
 vpncloud (1.0.0) stable; urgency=medium
 
   * [added] Added ability to publish small beacons for rendezvous

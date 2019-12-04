@@ -2,7 +2,6 @@
 // Copyright (C) 2019-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use base_62;
 use ring::digest;
 
 use std::{
@@ -21,7 +20,7 @@ use std::{
     thread
 };
 
-use super::util::{Encoder, TimeSource};
+use super::util::{from_base62, to_base62, Encoder, TimeSource};
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 
 
@@ -90,11 +89,11 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
     }
 
     fn begin(&self) -> String {
-        base_62::encode(&self.get_keystream(TYPE_BEGIN, 0, 0))[0..5].to_string()
+        to_base62(&self.get_keystream(TYPE_BEGIN, 0, 0))[0..5].to_string()
     }
 
     fn end(&self) -> String {
-        base_62::encode(&self.get_keystream(TYPE_END, 0, 0))[0..5].to_string()
+        to_base62(&self.get_keystream(TYPE_END, 0, 0))[0..5].to_string()
     }
     fn encrypt_data(&self, data: &mut Vec<u8>) {
         // Note: the 1 byte seed is only meant to protect from random changes,
@@ -152,11 +151,11 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
             data.extend_from_slice(&dat);
         }
         self.encrypt_data(&mut data);
-        base_62::encode(&data)
+        to_base62(&data)
     }
 
     fn peerlist_decode(&self, data: &str, ttl_hours: Option<u16>) -> Vec<SocketAddr> {
-        let mut data = base_62::decode(data).expect("Invalid input");
+        let mut data = from_base62(data).expect("Invalid input");
         let mut peers = Vec::new();
         let mut pos = 0;
         if data.len() < 4 {
@@ -327,13 +326,13 @@ fn encode() {
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
-    assert_eq!("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", ser.encode(&peers));
+    assert_eq!("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", ser.encode(&peers));
     peers.push(SocketAddr::from_str("[::1]:5678").unwrap());
-    assert_eq!("juWwKjF5qZG7PE5imnpi5XARaXnP3UsMsGBLxM4FNFDzvjlKt1SO55LN", ser.encode(&peers));
+    assert_eq!("3hRD8BKvg7jotek0FGLeYtIc1zj7jzPRyQscQAe9tCqnFJ0vyVfIxYMB", ser.encode(&peers));
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:54").unwrap());
-    assert_eq!("juWwKIgSqTammVFRNoIVzLPO0BEO55LN", ser.encode(&peers));
+    assert_eq!("3hRD86NwMC5dPp8bh5idzhMal4AIxYMB", ser.encode(&peers));
 }
 
 #[test]
@@ -343,11 +342,11 @@ fn decode() {
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
-    assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", None)));
+    assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", None)));
     peers.push(SocketAddr::from_str("[::1]:5678").unwrap());
     assert_eq!(
         format!("{:?}", peers),
-        format!("{:?}", ser.decode("juWwKjF5qZG7PE5imnpi5XARaXnP3UsMsGBLxM4FNFDzvjlKt1SO55LN", None))
+        format!("{:?}", ser.decode("3hRD8BKvg7jotek0FGLeYtIc1zj7jzPRyQscQAe9tCqnFJ0vyVfIxYMB", None))
     );
 }
 
@@ -360,11 +359,11 @@ fn decode_split() {
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
     assert_eq!(
         format!("{:?}", peers),
-        format!("{:?}", ser.decode("juWwK-hj.VT:Yj bw\tJj\ntY(AZ)lM[fE]j7üIDäO55LN", None))
+        format!("{:?}", ser.decode("3hRD8-5V.3h:1P 0g\t5U\nn9(ZW)no[qR]Doü7ZäIxYMB", None))
     );
     assert_eq!(
         format!("{:?}", peers),
-        format!("{:?}", ser.decode("j -, \nuW--wKhjVTYjbwJjtYAZlMfEj7IDO(5}5ÖÄÜ\nLN", None))
+        format!("{:?}", ser.decode("3 -, \nhR--D85V3h1P0g5Un9ZWnoqRDo7ZI(x}YÖÄÜ\nMB", None))
     );
 }
 
@@ -377,7 +376,7 @@ fn decode_offset() {
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
     assert_eq!(
         format!("{:?}", peers),
-        format!("{:?}", ser.decode("Hello World: juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN! End of the World", None))
+        format!("{:?}", ser.decode("Hello World: 3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB! End of the World", None))
     );
 }
 
@@ -390,7 +389,7 @@ fn decode_multiple() {
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
     assert_eq!(
         format!("{:?}", peers),
-        format!("{:?}", ser.decode("juWwKkBEVBp9SsDiN3BO55LN juWwKtGGPQz1gXIBd68O55LN", None))
+        format!("{:?}", ser.decode("3hRD850fTOmqFffvcJEIxYMB 3hRD823uwTS47pupeONIxYMB", None))
     );
 }
 
@@ -402,23 +401,23 @@ fn decode_ttl() {
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
     MockTimeSource::set_time(2000 * 3600);
-    assert_eq!(2, ser.decode("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", None).len());
+    assert_eq!(2, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", None).len());
     MockTimeSource::set_time(2100 * 3600);
-    assert_eq!(2, ser.decode("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", None).len());
+    assert_eq!(2, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", None).len());
     MockTimeSource::set_time(2005 * 3600);
-    assert_eq!(2, ser.decode("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", None).len());
+    assert_eq!(2, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", None).len());
     MockTimeSource::set_time(1995 * 3600);
-    assert_eq!(2, ser.decode("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", None).len());
+    assert_eq!(2, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", None).len());
     MockTimeSource::set_time(2000 * 3600);
-    assert_eq!(2, ser.decode("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", Some(24)).len());
+    assert_eq!(2, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", Some(24)).len());
     MockTimeSource::set_time(1995 * 3600);
-    assert_eq!(2, ser.decode("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", Some(24)).len());
+    assert_eq!(2, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", Some(24)).len());
     MockTimeSource::set_time(2005 * 3600);
-    assert_eq!(2, ser.decode("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", Some(24)).len());
+    assert_eq!(2, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", Some(24)).len());
     MockTimeSource::set_time(2100 * 3600);
-    assert_eq!(0, ser.decode("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", Some(24)).len());
+    assert_eq!(0, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", Some(24)).len());
     MockTimeSource::set_time(1900 * 3600);
-    assert_eq!(0, ser.decode("juWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", Some(24)).len());
+    assert_eq!(0, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", Some(24)).len());
 }
 
 #[test]
@@ -426,12 +425,12 @@ fn decode_invalid() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"vpnc", b"mysecretkey");
     assert_eq!(0, ser.decode("", None).len());
-    assert_eq!(0, ser.decode("juWwKO55LN", None).len());
-    assert_eq!(0, ser.decode("juWwK--", None).len());
-    assert_eq!(0, ser.decode("--O55LN", None).len());
-    assert_eq!(0, ser.decode("juWwKhjVTYjbwJjtYAZXMfEj7IDO55LN", None).len());
-    assert_eq!(2, ser.decode("SGrivjuWwKhjVTYjbwJjtYAZlMfEj7IDO55LNjuWwK", None).len());
-    assert_eq!(2, ser.decode("juWwKjuWwKhjVTYjbwJjtYAZlMfEj7IDO55LN", None).len());
+    assert_eq!(0, ser.decode("3hRD8IxYMB", None).len());
+    assert_eq!(0, ser.decode("3hRD8--", None).len());
+    assert_eq!(0, ser.decode("--IxYMB", None).len());
+    assert_eq!(0, ser.decode("3hRD85V3h1P0g5Un8ZWnoqRDo7ZIxYMB", None).len());
+    assert_eq!(2, ser.decode("IxYMB3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB3hRD8", None).len());
+    assert_eq!(2, ser.decode("3hRD83hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMBIxYMB", None).len());
 }
 
 
