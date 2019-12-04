@@ -227,6 +227,7 @@ pub struct GenericCloud<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSou
     device: D,
     crypto: Crypto,
     next_peerlist: Time,
+    peer_timeout_publish: u16,
     update_freq: u16,
     buffer_out: [u8; 64 * 1024],
     next_housekeep: Time,
@@ -255,15 +256,22 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             Err(err) => fail!("Failed to open ipv6 address ::{}: {}", config.port, err)
         };
         let now = TS::now();
+        let peer_timeout_publish = if S::detect_nat() {
+            info!("Private IP detected, setting published peer timeout to 300s");
+            300
+        } else {
+            config.peer_timeout as u16
+        };
         let mut res = GenericCloud {
             magic: config.get_magic(),
             node_id: random(),
-            peers: PeerList::new(config.peer_timeout as Duration),
+            peers: PeerList::new(config.peer_timeout),
             addresses,
             learning,
             broadcast,
             reconnect_peers: Vec::new(),
             own_addresses: Vec::new(),
+            peer_timeout_publish,
             table,
             socket4,
             socket6,
@@ -414,7 +422,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         // Send a message to each resolved address
         for a in resolve(&addr)? {
             // Ignore error this time
-            let mut msg = Message::Init(0, node_id, subnets.clone(), self.config.peer_timeout as u16);
+            let mut msg = Message::Init(0, node_id, subnets.clone(), self.peer_timeout_publish);
             self.send_msg(a, &mut msg).ok();
         }
         Ok(())
@@ -435,7 +443,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         debug!("Connecting to {:?}", addr);
         let subnets = self.addresses.clone();
         let node_id = self.node_id;
-        let mut msg = Message::Init(0, node_id, subnets.clone(), self.config.peer_timeout as u16);
+        let mut msg = Message::Init(0, node_id, subnets.clone(), self.peer_timeout_publish);
         self.send_msg(addr, &mut msg)
     }
 
@@ -725,7 +733,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                     let own_node_id = self.node_id;
                     self.send_msg(
                         peer,
-                        &mut Message::Init(stage + 1, own_node_id, own_addrs, self.config.peer_timeout as u16)
+                        &mut Message::Init(stage + 1, own_node_id, own_addrs, self.peer_timeout_publish)
                     )?;
                 }
                 // Send peers in any case

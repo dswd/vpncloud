@@ -2,16 +2,13 @@
 // Copyright (C) 2015-2019  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use std::{
-    io,
-    net::{SocketAddr, SocketAddrV4, UdpSocket}
-};
+use std::{io, net::SocketAddrV4};
 
 use igd::*;
 
-use super::util::{SystemTimeSource, Time, TimeSource};
+use super::util::{get_internal_ip, SystemTimeSource, Time, TimeSource};
 
-const LEASE_TIME: u32 = 300;
+const LEASE_TIME: u32 = 1800;
 const DESCRIPTION: &str = "VpnCloud";
 
 
@@ -40,16 +37,7 @@ impl PortForwarding {
             }
         };
         info!("Port-forwarding: found router at {}", gateway.addr);
-        // Get the internal address (this trick gets the address by opening a UDP connection which
-        // does not really open anything but returns the correct address)
-        let dummy_sock = UdpSocket::bind("0.0.0.0:0").expect("Failed to bind");
-        dummy_sock.connect(gateway.addr).expect("Failed to connect");
-        let internal_addr;
-        if let SocketAddr::V4(addr) = dummy_sock.local_addr().expect("Failed to get local address") {
-            internal_addr = SocketAddrV4::new(*addr.ip(), port);
-        } else {
-            unreachable!()
-        }
+        let internal_addr = SocketAddrV4::new(get_internal_ip(), port);
         // Query the external address
         let external_ip = match gateway.get_external_ip() {
             Ok(ip) => ip,
