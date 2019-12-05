@@ -25,12 +25,12 @@ pub type Time = i64;
 const HEX_CHARS: &[u8] = b"0123456789abcdef";
 
 pub fn bytes_to_hex(bytes: &[u8]) -> String {
-    let mut v = Vec::with_capacity(bytes.len() * 2);
+    let mut s = String::with_capacity(bytes.len() * 2);
     for &byte in bytes {
-        v.push(HEX_CHARS[(byte >> 4) as usize]);
-        v.push(HEX_CHARS[(byte & 0xf) as usize]);
+        s.push(HEX_CHARS[(byte >> 4) as usize] as char);
+        s.push(HEX_CHARS[(byte & 0xf) as usize] as char);
     }
-    unsafe { String::from_utf8_unchecked(v) }
+    s
 }
 
 
