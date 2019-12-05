@@ -1,4 +1,4 @@
-FROM centos:latest
+FROM centos:7
 
 RUN yum groupinstall -y 'Development Tools'
 
