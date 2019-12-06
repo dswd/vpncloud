@@ -80,7 +80,7 @@ fn create_tap_node(nat: bool) -> TapTestNode {
 fn create_tap_node_with_config(nat: bool, mut config: Config) -> TapTestNode {
     MockSocket::set_nat(nat);
     config.port = NEXT_PORT.with(|p| p.fetch_add(1, Ordering::Relaxed)) as u16;
-    TestNode::new(&config, MockDevice::new(), SwitchTable::new(1800, 10), true, true, vec![], Crypto::None, None)
+    TestNode::new(&config, MockDevice::new(), SwitchTable::new(1800, 10), true, true, vec![], Crypto::None, None, None)
 }
 
 #[allow(dead_code)]
@@ -94,6 +94,7 @@ fn create_tun_node(nat: bool, addresses: Vec<Range>) -> TunTestNode {
         false,
         addresses,
         Crypto::None,
+        None,
         None
     )
 }
