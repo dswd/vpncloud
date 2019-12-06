@@ -31,8 +31,8 @@ Options:
                                     interface.
     --pid-file <file>               Store the process id in this file when
                                     daemonizing.
-    --user <user>                   Run as other user when daemonizing.
-    --group <group>                 Run as other group when daemonizing.
+    --user <user>                   Run as other user.
+    --group <group>                 Run as other group.
     --log-file <file>               Print logs also to this file.
     --stats-file <file>             Print statistics to this file.
     --no-port-forwarding            Disable automatic port forward.

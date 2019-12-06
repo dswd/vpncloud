@@ -28,6 +28,7 @@ igd = "0.9"
 siphasher = "0.3"
 daemonize = "0.4"
 ring = "0.16"
+privdrop = "0.3"
 
 [build-dependencies]
 cc = "^1"

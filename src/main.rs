@@ -277,6 +277,16 @@ fn run<P: Protocol>(config: Config) {
             daemonize = daemonize.pid_file(pid_file).chown_pid_file(true);
         }
         try_fail!(daemonize.start(), "Failed to daemonize: {}");
+    } else if config.user.is_some() || config.group.is_some() {
+        info!("Dropping privileges");
+        let mut pd = privdrop::PrivDrop::default();
+        if let Some(user) = config.user {
+            pd = pd.user(user);
+        }
+        if let Some(group) = config.group {
+            pd = pd.group(group);
+        }
+        try_fail!(pd.apply(), "Failed to drop privileges: {}");
     }
     cloud.run();
     if let Some(script) = config.ifdown {

@@ -146,8 +146,7 @@ vpncloud(1) -- Peer-to-peer VPN
   * `--group <group>`:
 
     Change the user and/or group of the process once all the setup has been
-    done and before spawning the background process. This option is only used
-    when running in background.
+    done.
 
   * `--log-file <file>`:
 
