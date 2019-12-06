@@ -27,7 +27,8 @@ script:
   - |
       cargo build && cargo test
 after_success:
-  - cargo coveralls
+  - |
+      [ $TRAVIS_RUST_VERSION = stable ] && cargo coveralls
 env:
   global:
     - TRAVIS_CARGO_NIGHTLY_FEATURE=""
