@@ -256,11 +256,11 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             Err(err) => fail!("Failed to open ipv6 address ::{}: {}", config.port, err)
         };
         let now = TS::now();
-        let peer_timeout_publish = if socket4.detect_nat() {
-            info!("Private IP detected, setting published peer timeout to 300s");
-            300
+        let update_freq = if socket4.detect_nat() && config.get_keepalive() > 120 {
+            info!("Private IP detected, setting keepalive interval to 120s");
+            120
         } else {
-            config.peer_timeout as u16
+            config.get_keepalive() as u16
         };
         let mut res = GenericCloud {
             magic: config.get_magic(),
@@ -271,13 +271,13 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             broadcast,
             reconnect_peers: Vec::new(),
             own_addresses: Vec::new(),
-            peer_timeout_publish,
+            peer_timeout_publish: config.peer_timeout as u16,
             table,
             socket4,
             socket6,
             device,
             next_peerlist: now,
-            update_freq: config.get_keepalive() as u16,
+            update_freq,
             stats_file,
             buffer_out: [0; 64 * 1024],
             next_housekeep: now,
@@ -481,8 +481,8 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             let mut msg = Message::Peers(peers);
             self.broadcast_msg(&mut msg)?;
             // Reschedule for next update
-            self.update_freq = min(self.config.get_keepalive() as u16, self.peers.min_peer_timeout());
-            self.next_peerlist = now + Time::from(self.update_freq);
+            let interval = min(self.update_freq as u16, self.peers.min_peer_timeout());
+            self.next_peerlist = now + Time::from(interval);
         }
         // Connect to those reconnect_peers that are due
         for entry in self.reconnect_peers.clone() {
@@ -527,7 +527,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             // Write out the statistics
             self.write_out_stats().map_err(|err| Error::File("Failed to write stats file", err))?;
             self.next_stats_out = now + STATS_INTERVAL;
-            self.traffic.period(Some(60));
+            self.traffic.period(Some(5));
         }
         if let Some(peers) = self.beacon_serializer.get_cmd_results() {
             debug!("Loaded beacon with peers: {:?}", peers);

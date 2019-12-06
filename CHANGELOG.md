@@ -6,6 +6,7 @@ This project follows [semantic versioning](http://semver.org).
 
 - [changed] Also drop privileges in foreground mode
 - [changed] Set builders to Ubuntu 16.04 and CentOS 7
+- [changed] Set keepalive to 120 secs when NAT is detected
 - [fixed] Added parameter keepalive to manpage
 - [fixed] Fixed problems on stats file when dropping permissions
 
