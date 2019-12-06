@@ -33,9 +33,10 @@ pub mod udpmessage;
 use docopt::Docopt;
 
 use std::{
-    fs::File,
+    fs::{self, File, Permissions},
     io::{self, Write},
     net::UdpSocket,
+    os::unix::fs::PermissionsExt,
     path::Path,
     process::Command,
     str::FromStr,
@@ -166,7 +167,7 @@ impl<P: Protocol> AnyCloud<P> {
     #[allow(unknown_lints, clippy::too_many_arguments)]
     fn new(
         config: &Config, device: TunTapDevice, table: AnyTable, learning: bool, broadcast: bool, addresses: Vec<Range>,
-        crypto: Crypto, port_forwarding: Option<PortForwarding>
+        crypto: Crypto, port_forwarding: Option<PortForwarding>, stats_file: Option<File>
     ) -> Self
     {
         match table {
@@ -178,7 +179,15 @@ impl<P: Protocol> AnyCloud<P> {
                     UdpSocket,
                     SystemTimeSource
                 >::new(
-                    config, device, t, learning, broadcast, addresses, crypto, port_forwarding
+                    config,
+                    device,
+                    t,
+                    learning,
+                    broadcast,
+                    addresses,
+                    crypto,
+                    port_forwarding,
+                    stats_file
                 ))
             }
             AnyTable::Routing(t) => {
@@ -190,7 +199,8 @@ impl<P: Protocol> AnyCloud<P> {
                     broadcast,
                     addresses,
                     crypto,
-                    port_forwarding
+                    port_forwarding,
+                    stats_file
                 ))
             }
         }
@@ -256,7 +266,19 @@ fn run<P: Protocol>(config: Config) {
         None => Crypto::None
     };
     let port_forwarding = if config.port_forwarding { PortForwarding::new(config.port) } else { None };
-    let mut cloud = AnyCloud::<P>::new(&config, device, table, learning, broadcasting, ranges, crypto, port_forwarding);
+    let stats_file = match config.stats_file {
+        None => None,
+        Some(ref name) => {
+            let file = try_fail!(File::create(name), "Failed to create stats file: {}");
+            try_fail!(
+                fs::set_permissions(name, Permissions::from_mode(0o644)),
+                "Failed to set permissions on stats file: {}"
+            );
+            Some(file)
+        }
+    };
+    let mut cloud =
+        AnyCloud::<P>::new(&config, device, table, learning, broadcasting, ranges, crypto, port_forwarding, stats_file);
     if let Some(script) = config.ifup {
         run_script(&script, cloud.ifname());
     }

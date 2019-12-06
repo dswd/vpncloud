@@ -2,6 +2,13 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### Unreleased
+
+- [changed] Also drop privileges in foreground mode
+- [changed] Set builders to Ubuntu 16.04 and CentOS 7
+- [fixed] Added parameter keepalive to manpage
+- [fixed] Fixed problems on stats file when dropping permissions
+
 ### v1.1.0 (2019-12-04)
 
 - [added] Exchange peer timeout and adapt keepalive accordingly

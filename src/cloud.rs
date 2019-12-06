@@ -6,12 +6,11 @@ use std::{
     cmp::min,
     collections::HashMap,
     fmt,
-    fs::{self, File, Permissions},
+    fs::File,
     hash::BuildHasherDefault,
     io::{self, Write},
     marker::PhantomData,
-    net::{SocketAddr, ToSocketAddrs},
-    os::unix::fs::PermissionsExt
+    net::{SocketAddr, ToSocketAddrs}
 };
 
 use fnv::FnvHasher;
@@ -230,6 +229,7 @@ pub struct GenericCloud<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSou
     peer_timeout_publish: u16,
     update_freq: u16,
     buffer_out: [u8; 64 * 1024],
+    stats_file: Option<File>,
     next_housekeep: Time,
     next_stats_out: Time,
     next_beacon: Time,
@@ -244,7 +244,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: &Config, device: D, table: T, learning: bool, broadcast: bool, addresses: Vec<Range>, crypto: Crypto,
-        port_forwarding: Option<PortForwarding>
+        port_forwarding: Option<PortForwarding>, stats_file: Option<File>
     ) -> Self
     {
         let socket4 = match S::listen_v4("0.0.0.0", config.port) {
@@ -278,6 +278,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             device,
             next_peerlist: now,
             update_freq: config.get_keepalive() as u16,
+            stats_file,
             buffer_out: [0; 64 * 1024],
             next_housekeep: now,
             next_stats_out: now + STATS_INTERVAL,
@@ -586,18 +587,16 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
 
     /// Calculates, resets and writes out the statistics to a file
     fn write_out_stats(&mut self) -> Result<(), io::Error> {
-        if self.config.stats_file.is_none() {
-            return Ok(())
+        if let Some(ref mut f) = self.stats_file {
+            debug!("Writing out stats");
+            f.set_len(0)?;
+            self.peers.write_out(f)?;
+            writeln!(f)?;
+            self.table.write_out(f)?;
+            writeln!(f)?;
+            self.traffic.write_out(f)?;
+            writeln!(f)?;
         }
-        debug!("Writing out stats");
-        let mut f = File::create(self.config.stats_file.as_ref().unwrap())?;
-        self.peers.write_out(&mut f)?;
-        writeln!(&mut f)?;
-        self.table.write_out(&mut f)?;
-        writeln!(&mut f)?;
-        self.traffic.write_out(&mut f)?;
-        writeln!(&mut f)?;
-        fs::set_permissions(self.config.stats_file.as_ref().unwrap(), Permissions::from_mode(0o644))?;
         Ok(())
     }
 
