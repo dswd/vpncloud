@@ -80,6 +80,12 @@ vpncloud(1) -- Peer-to-peer VPN
     Peer timeout in seconds. The peers will exchange information periodically
     and drop peers that are silent for this period of time. [default: `1800`]
 
+  * `--keepalive <secs>`:
+
+    Interval of peer exchange messages in seconds. The peers will exchange 
+    information periodically to keep connections alive. This setting overrides
+    how often this will happen. [default: `peer-timeout/2-60`]  
+
   * `--dst-timeout <secs>`:
 
     Switch table entry timeout in seconds. This parameter is only used in switch
