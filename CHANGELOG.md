@@ -5,6 +5,7 @@ This project follows [semantic versioning](http://semver.org).
 ### Unreleased
 
 - [added] Added service restrictions to systemd
+- [changed] Rust version 1.40.0
 - [changed] Also drop privileges in foreground mode
 - [changed] Set builders to Ubuntu 16.04 and CentOS 7
 - [changed] Set keepalive to 120 secs when NAT is detected
