@@ -116,9 +116,12 @@ impl Crypto {
         for _ in 0..algo.nonce_len() {
             nonce.push(0);
         }
-        // leave the highest byte of the nonce 0 so it will not overflow
-        if SystemRandom::new().fill(&mut nonce[1..]).is_err() {
+        if SystemRandom::new().fill(&mut nonce).is_err() {
             fail!("Randomizing nonce failed");
+        }
+        // make sure the nonce will not overflow
+        if nonce[0] == 0xff {
+            nonce[0] = 0
         }
         let data = CryptoData { crypto_key, nonce, key };
         match method {
