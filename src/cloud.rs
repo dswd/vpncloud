@@ -6,11 +6,12 @@ use std::{
     cmp::min,
     collections::HashMap,
     fmt,
-    fs::File,
+    fs::{self, File},
     hash::BuildHasherDefault,
     io::{self, Write},
     marker::PhantomData,
-    net::{SocketAddr, ToSocketAddrs}
+    net::{SocketAddr, ToSocketAddrs},
+    path::Path
 };
 
 use fnv::FnvHasher;
@@ -826,6 +827,15 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         }
         info!("Shutting down...");
         self.broadcast_msg(&mut Message::Close).ok();
+        if let Some(ref path) = self.config.beacon_store {
+            let path = Path::new(path);
+            if path.exists() {
+                info!("Removing beacon file");
+                if let Err(e) = fs::remove_file(path) {
+                    error!("Failed to remove beacon file: {}", e)
+                }
+            }
+        }
     }
 }
 
