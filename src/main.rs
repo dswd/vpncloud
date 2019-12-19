@@ -103,6 +103,10 @@ struct DualLogger {
 impl DualLogger {
     pub fn new<P: AsRef<Path>>(path: Option<P>) -> Result<Self, io::Error> {
         if let Some(path) = path {
+            let path = path.as_ref();
+            if path.exists() {
+                fs::remove_file(path)?
+            }
             let file = File::create(path)?;
             Ok(DualLogger { file: Mutex::new(Some(file)) })
         } else {
@@ -269,6 +273,10 @@ fn run<P: Protocol>(config: Config) {
     let stats_file = match config.stats_file {
         None => None,
         Some(ref name) => {
+            let path = Path::new(name);
+            if path.exists() {
+                try_fail!(fs::remove_file(path), "Failed to remove file {}: {}", name);
+            }
             let file = try_fail!(File::create(name), "Failed to create stats file: {}");
             try_fail!(
                 fs::set_permissions(name, Permissions::from_mode(0o644)),

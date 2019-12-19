@@ -213,9 +213,13 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
     pub fn write_to_file<P: AsRef<Path>>(&self, peers: &[SocketAddr], path: P) -> Result<(), io::Error> {
         let beacon = self.encode(peers);
         debug!("Beacon: {}", beacon);
-        let mut f = File::create(&path)?;
+        let path = path.as_ref();
+        if path.exists() {
+            fs::remove_file(path)?
+        }
+        let mut f = File::create(path)?;
         writeln!(&mut f, "{}", beacon)?;
-        fs::set_permissions(&path, Permissions::from_mode(0o644))?;
+        fs::set_permissions(path, Permissions::from_mode(0o444))?;
         Ok(())
     }
 

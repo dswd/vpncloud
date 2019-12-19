@@ -10,6 +10,7 @@ This project follows [semantic versioning](http://semver.org).
 - [changed] Set keepalive to 120 secs when NAT is detected
 - [fixed] Added parameter keepalive to manpage
 - [fixed] Fixed problems on stats file when dropping permissions
+- [fixed] Deleting files before overwriting them
 
 ### v1.1.0 (2019-12-04)
 
