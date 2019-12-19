@@ -12,6 +12,7 @@ This project follows [semantic versioning](http://semver.org).
 - [fixed] Added parameter keepalive to manpage
 - [fixed] Fixed problems on stats file when dropping permissions
 - [fixed] Deleting files before overwriting them
+- [fixed] Fixed duplicate port bindings
 
 ### v1.1.0 (2019-12-04)
 
