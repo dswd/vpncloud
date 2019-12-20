@@ -149,6 +149,7 @@ fn create_test_node() -> TestNode {
         true,
         vec![],
         Crypto::None,
+        None,
         None
     )
 }
