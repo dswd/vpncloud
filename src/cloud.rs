@@ -445,7 +445,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         debug!("Connecting to {:?}", addr);
         let subnets = self.addresses.clone();
         let node_id = self.node_id;
-        let mut msg = Message::Init(0, node_id, subnets.clone(), self.peer_timeout_publish);
+        let mut msg = Message::Init(0, node_id, subnets, self.peer_timeout_publish);
         self.send_msg(addr, &mut msg)
     }
 

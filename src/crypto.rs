@@ -171,9 +171,7 @@ fn encrypt_decrypt_chacha20poly1305() {
     let msg_bytes = msg.as_bytes();
     let mut buffer = [0u8; 1024];
     let header = [0u8; 8];
-    for i in 0..msg_bytes.len() {
-        buffer[i] = msg_bytes[i];
-    }
+    buffer[..msg_bytes.len()].clone_from_slice(&msg_bytes);
     let mut nonce1 = [0u8; 12];
     let size = sender.encrypt(&mut buffer, msg_bytes.len(), &mut nonce1, &header);
     assert_eq!(size, msg_bytes.len() + sender.additional_bytes());
@@ -195,9 +193,7 @@ fn encrypt_decrypt_aes256() {
     let msg_bytes = msg.as_bytes();
     let mut buffer = [0u8; 1024];
     let header = [0u8; 8];
-    for i in 0..msg_bytes.len() {
-        buffer[i] = msg_bytes[i];
-    }
+    buffer[..msg_bytes.len()].clone_from_slice(&msg_bytes);
     let mut nonce1 = [0u8; 12];
     let size = sender.encrypt(&mut buffer, msg_bytes.len(), &mut nonce1, &header);
     assert_eq!(size, msg_bytes.len() + sender.additional_bytes());

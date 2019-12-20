@@ -59,7 +59,7 @@ use crate::{
 const VERSION: u8 = 1;
 const MAGIC: HeaderMagic = *b"vpn\x01";
 
-static USAGE: &'static str = include_str!("usage.txt");
+static USAGE: &str = include_str!("usage.txt");
 
 
 #[derive(Deserialize, Debug, Default)]
@@ -240,6 +240,7 @@ impl<P: Protocol> AnyCloud<P> {
 }
 
 
+#[allow(clippy::cognitive_complexity)]
 fn run<P: Protocol>(config: Config) {
     let device = try_fail!(
         TunTapDevice::new(&config.device_name, config.device_type, config.device_path.as_ref().map(|s| s as &str)),

@@ -254,9 +254,9 @@ impl TimeSource for MockTimeSource {
 /// Helper function that multiplies the base62 data in buf[0..buflen] by 16 and adds m to it
 fn base62_add_mult_16(buf: &mut [u8], mut buflen: usize, m: u8) -> usize {
     let mut d: usize = m as usize;
-    for i in 0..buflen {
-        d += buf[i] as usize * 16;
-        buf[i] = (d % 62) as u8;
+    for item in buf.iter_mut().take(buflen) {
+        d += *item as usize * 16;
+        *item = (d % 62) as u8;
         d /= 62;
     }
     assert!(d < 62);
@@ -298,9 +298,9 @@ pub fn from_base62(data: &str) -> Result<Vec<u8>, char> {
             'a'..='z' => ((c as usize) % ('a' as usize)) + 36,
             _ => return Err(c)
         };
-        for i in 0..buf.len() {
-            val += buf[i] as usize * 62;
-            buf[i] = (val % 256) as u8;
+        for item in &mut buf {
+            val += *item as usize * 62;
+            *item = (val % 256) as u8;
             val /= 256;
         }
         if val > 0 {

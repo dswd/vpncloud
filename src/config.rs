@@ -447,7 +447,6 @@ fn config_merge() {
         group: Some("root".to_string()),
         pid_file: Some("/run/vpncloud-mynet.run".to_string()),
         stats_file: Some("/var/log/vpncloud-mynet.stats".to_string()),
-        daemonize: true,
-        ..Default::default()
+        daemonize: true
     });
 }

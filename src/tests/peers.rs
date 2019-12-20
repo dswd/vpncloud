@@ -5,6 +5,7 @@
 use super::*;
 
 #[test]
+#[allow(clippy::cognitive_complexity)]
 fn connect_v4() {
     let mut node1 = create_tap_node(false);
     let node1_addr = addr!("1.2.3.4:5678");
@@ -56,6 +57,7 @@ fn connect_v6() {
 }
 
 #[test]
+#[allow(clippy::cognitive_complexity)]
 fn cross_connect() {
     let mut node1 = create_tap_node(false);
     let node1_addr = addr!("1.1.1.1:1111");

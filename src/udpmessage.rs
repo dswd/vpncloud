@@ -190,11 +190,7 @@ pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &Crypto) -> Re
                 pos += read;
                 addrs.push(range);
             }
-            let mut peer_timeout = 1800;
-            if data.len() >= pos + 2 {
-                peer_timeout = Encoder::read_u16(&data[pos..]);
-                // pos += 2; never read
-            }
+            let peer_timeout = if data.len() >= pos + 2 { Encoder::read_u16(&data[pos..]) } else { 1800 };
             Message::Init(stage, node_id, addrs, peer_timeout)
         }
         3 => Message::Close,
@@ -353,12 +349,10 @@ fn udpmessage_packet() {
         let res = encode(&mut msg, &mut [], MAGIC, &mut crypto);
         assert_eq!(res.len(), 13);
         assert_eq!(&res[..8], &[118, 112, 110, 1, 0, 0, 0, 0]);
-        for i in 0..res.len() {
-            buf[i] = res[i];
-        }
+        buf[..res.len()].clone_from_slice(&res);
         len = res.len();
     }
-    let msg2 = decode(&mut buf[..len], MAGIC, &mut crypto).unwrap();
+    let msg2 = decode(&mut buf[..len], MAGIC, &crypto).unwrap();
     assert_eq!(msg, msg2);
 }
 
@@ -373,9 +367,7 @@ fn udpmessage_encrypted() {
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     ];
     let mut orig_payload = [0; 133];
-    for i in 0..payload.len() {
-        orig_payload[i] = payload[i];
-    }
+    orig_payload[..payload.len()].clone_from_slice(&payload);
     let orig_msg = Message::Data(&mut orig_payload, 64, 69);
     let mut msg = Message::Data(&mut payload, 64, 69);
     let mut buf = [0; 1024];
@@ -384,12 +376,10 @@ fn udpmessage_encrypted() {
         let res = encode(&mut msg, &mut [], MAGIC, &mut crypto);
         assert_eq!(res.len(), 41);
         assert_eq!(&res[..8], &[118, 112, 110, 1, 1, 0, 0, 0]);
-        for i in 0..res.len() {
-            buf[i] = res[i];
-        }
+        buf[..res.len()].clone_from_slice(&res);
         len = res.len();
     }
-    let msg2 = decode(&mut buf[..len], MAGIC, &mut crypto).unwrap();
+    let msg2 = decode(&mut buf[..len], MAGIC, &crypto).unwrap();
     assert_eq!(orig_msg, msg2);
 }
 
@@ -414,16 +404,16 @@ fn udpmessage_peers() {
             assert_eq!(res[i], should[i]);
         }
     }
-    let msg2 = decode(&mut should, MAGIC, &mut crypto).unwrap();
+    let msg2 = decode(&mut should, MAGIC, &crypto).unwrap();
     assert_eq!(msg, msg2);
     // Missing IPv4 count
-    assert!(decode(&mut [118, 112, 110, 1, 0, 0, 0, 1], MAGIC, &mut crypto).is_err());
+    assert!(decode(&mut [118, 112, 110, 1, 0, 0, 0, 1], MAGIC, &crypto).is_err());
     // Truncated IPv4
-    assert!(decode(&mut [118, 112, 110, 1, 0, 0, 0, 1, 1], MAGIC, &mut crypto).is_err());
+    assert!(decode(&mut [118, 112, 110, 1, 0, 0, 0, 1, 1], MAGIC, &crypto).is_err());
     // Missing IPv6 count
-    assert!(decode(&mut [118, 112, 110, 1, 0, 0, 0, 1, 1, 1, 2, 3, 4, 0, 0], MAGIC, &mut crypto).is_err());
+    assert!(decode(&mut [118, 112, 110, 1, 0, 0, 0, 1, 1, 1, 2, 3, 4, 0, 0], MAGIC, &crypto).is_err());
     // Truncated IPv6
-    assert!(decode(&mut [118, 112, 110, 1, 0, 0, 0, 1, 1, 1, 2, 3, 4, 0, 0, 1], MAGIC, &mut crypto).is_err());
+    assert!(decode(&mut [118, 112, 110, 1, 0, 0, 0, 1, 1, 1, 2, 3, 4, 0, 0, 1], MAGIC, &crypto).is_err());
 }
 
 #[test]
@@ -448,7 +438,7 @@ fn udpmessage_init() {
             assert_eq!(res[i], should[i]);
         }
     }
-    let msg2 = decode(&mut should, MAGIC, &mut crypto).unwrap();
+    let msg2 = decode(&mut should, MAGIC, &crypto).unwrap();
     assert_eq!(msg, msg2);
 }
 
@@ -463,31 +453,31 @@ fn udpmessage_close() {
         assert_eq!(res.len(), 8);
         assert_eq!(&res, &should);
     }
-    let msg2 = decode(&mut should, MAGIC, &mut crypto).unwrap();
+    let msg2 = decode(&mut should, MAGIC, &crypto).unwrap();
     assert_eq!(msg, msg2);
 }
 
 #[test]
 fn udpmessage_invalid() {
-    let mut crypto = Crypto::None;
-    assert!(decode(&mut [0x76, 0x70, 0x6e, 1, 0, 0, 0, 0], MAGIC, &mut crypto).is_ok());
+    let crypto = Crypto::None;
+    assert!(decode(&mut [0x76, 0x70, 0x6e, 1, 0, 0, 0, 0], MAGIC, &crypto).is_ok());
     // too short
-    assert!(decode(&mut [], MAGIC, &mut crypto).is_err());
+    assert!(decode(&mut [], MAGIC, &crypto).is_err());
     // invalid protocol
-    assert!(decode(&mut [0, 1, 2, 0, 0, 0, 0, 0], MAGIC, &mut crypto).is_err());
+    assert!(decode(&mut [0, 1, 2, 0, 0, 0, 0, 0], MAGIC, &crypto).is_err());
     // invalid version
-    assert!(decode(&mut [0x76, 0x70, 0x6e, 0xaa, 0, 0, 0, 0], MAGIC, &mut crypto).is_err());
+    assert!(decode(&mut [0x76, 0x70, 0x6e, 0xaa, 0, 0, 0, 0], MAGIC, &crypto).is_err());
     // invalid crypto
-    assert!(decode(&mut [0x76, 0x70, 0x6e, 1, 0xaa, 0, 0, 0], MAGIC, &mut crypto).is_err());
+    assert!(decode(&mut [0x76, 0x70, 0x6e, 1, 0xaa, 0, 0, 0], MAGIC, &crypto).is_err());
     // invalid msg type
-    assert!(decode(&mut [0x76, 0x70, 0x6e, 1, 0, 0, 0, 0xaa], MAGIC, &mut crypto).is_err());
+    assert!(decode(&mut [0x76, 0x70, 0x6e, 1, 0, 0, 0, 0xaa], MAGIC, &crypto).is_err());
 }
 
 #[test]
 fn udpmessage_invalid_crypto() {
-    let mut crypto = Crypto::from_shared_key(CryptoMethod::ChaCha20, "test");
+    let crypto = Crypto::from_shared_key(CryptoMethod::ChaCha20, "test");
     // truncated crypto
-    assert!(decode(&mut [0x76, 0x70, 0x6e, 1, 1, 0, 0, 0], MAGIC, &mut crypto).is_err());
+    assert!(decode(&mut [0x76, 0x70, 0x6e, 1, 1, 0, 0, 0], MAGIC, &crypto).is_err());
 }
 
 #[test]

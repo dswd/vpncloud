@@ -60,6 +60,7 @@ fn connect_nat_3_peers() {
 }
 
 #[test]
+#[allow(clippy::cognitive_complexity)]
 fn nat_keepalive() {
     init_debug_logger();
     MockTimeSource::set_time(0);
