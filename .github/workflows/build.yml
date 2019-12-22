@@ -9,6 +9,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
+    - name: Install latest nightly
+      run: rustup toolchain install 1.40.0
+    - name: Set default toolchain
+      run: rustup default 1.40.0
     - name: Build
       run: cargo build --verbose
     - name: Run tests
