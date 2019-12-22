@@ -24,7 +24,7 @@ rand = "0.7"
 fnv = "1"
 net2 = "0.2"
 yaml-rust = "0.4"
-igd = "0.9"
+igd = { version = "0.9", optional = true }
 siphasher = "0.3"
 daemonize = "0.4"
 ring = "0.16"
@@ -38,8 +38,9 @@ pkg-config = "0.3"
 tempfile = "3"
 
 [features]
-default = []
+default = ["nat"]
 bench = []
+nat = ["igd"]
 
 [profile.release]
 lto = true

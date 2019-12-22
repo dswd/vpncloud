@@ -4,6 +4,7 @@ This project follows [semantic versioning](http://semver.org).
 
 ### Unreleased
 
+- [added] Added feature to disable special NAT support
 - [changed] Improved port forwarding on quirky routers
 - [changed] Reduced peer timeout to 5min to work better with NAT
 
