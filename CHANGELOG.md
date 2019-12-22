@@ -2,6 +2,11 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### Unreleased
+
+- [changed] Improved port forwarding on quirky routers
+
+
 ### v1.2.1 (2019-12-22)
 
 - [fixed] Fixed a problem with service restrictions
