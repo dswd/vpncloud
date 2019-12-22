@@ -1,6 +1,6 @@
 [package]
 name = "vpncloud"
-version = "1.2.0"
+version = "1.2.1"
 authors = ["Dennis Schwerdel <schwerdel@googlemail.com>"]
 build = "build.rs"
 license = "GPL-3.0"

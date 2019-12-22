@@ -1,3 +1,9 @@
+vpncloud (1.2.1) stable; urgency=medium
+
+  * [fixed] Fixed a problem with service restrictions
+
+ -- Dennis Schwerdel <schwerdel@googlemail.com>  Sun, 22 Dec 2019 16:47:38 +0100
+
 vpncloud (1.2.0) stable; urgency=medium
 
   * [added] Added service restrictions to systemd

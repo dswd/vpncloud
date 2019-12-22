@@ -556,7 +556,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "vpncloud"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "cc 1.0.48 (registry+https://github.com/rust-lang/crates.io-index)",
  "daemonize 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",

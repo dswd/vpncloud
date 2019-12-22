@@ -2,6 +2,10 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### v1.2.1 (2019-12-22)
+
+- [fixed] Fixed a problem with service restrictions
+
 ### v1.2.0 (2019-12-20)
 
 - [added] Added service restrictions to systemd
