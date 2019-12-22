@@ -18,24 +18,24 @@ fn connect_v4() {
     node1.connect("2.3.4.5:6789").unwrap();
 
     // Node 1 -> Node 2: Init 0
-    assert_message4!(node1, node1_addr, node2, node2_addr, Message::Init(0, node1.node_id(), vec![], 1800));
+    assert_message4!(node1, node1_addr, node2, node2_addr, Message::Init(0, node1.node_id(), vec![], 600));
     assert_clean!(node1);
     assert!(node2.peers().contains_node(&node1.node_id()));
 
     // Node 2 -> Node 1: Init 1 | Node 2 -> Node 1: Peers
-    assert_message4!(node2, node2_addr, node1, node1_addr, Message::Init(1, node2.node_id(), vec![], 1800));
+    assert_message4!(node2, node2_addr, node1, node1_addr, Message::Init(1, node2.node_id(), vec![], 600));
     assert!(node1.peers().contains_node(&node2.node_id()));
     assert_message4!(node2, node2_addr, node1, node1_addr, Message::Peers(vec![node1_addr]));
     assert_clean!(node2);
 
     // Node 1 -> Node 2: Peers | Node 1 -> Node 1: Init 0
     assert_message4!(node1, node1_addr, node2, node2_addr, Message::Peers(vec![node2_addr]));
-    assert_message4!(node1, node1_addr, node1, node1_addr, Message::Init(0, node1.node_id(), vec![], 1800));
+    assert_message4!(node1, node1_addr, node1, node1_addr, Message::Init(0, node1.node_id(), vec![], 600));
     assert!(node1.own_addresses().contains(&node1_addr));
     assert_clean!(node1);
 
     // Node 2 -> Node 2: Init 0
-    assert_message4!(node2, node2_addr, node2, node2_addr, Message::Init(0, node2.node_id(), vec![], 1800));
+    assert_message4!(node2, node2_addr, node2, node2_addr, Message::Init(0, node2.node_id(), vec![], 600));
     assert_clean!(node2);
     assert!(node2.own_addresses().contains(&node2_addr));
 
@@ -158,7 +158,7 @@ fn lost_init1() {
     node1.connect("2.3.4.5:6789").unwrap();
 
     // Node 1 -> Node 2: Init 0
-    assert_message4!(node1, node1_addr, node2, node2_addr, Message::Init(0, node1.node_id(), vec![], 1800));
+    assert_message4!(node1, node1_addr, node2, node2_addr, Message::Init(0, node1.node_id(), vec![], 600));
     assert_clean!(node1);
 
     // Node 2 -> Node 1: Init 1 | Node 2 -> Node 1: Peers
@@ -179,7 +179,7 @@ fn wrong_magic() {
     let node2_addr = addr!("2.3.4.5:6789");
     node1.connect("2.3.4.5:6789").unwrap();
 
-    assert_message4!(node1, node1_addr, node2, node2_addr, Message::Init(0, node1.node_id(), vec![], 1800));
+    assert_message4!(node1, node1_addr, node2, node2_addr, Message::Init(0, node1.node_id(), vec![], 600));
 
     assert_clean!(node1, node2);
 

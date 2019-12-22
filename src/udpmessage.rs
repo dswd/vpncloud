@@ -8,6 +8,7 @@ use std::{
 };
 
 use super::{
+    config::DEFAULT_PEER_TIMEOUT,
     crypto::Crypto,
     types::{Error, HeaderMagic, NodeId, Range, NODE_ID_BYTES},
     util::{bytes_to_hex, Encoder}
@@ -190,7 +191,8 @@ pub fn decode<'a>(data: &'a mut [u8], magic: HeaderMagic, crypto: &Crypto) -> Re
                 pos += read;
                 addrs.push(range);
             }
-            let peer_timeout = if data.len() >= pos + 2 { Encoder::read_u16(&data[pos..]) } else { 1800 };
+            let peer_timeout =
+                if data.len() >= pos + 2 { Encoder::read_u16(&data[pos..]) } else { DEFAULT_PEER_TIMEOUT };
             Message::Init(stage, node_id, addrs, peer_timeout)
         }
         3 => Message::Close,

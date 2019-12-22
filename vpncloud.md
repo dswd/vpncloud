@@ -78,7 +78,7 @@ vpncloud(1) -- Peer-to-peer VPN
   * `--peer-timeout <secs>`:
 
     Peer timeout in seconds. The peers will exchange information periodically
-    and drop peers that are silent for this period of time. [default: `1800`]
+    and drop peers that are silent for this period of time. [default: `600`]
 
   * `--keepalive <secs>`:
 
@@ -338,7 +338,7 @@ port: 3210
 peers:
   - remote.machine.foo:3210
   - remote.machine.bar:3210
-peer_timeout: 1800
+peer_timeout: 600
 mode: normal
 subnets:
   - 10.0.1.0/24

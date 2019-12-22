@@ -19,7 +19,7 @@ use rand::{prelude::*, random, thread_rng};
 
 use super::{
     beacon::BeaconSerializer,
-    config::Config,
+    config::{Config, DEFAULT_PEER_TIMEOUT},
     crypto::Crypto,
     device::Device,
     net::Socket,
@@ -86,7 +86,7 @@ impl<TS: TimeSource> PeerList<TS> {
     }
 
     pub fn min_peer_timeout(&self) -> u16 {
-        self.peers.iter().map(|p| p.1.peer_timeout).min().unwrap_or(1800)
+        self.peers.iter().map(|p| p.1.peer_timeout).min().unwrap_or(DEFAULT_PEER_TIMEOUT)
     }
 
     #[inline]
@@ -257,12 +257,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             Err(err) => fail!("Failed to open ipv6 address ::{}: {}", config.port, err)
         };
         let now = TS::now();
-        let update_freq = if socket4.detect_nat() && config.get_keepalive() > 120 {
-            info!("Private IP detected, setting keepalive interval to 120s");
-            120
-        } else {
-            config.get_keepalive() as u16
-        };
+        let update_freq = config.get_keepalive() as u16;
         let mut res = GenericCloud {
             magic: config.get_magic(),
             node_id: random(),

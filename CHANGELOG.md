@@ -5,7 +5,7 @@ This project follows [semantic versioning](http://semver.org).
 ### Unreleased
 
 - [changed] Improved port forwarding on quirky routers
-
+- [changed] Reduced peer timeout to 5min to work better with NAT
 
 ### v1.2.1 (2019-12-22)
 

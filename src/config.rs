@@ -16,6 +16,7 @@ use std::hash::{Hash, Hasher};
 
 
 const HASH_PREFIX: &str = "hash:";
+pub const DEFAULT_PEER_TIMEOUT: u16 = 600;
 
 
 #[derive(Deserialize, Debug, PartialEq, Clone)]
@@ -59,7 +60,7 @@ impl Default for Config {
             magic: None,
             port: 3210,
             peers: vec![],
-            peer_timeout: 1800,
+            peer_timeout: DEFAULT_PEER_TIMEOUT as Duration,
             keepalive: None,
             beacon_store: None,
             beacon_load: None,
@@ -296,7 +297,7 @@ port: 3210
 peers:
   - remote.machine.foo:3210
   - remote.machine.bar:3210
-peer_timeout: 1800
+peer_timeout: 600
 keepalive: 840
 dst_timeout: 300
 beacon_store: /run/vpncloud.beacon.out
@@ -322,7 +323,7 @@ stats_file: /var/log/vpncloud.stats
         magic: Some("0123ABCD".to_string()),
         port: Some(3210),
         peers: Some(vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()]),
-        peer_timeout: Some(1800),
+        peer_timeout: Some(600),
         keepalive: Some(840),
         beacon_store: Some("/run/vpncloud.beacon.out".to_string()),
         beacon_load: Some("/run/vpncloud.beacon.in".to_string()),
@@ -352,7 +353,7 @@ fn config_merge() {
         magic: Some("0123ABCD".to_string()),
         port: Some(3210),
         peers: Some(vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()]),
-        peer_timeout: Some(1800),
+        peer_timeout: Some(600),
         keepalive: Some(840),
         beacon_store: Some("/run/vpncloud.beacon.out".to_string()),
         beacon_load: Some("/run/vpncloud.beacon.in".to_string()),
@@ -377,7 +378,7 @@ fn config_merge() {
         shared_key: Some("mysecret".to_string()),
         port: 3210,
         peers: vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()],
-        peer_timeout: 1800,
+        peer_timeout: 600,
         keepalive: Some(840),
         dst_timeout: 300,
         beacon_store: Some("/run/vpncloud.beacon.out".to_string()),
