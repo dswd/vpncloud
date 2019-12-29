@@ -7,6 +7,7 @@ This project follows [semantic versioning](http://semver.org).
 - [added] Added feature to disable special NAT support
 - [changed] Improved port forwarding on quirky routers
 - [changed] Reduced peer timeout to 5min to work better with NAT
+- [fixed] Fixed problem with growing stats file
 
 ### v1.2.1 (2019-12-22)
 

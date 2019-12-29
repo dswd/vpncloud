@@ -8,7 +8,7 @@ use std::{
     fmt,
     fs::{self, File},
     hash::BuildHasherDefault,
-    io::{self, Write},
+    io::{self, Seek, SeekFrom, Write},
     marker::PhantomData,
     net::{SocketAddr, ToSocketAddrs},
     path::Path
@@ -585,6 +585,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     fn write_out_stats(&mut self) -> Result<(), io::Error> {
         if let Some(ref mut f) = self.stats_file {
             debug!("Writing out stats");
+            f.seek(SeekFrom::Start(0))?;
             f.set_len(0)?;
             self.peers.write_out(f)?;
             writeln!(f)?;
