@@ -31,6 +31,10 @@ cp ../target/debian/vpncloud_${VERSION}_amd64.deb ../dist/vpncloud_${VERSION}_am
 docker_cmd deb 'cd code && cargo deb --target armv7-unknown-linux-gnueabihf'
 cp ../target/armv7-unknown-linux-gnueabihf/debian/vpncloud_${VERSION}_armhf.deb ../dist/vpncloud_${VERSION}_armhf.deb
 
+# aarch64 deb
+docker_cmd deb 'cd code && cargo deb --target aarch64-unknown-linux-gnu'
+cp ../target/aarch64-unknown-linux-gnu/debian/vpncloud_${VERSION}_arm64.deb ../dist/vpncloud_${VERSION}_arm64.deb
+
 
 docker build --rm -f=Dockerfile-rpm -t vpncloud-builder-rpm .
 

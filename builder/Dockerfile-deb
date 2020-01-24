@@ -2,7 +2,13 @@ FROM ubuntu:16.04
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-    curl ruby-ronn build-essential gcc-arm-linux-gnueabihf libc6-dev-armhf-cross \
+    build-essential \
+    curl \
+    gcc-aarch64-linux-gnu \
+    gcc-arm-linux-gnueabihf \
+    libc6-dev-arm64-cross \
+    libc6-dev-armhf-cross \
+    ruby-ronn \
  && rm -rf /var/cache/dpkg
 
 RUN useradd -ms /bin/bash user
@@ -16,7 +22,8 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain ${RUST}
 ENV PATH=/home/user/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 RUN rustup target add i686-unknown-linux-gnu \
- && rustup target add armv7-unknown-linux-gnueabihf
+ && rustup target add armv7-unknown-linux-gnueabihf \
+ && rustup target add aarch64-unknown-linux-gnu
 
 RUN cargo install cargo-deb \
  && rm -rf /home/user/.cargo/{git,tmp,registry}
