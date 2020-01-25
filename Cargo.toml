@@ -1,6 +1,6 @@
 [package]
 name = "vpncloud"
-version = "1.2.1"
+version = "1.3.0"
 authors = ["Dennis Schwerdel <schwerdel@googlemail.com>"]
 build = "build.rs"
 license = "GPL-3.0"
@@ -24,7 +24,7 @@ rand = "0.7"
 fnv = "1"
 net2 = "0.2"
 yaml-rust = "0.4"
-igd = { version = "0.9", optional = true }
+igd = { version = "0.10", optional = true }
 siphasher = "0.3"
 daemonize = "0.4"
 ring = "0.16"

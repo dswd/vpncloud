@@ -2,11 +2,14 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### Unreleased
+### v1.3.0 (2020-01-25)
 
+- [added] Building for aarch64 aka arm64 (thanks to Ivan)
 - [added] Added feature to disable special NAT support
 - [changed] Improved port forwarding on quirky routers
 - [changed] Reduced peer timeout to 5min to work better with NAT
+- [changed] Improved builder scripts
+- [changed] Updated dependencies
 - [fixed] Fixed problem with growing stats file
 
 ### v1.2.1 (2019-12-22)
