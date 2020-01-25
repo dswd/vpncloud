@@ -4,10 +4,7 @@
 
 extern crate cc;
 
-use std::process::Command;
-use std::env;
-use std::path::Path;
-use std::fs;
+use std::{env, fs, path::Path, process::Command};
 
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
@@ -23,7 +20,7 @@ fn main() {
         Ok(_) => {
             Command::new("gzip").args(&["vpncloud.1"]).current_dir(&Path::new(&out_dir)).status().unwrap();
             fs::copy(Path::new(&out_dir).join("vpncloud.1.gz"), "target/vpncloud.1.gz").unwrap();
-        }, 
+        }
         Err(err) => {
             println!("cargo:warning=Error building manpage: {}", err);
             println!("cargo:warning=The manpage will not be build. Do you have 'ronn'?");
