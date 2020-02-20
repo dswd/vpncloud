@@ -31,7 +31,7 @@ mod internal {
                     if let SearchError::IoError(ref err) = err {
                         if err.kind() == io::ErrorKind::WouldBlock {
                             // Why this code?
-                            warn!("Port-forwarding: no router found");
+                            info!("Port-forwarding: no router found");
                             return None
                         }
                     }
