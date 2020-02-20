@@ -705,8 +705,12 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                     self.peers.make_primary(node_id, peer);
                 } else {
                     self.peers.add(node_id, peer, peer_timeout);
-                    for range in ranges {
-                        self.table.learn(range.base, Some(range.prefix_len), peer);
+                    if self.learning && !ranges.is_empty() {
+                        warn!("Ignoring claimed addresses received from {} in learning mode.", peer);
+                    } else {
+                        for range in ranges {
+                            self.table.learn(range.base, Some(range.prefix_len), peer);
+                        }
                     }
                 }
                 // Reply with stage=1 if stage is 0

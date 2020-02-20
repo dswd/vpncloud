@@ -22,7 +22,6 @@ signal = "0.7"
 libc = "0.2"
 rand = "0.7"
 fnv = "1"
-net2 = "0.2"
 yaml-rust = "0.4"
 igd = { version = "0.10", optional = true }
 siphasher = "0.3"
@@ -60,6 +59,7 @@ extended-description = """\
 license-file = ["LICENSE.md", "1"]
 changelog = "assets/changelog.txt"
 section = "net"
+depends = "libc6 (>= 2.23), libgcc1 (>= 1:6.0.1)"
 assets = [
   ["target/release/vpncloud", "/usr/bin/vpncloud", "755"],
   ["assets/example.net.disabled", "/etc/vpncloud/example.net.disabled", "600"],

@@ -29,6 +29,10 @@ docker build --rm -f=Dockerfile-deb -t vpncloud-builder-deb .
 docker_cmd deb 'cd code && cargo deb'
 cp $CACHE/deb/target/debian/vpncloud_${VERSION}_amd64.deb ../dist/vpncloud_${VERSION}_amd64.deb
 
+# i386 deb
+docker_cmd deb 'cd code && cargo deb --target i686-unknown-linux-gnu'
+cp $CACHE/deb/target/i686-unknown-linux-gnu/debian/vpncloud_${VERSION}_i386.deb ../dist/vpncloud_${VERSION}_i386.deb
+
 # arm7hf deb
 docker_cmd deb 'cd code && cargo deb --target armv7-unknown-linux-gnueabihf'
 cp $CACHE/deb/target/armv7-unknown-linux-gnueabihf/debian/vpncloud_${VERSION}_armhf.deb ../dist/vpncloud_${VERSION}_armhf.deb

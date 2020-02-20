@@ -6,6 +6,10 @@ This project follows [semantic versioning](http://semver.org).
 
 - [added] Added option to listen on specified IP
 - [changed] No longer using two sockets for ipv4 and ipv6
+- [changed] Warning for missing router is now info
+- [changed] New warning on claimed addresses in learning mode
+- [changed] Updated dependencies
+
 
 ### v1.3.0 (2020-01-25)
 
