@@ -38,9 +38,12 @@ vpncloud(1) -- Peer-to-peer VPN
     peers and ignore them otherwise. The **normal** mode is switch for tap
     devices and router for tun devices. [default: `normal`]
 
-  * `-l <port>`, `--listen <port>`:
+  * `-l <addr>`, `--listen <addr>`:
 
-    The port number on which to listen for data. [default: `3210`]
+    The address on which to listen for data. This can be simply a port number
+    or a full address in form IP:PORT. If the IP is specified as '*' or only
+    a port number is given, then the socket will listen on all IPs (v4 and v6),
+    otherwise the socket will only listen on the given IP. [default: `3210`]
 
   * `-c <addr>`, `--connect <addr>`:
 
@@ -311,7 +314,8 @@ detailed descriptions of the options.
 * `crypto`: The encryption method to use. Same as `--crypto`
 * `shared_key`: The shared key to encrypt all traffic. Same as `--shared-key`
 * `magic`: Override the 4-byte magic header of each packet. Same as `--magic`
-* `port`: The port number on which to listen for data. Same as `--listen`
+* `port`: A port number to listen on. This option is DEPRECATED.
+* `listen`: The address on which to listen for data. Same as `--listen`
 * `peers`: A list of addresses to connect to. See `--connect`
 * `peer_timeout`: Peer timeout in seconds. Same as`--peer-timeout`
 * `beacon_store`: Path or command to store beacons. Same as `--beacon-store`
@@ -334,7 +338,7 @@ device_name: vpncloud%d
 ifup: ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up
 crypto: aes256
 shared_key: mysecret
-port: 3210
+listen: 3210
 peers:
   - remote.machine.foo:3210
   - remote.machine.bar:3210

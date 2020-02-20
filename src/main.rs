@@ -72,7 +72,7 @@ pub struct Args {
     flag_crypto: Option<CryptoMethod>,
     flag_subnet: Vec<String>,
     flag_device: Option<String>,
-    flag_listen: Option<u16>,
+    flag_listen: Option<String>,
     flag_network_id: Option<String>,
     flag_magic: Option<String>,
     flag_connect: Vec<String>,
@@ -270,7 +270,7 @@ fn run<P: Protocol>(config: Config) {
         Some(ref key) => Crypto::from_shared_key(config.crypto, key),
         None => Crypto::None
     };
-    let port_forwarding = if config.port_forwarding { PortForwarding::new(config.port) } else { None };
+    let port_forwarding = if config.port_forwarding { PortForwarding::new(config.listen.port()) } else { None };
     let stats_file = match config.stats_file {
         None => None,
         Some(ref name) => {

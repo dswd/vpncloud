@@ -12,12 +12,27 @@ use super::{
 };
 
 use siphasher::sip::SipHasher24;
-use std::hash::{Hash, Hasher};
+use std::{
+    hash::{Hash, Hasher},
+    net::{IpAddr, Ipv6Addr, SocketAddr}
+};
 
 
 const HASH_PREFIX: &str = "hash:";
 pub const DEFAULT_PEER_TIMEOUT: u16 = 600;
 
+
+fn parse_listen(addr: &str) -> SocketAddr {
+    if addr.starts_with("*:") {
+        let port = try_fail!(addr[2..].parse::<u16>(), "Invalid port: {}");
+        SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
+    } else if addr.contains(':') {
+        try_fail!(addr.parse::<SocketAddr>(), "Invalid address: {}: {}", addr)
+    } else {
+        let port = try_fail!(addr.parse::<u16>(), "Invalid port: {}");
+        SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
+    }
+}
 
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Config {
@@ -29,7 +44,7 @@ pub struct Config {
     pub crypto: CryptoMethod,
     pub shared_key: Option<String>,
     pub magic: Option<String>,
-    pub port: u16,
+    pub listen: SocketAddr,
     pub peers: Vec<String>,
     pub peer_timeout: Duration,
     pub keepalive: Option<Duration>,
@@ -58,7 +73,7 @@ impl Default for Config {
             crypto: CryptoMethod::ChaCha20,
             shared_key: None,
             magic: None,
-            port: 3210,
+            listen: "[::]:3210".parse::<SocketAddr>().unwrap(),
             peers: vec![],
             peer_timeout: DEFAULT_PEER_TIMEOUT as Duration,
             keepalive: None,
@@ -79,6 +94,7 @@ impl Default for Config {
 }
 
 impl Config {
+    #[allow(clippy::cognitive_complexity)]
     pub fn merge_file(&mut self, file: ConfigFile) {
         if let Some(val) = file.device_type {
             self.device_type = val;
@@ -105,7 +121,11 @@ impl Config {
             self.magic = Some(val);
         }
         if let Some(val) = file.port {
-            self.port = val;
+            self.listen = parse_listen(&format!("{}", &val));
+            warn!("The config option 'port' is deprecated, use 'listen' instead.");
+        }
+        if let Some(val) = file.listen {
+            self.listen = parse_listen(&val);
         }
         if let Some(mut val) = file.peers {
             self.peers.append(&mut val);
@@ -181,7 +201,7 @@ impl Config {
             self.magic = Some(val);
         }
         if let Some(val) = args.flag_listen {
-            self.port = val;
+            self.listen = parse_listen(&val);
         }
         self.peers.append(&mut args.flag_connect);
         if let Some(val) = args.flag_peer_timeout {
@@ -265,6 +285,7 @@ pub struct ConfigFile {
     pub shared_key: Option<String>,
     pub magic: Option<String>,
     pub port: Option<u16>,
+    pub listen: Option<String>,
     pub peers: Option<Vec<String>>,
     pub peer_timeout: Option<Duration>,
     pub keepalive: Option<Duration>,
@@ -322,6 +343,7 @@ stats_file: /var/log/vpncloud.stats
         shared_key: Some("mysecret".to_string()),
         magic: Some("0123ABCD".to_string()),
         port: Some(3210),
+        listen: None,
         peers: Some(vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()]),
         peer_timeout: Some(600),
         keepalive: Some(840),
@@ -352,6 +374,7 @@ fn config_merge() {
         shared_key: Some("mysecret".to_string()),
         magic: Some("0123ABCD".to_string()),
         port: Some(3210),
+        listen: None,
         peers: Some(vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()]),
         peer_timeout: Some(600),
         keepalive: Some(840),
@@ -376,7 +399,7 @@ fn config_merge() {
         magic: Some("0123ABCD".to_string()),
         crypto: CryptoMethod::AES256,
         shared_key: Some("mysecret".to_string()),
-        port: 3210,
+        listen: "[::]:3210".parse::<SocketAddr>().unwrap(),
         peers: vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()],
         peer_timeout: 600,
         keepalive: Some(840),
@@ -402,7 +425,7 @@ fn config_merge() {
         flag_crypto: Some(CryptoMethod::ChaCha20),
         flag_shared_key: Some("anothersecret".to_string()),
         flag_magic: Some("hash:mynet".to_string()),
-        flag_listen: Some(3211),
+        flag_listen: Some("3211".to_string()),
         flag_peer_timeout: Some(1801),
         flag_keepalive: Some(850),
         flag_dst_timeout: Some(301),
@@ -429,7 +452,7 @@ fn config_merge() {
         magic: Some("hash:mynet".to_string()),
         crypto: CryptoMethod::ChaCha20,
         shared_key: Some("anothersecret".to_string()),
-        port: 3211,
+        listen: "[::]:3211".parse::<SocketAddr>().unwrap(),
         peers: vec![
             "remote.machine.foo:3210".to_string(),
             "remote.machine.bar:3210".to_string(),

@@ -101,7 +101,7 @@ fn connect_via_beacons() {
     let beacon_path = "target/.vpncloud_test";
     let mut node1 =
         create_tap_node_with_config(false, Config { beacon_store: Some(beacon_path.to_string()), ..Config::default() });
-    let node1_addr = node1.address().unwrap().0;
+    let node1_addr = node1.address().unwrap();
     let mut node2 =
         create_tap_node_with_config(false, Config { beacon_load: Some(beacon_path.to_string()), ..Config::default() });
     let node2_addr = addr!("2.2.2.2:2222");
@@ -162,7 +162,7 @@ fn lost_init1() {
     assert_clean!(node1);
 
     // Node 2 -> Node 1: Init 1 | Node 2 -> Node 1: Peers
-    assert!(node2.socket4().pop_outbound().is_some());
+    assert!(node2.socket().pop_outbound().is_some());
     assert!(!node1.peers().contains_node(&node2.node_id()));
 
     simulate!(node1 => node1_addr, node2 => node2_addr);

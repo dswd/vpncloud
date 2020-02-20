@@ -1,8 +1,7 @@
 macro_rules! assert_clean {
     ($($node: expr),*) => {
         $(
-        assert_eq!($node.socket4().pop_outbound().map(|(addr, mut msg)| (addr, $node.decode_message(&mut msg).unwrap().without_data())), None);
-        assert_eq!($node.socket6().pop_outbound().map(|(addr, mut msg)| (addr, $node.decode_message(&mut msg).unwrap().without_data())), None);
+        assert_eq!($node.socket().pop_outbound().map(|(addr, mut msg)| (addr, $node.decode_message(&mut msg).unwrap().without_data())), None);
         assert_eq!($node.device().pop_outbound(), None);
         )*
     };
@@ -10,13 +9,13 @@ macro_rules! assert_clean {
 
 macro_rules! assert_message4 {
     ($from: expr, $from_addr: expr, $to: expr, $to_addr: expr, $message: expr) => {
-        let (addr, mut data) = msg4_get(&mut $from);
+        let (addr, mut data) = msg_get(&mut $from);
         assert_eq!($to_addr, addr);
         {
             let message = $from.decode_message(&mut data).unwrap();
             assert_eq!($message, message.without_data());
         }
-        msg4_put(&mut $to, $from_addr, data);
+        msg_put(&mut $to, $from_addr, data);
     };
 }
 

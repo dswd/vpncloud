@@ -222,8 +222,7 @@ pub struct GenericCloud<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSou
     reconnect_peers: Vec<ReconnectEntry>,
     own_addresses: Vec<SocketAddr>,
     table: T,
-    socket4: S,
-    socket6: S,
+    socket: S,
     device: D,
     crypto: Crypto,
     next_peerlist: Time,
@@ -248,13 +247,9 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         port_forwarding: Option<PortForwarding>, stats_file: Option<File>
     ) -> Self
     {
-        let socket4 = match S::listen_v4("0.0.0.0", config.port) {
+        let socket = match S::listen(config.listen) {
             Ok(socket) => socket,
-            Err(err) => fail!("Failed to open ipv4 address 0.0.0.0:{}: {}", config.port, err)
-        };
-        let socket6 = match S::listen_v6("::", config.port) {
-            Ok(socket) => socket,
-            Err(err) => fail!("Failed to open ipv6 address ::{}: {}", config.port, err)
+            Err(err) => fail!("Failed to open socket {}: {}", config.listen, err)
         };
         let now = TS::now();
         let update_freq = config.get_keepalive() as u16;
@@ -269,8 +264,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             own_addresses: Vec::new(),
             peer_timeout_publish: config.peer_timeout as u16,
             table,
-            socket4,
-            socket6,
+            socket,
             device,
             next_peerlist: now,
             update_freq,
@@ -309,11 +303,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         let msg_data = encode(msg, &mut self.buffer_out, self.magic, &mut self.crypto);
         for addr in self.peers.peers.keys() {
             self.traffic.count_out_traffic(*addr, msg_data.len());
-            let socket = match *addr {
-                SocketAddr::V4(_) => &mut self.socket4,
-                SocketAddr::V6(_) => &mut self.socket6
-            };
-            match socket.send(msg_data, *addr) {
+            match self.socket.send(msg_data, *addr) {
                 Ok(written) if written == msg_data.len() => Ok(()),
                 Ok(_) => {
                     Err(Error::Socket("Sent out truncated packet", io::Error::new(io::ErrorKind::Other, "truncated")))
@@ -335,11 +325,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         // Encrypt and encode
         let msg_data = encode(msg, &mut self.buffer_out, self.magic, &mut self.crypto);
         self.traffic.count_out_traffic(addr, msg_data.len());
-        let socket = match addr {
-            SocketAddr::V4(_) => &mut self.socket4,
-            SocketAddr::V6(_) => &mut self.socket6
-        };
-        match socket.send(msg_data, addr) {
+        match self.socket.send(msg_data, addr) {
             Ok(written) if written == msg_data.len() => Ok(()),
             Ok(_) => Err(Error::Socket("Sent out truncated packet", io::Error::new(io::ErrorKind::Other, "truncated"))),
             Err(e) => Err(Error::Socket("IOError when sending", e))
@@ -354,8 +340,8 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     /// # Errors
     /// Returns an IOError if the underlying system call fails
     #[allow(dead_code)]
-    pub fn address(&self) -> io::Result<(SocketAddr, SocketAddr)> {
-        Ok((self.socket4.address()?, self.socket6.address()?))
+    pub fn address(&self) -> io::Result<SocketAddr> {
+        Ok(self.socket.address()?)
     }
 
     /// Returns the number of peers
@@ -747,10 +733,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     fn initialize(&mut self) {
         match self.address() {
             Err(err) => error!("Failed to obtain local addresses: {}", err),
-            Ok((v4, v6)) => {
-                self.own_addresses.push(v4);
-                self.own_addresses.push(v6);
-            }
+            Ok(addr) => self.own_addresses.push(addr)
         }
     }
 
@@ -764,13 +747,8 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         }
     }
 
-    fn handle_socket_v4_event(&mut self, buffer: &mut [u8]) {
-        let (size, src) = try_fail!(self.socket4.receive(buffer), "Failed to read from ipv4 network socket: {}");
-        self.handle_socket_data(src, &mut buffer[..size])
-    }
-
-    fn handle_socket_v6_event(&mut self, buffer: &mut [u8]) {
-        let (size, src) = try_fail!(self.socket6.receive(buffer), "Failed to read from ipv6 network socket: {}");
+    fn handle_socket_event(&mut self, buffer: &mut [u8]) {
+        let (size, src) = try_fail!(self.socket.receive(buffer), "Failed to read from network socket: {}");
         self.handle_socket_data(src, &mut buffer[..size])
     }
 
@@ -792,8 +770,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     /// Also, this method will call `housekeep` every second.
     pub fn run(&mut self) {
         let ctrlc = CtrlC::new();
-        let waiter =
-            try_fail!(WaitImpl::new(&self.socket4, &self.socket6, &self.device, 1000), "Failed to setup poll: {}");
+        let waiter = try_fail!(WaitImpl::new(&self.socket, &self.device, 1000), "Failed to setup poll: {}");
         let mut buffer = [0; 64 * 1024];
         let mut poll_error = false;
         for evt in waiter {
@@ -806,8 +783,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                     poll_error = true;
                 }
                 WaitResult::Timeout => {}
-                WaitResult::SocketV4 => self.handle_socket_v4_event(&mut buffer),
-                WaitResult::SocketV6 => self.handle_socket_v6_event(&mut buffer),
+                WaitResult::Socket => self.handle_socket_event(&mut buffer),
                 WaitResult::Device => self.handle_device_event(&mut buffer)
             }
             if self.next_housekeep < TS::now() {
@@ -842,26 +818,17 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
 
 #[cfg(test)]
 impl<P: Protocol, T: Table> GenericCloud<MockDevice, P, T, MockSocket, MockTimeSource> {
-    pub fn socket4(&mut self) -> &mut MockSocket {
-        &mut self.socket4
-    }
-
-    pub fn socket6(&mut self) -> &mut MockSocket {
-        &mut self.socket6
+    pub fn socket(&mut self) -> &mut MockSocket {
+        &mut self.socket
     }
 
     pub fn device(&mut self) -> &mut MockDevice {
         &mut self.device
     }
 
-    pub fn trigger_socket_v4_event(&mut self) {
+    pub fn trigger_socket_event(&mut self) {
         let mut buffer = [0; 64 * 1024];
-        self.handle_socket_v4_event(&mut buffer);
-    }
-
-    pub fn trigger_socket_v6_event(&mut self) {
-        let mut buffer = [0; 64 * 1024];
-        self.handle_socket_v6_event(&mut buffer);
+        self.handle_socket_event(&mut buffer);
     }
 
     pub fn trigger_device_event(&mut self) {

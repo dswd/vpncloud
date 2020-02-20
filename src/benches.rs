@@ -130,10 +130,9 @@ fn now(b: &mut Bencher) {
 
 #[bench]
 fn epoll_wait(b: &mut Bencher) {
-    let socketv4 = UdpSocket::bind("0.0.0.0:0").unwrap();
-    let socketv6 = UdpSocket::bind("[::]:0").unwrap();
+    let socket = UdpSocket::bind("[::]:0").unwrap();
     let device = TunTapDevice::dummy("dummy", "/dev/zero", Type::Dummy).unwrap();
-    let mut waiter = WaitImpl::testing(&socketv4, &socketv6, &device, 1000).unwrap();
+    let mut waiter = WaitImpl::testing(&socket, &device, 1000).unwrap();
     b.iter(|| assert!(waiter.next().is_some()));
     b.bytes = 1400;
 }

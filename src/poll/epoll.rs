@@ -13,33 +13,30 @@ use crate::{device::Type, net::Socket};
 pub struct EpollWait {
     poll_fd: RawFd,
     event: libc::epoll_event,
-    socketv4: RawFd,
-    socketv6: RawFd,
+    socket: RawFd,
     device: RawFd,
     timeout: u32
 }
 
 impl EpollWait {
-    pub fn new<S: Socket>(socketv4: &S, socketv6: &S, device: &dyn Device, timeout: u32) -> io::Result<Self> {
-        Self::create(socketv4, socketv6, device, timeout, libc::EPOLLIN as u32)
+    pub fn new<S: Socket>(socket: &S, device: &dyn Device, timeout: u32) -> io::Result<Self> {
+        Self::create(socket, device, timeout, libc::EPOLLIN as u32)
     }
 
-    pub fn testing<S: Socket>(socketv4: &S, socketv6: &S, device: &dyn Device, timeout: u32) -> io::Result<Self> {
-        Self::create(socketv4, socketv6, device, timeout, (libc::EPOLLIN | libc::EPOLLOUT) as u32)
+    pub fn testing<S: Socket>(socket: &S, device: &dyn Device, timeout: u32) -> io::Result<Self> {
+        Self::create(socket, device, timeout, (libc::EPOLLIN | libc::EPOLLOUT) as u32)
     }
 
-    fn create<S: Socket>(
-        socketv4: &S, socketv6: &S, device: &dyn Device, timeout: u32, flags: u32
-    ) -> io::Result<Self> {
+    fn create<S: Socket>(socket: &S, device: &dyn Device, timeout: u32, flags: u32) -> io::Result<Self> {
         let mut event = libc::epoll_event { u64: 0, events: 0 };
         let poll_fd = unsafe { libc::epoll_create(3) };
         if poll_fd == -1 {
             return Err(io::Error::last_os_error())
         }
         let raw_fds = if device.get_type() != Type::Dummy {
-            vec![socketv4.as_raw_fd(), socketv6.as_raw_fd(), device.as_raw_fd()]
+            vec![socket.as_raw_fd(), device.as_raw_fd()]
         } else {
-            vec![socketv4.as_raw_fd(), socketv6.as_raw_fd()]
+            vec![socket.as_raw_fd()]
         };
         for fd in raw_fds {
             event.u64 = fd as u64;
@@ -52,8 +49,7 @@ impl EpollWait {
         Ok(Self {
             poll_fd,
             event,
-            socketv4: socketv4.as_raw_fd(),
-            socketv6: socketv6.as_raw_fd(),
+            socket: socket.as_raw_fd(),
             device: device.as_raw_fd(),
             timeout
         })
@@ -74,10 +70,8 @@ impl Iterator for EpollWait {
             -1 => WaitResult::Error(io::Error::last_os_error()),
             0 => WaitResult::Timeout,
             1 => {
-                if self.event.u64 == self.socketv4 as u64 {
-                    WaitResult::SocketV4
-                } else if self.event.u64 == self.socketv6 as u64 {
-                    WaitResult::SocketV6
+                if self.event.u64 == self.socket as u64 {
+                    WaitResult::Socket
                 } else if self.event.u64 == self.device as u64 {
                     WaitResult::Device
                 } else {

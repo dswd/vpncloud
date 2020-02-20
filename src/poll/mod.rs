@@ -13,8 +13,7 @@ use std::io;
 
 pub enum WaitResult {
     Timeout,
-    SocketV4,
-    SocketV6,
+    Socket,
     Device,
     Error(io::Error)
 }

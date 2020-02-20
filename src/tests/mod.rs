@@ -8,9 +8,9 @@ mod nat;
 mod payload;
 mod peers;
 
-pub use std::net::SocketAddr;
 use std::{
     io::Write,
+    net::{IpAddr, Ipv6Addr, SocketAddr},
     sync::{
         atomic::{AtomicUsize, Ordering},
         Once
@@ -73,13 +73,17 @@ thread_local! {
     static NEXT_PORT: AtomicUsize = AtomicUsize::new(1);
 }
 
+fn next_sock_addr() -> SocketAddr {
+    SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), NEXT_PORT.with(|p| p.fetch_add(1, Ordering::Relaxed)) as u16)
+}
+
 fn create_tap_node(nat: bool) -> TapTestNode {
     create_tap_node_with_config(nat, Config::default())
 }
 
 fn create_tap_node_with_config(nat: bool, mut config: Config) -> TapTestNode {
     MockSocket::set_nat(nat);
-    config.port = NEXT_PORT.with(|p| p.fetch_add(1, Ordering::Relaxed)) as u16;
+    config.listen = next_sock_addr();
     TestNode::new(&config, MockDevice::new(), SwitchTable::new(1800, 10), true, true, vec![], Crypto::None, None, None)
 }
 
@@ -87,7 +91,7 @@ fn create_tap_node_with_config(nat: bool, mut config: Config) -> TapTestNode {
 fn create_tun_node(nat: bool, addresses: Vec<Range>) -> TunTestNode {
     MockSocket::set_nat(nat);
     TestNode::new(
-        &Config { port: NEXT_PORT.with(|p| p.fetch_add(1, Ordering::Relaxed)) as u16, ..Config::default() },
+        &Config { listen: next_sock_addr(), ..Config::default() },
         MockDevice::new(),
         RoutingTable::new(),
         false,
@@ -100,28 +104,15 @@ fn create_tun_node(nat: bool, addresses: Vec<Range>) -> TunTestNode {
 }
 
 
-fn msg4_get<P: Protocol, T: Table>(node: &mut TestNode<P, T>) -> (SocketAddr, Vec<u8>) {
-    let msg = node.socket4().pop_outbound();
+fn msg_get<P: Protocol, T: Table>(node: &mut TestNode<P, T>) -> (SocketAddr, Vec<u8>) {
+    let msg = node.socket().pop_outbound();
     assert!(msg.is_some());
     msg.unwrap()
 }
 
-#[allow(dead_code)]
-fn msg6_get<P: Protocol, T: Table>(node: &mut TestNode<P, T>) -> (SocketAddr, Vec<u8>) {
-    let msg = node.socket6().pop_outbound();
-    assert!(msg.is_some());
-    msg.unwrap()
-}
-
-fn msg4_put<P: Protocol, T: Table>(node: &mut TestNode<P, T>, from: SocketAddr, msg: Vec<u8>) {
-    if node.socket4().put_inbound(from, msg) {
-        node.trigger_socket_v4_event();
-    }
-}
-
-fn msg6_put<P: Protocol, T: Table>(node: &mut TestNode<P, T>, from: SocketAddr, msg: Vec<u8>) {
-    if node.socket6().put_inbound(from, msg) {
-        node.trigger_socket_v6_event();
+fn msg_put<P: Protocol, T: Table>(node: &mut TestNode<P, T>, from: SocketAddr, msg: Vec<u8>) {
+    if node.socket().put_inbound(from, msg) {
+        node.trigger_socket_event();
     }
 }
 
@@ -136,7 +127,7 @@ fn simulate<P: Protocol, T: Table>(nodes: &mut [(&mut TestNode<P, T>, SocketAddr
         clean = true;
         let mut msgs = Vec::new();
         for (ref mut node, ref from_addr) in nodes.iter_mut() {
-            while let Some((to_addr, msg)) = node.socket4().pop_outbound() {
+            while let Some((to_addr, msg)) = node.socket().pop_outbound() {
                 msgs.push((msg, *from_addr, to_addr));
             }
         }
@@ -144,22 +135,7 @@ fn simulate<P: Protocol, T: Table>(nodes: &mut [(&mut TestNode<P, T>, SocketAddr
         for (msg, from_addr, to_addr) in msgs {
             for (ref mut node, ref addr) in nodes.iter_mut() {
                 if *addr == to_addr {
-                    msg4_put(node, from_addr, msg);
-                    break
-                }
-            }
-        }
-        let mut msgs = Vec::new();
-        for (ref mut node, ref from_addr) in nodes.iter_mut() {
-            while let Some((to_addr, msg)) = node.socket6().pop_outbound() {
-                msgs.push((msg, *from_addr, to_addr));
-            }
-        }
-        clean &= msgs.is_empty();
-        for (msg, from_addr, to_addr) in msgs {
-            for (ref mut node, ref addr) in nodes.iter_mut() {
-                if *addr == to_addr {
-                    msg6_put(node, from_addr, msg);
+                    msg_put(node, from_addr, msg);
                     break
                 }
             }
