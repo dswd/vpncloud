@@ -321,7 +321,6 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
 #[cfg(test)] use crate::util::MockTimeSource;
 #[cfg(test)] use std::str::FromStr;
 #[cfg(test)] use std::time::Duration;
-#[cfg(test)] use tempfile;
 
 #[test]
 fn encode() {

@@ -10,8 +10,6 @@ use std::{
 
 use super::types::Error;
 
-#[cfg(target_os = "linux")] use libc;
-
 #[cfg(not(target_os = "linux"))] use time;
 
 use signal::{trap::Trap, Signal};

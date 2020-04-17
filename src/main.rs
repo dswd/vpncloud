@@ -127,7 +127,7 @@ impl log::Log for DualLogger {
             println!("{} - {}", record.level(), record.args());
             let mut file = self.file.lock().expect("Lock poisoned");
             if let Some(ref mut file) = *file {
-                let time = time::PrimitiveDateTime::now().format("%F %T");
+                let time = time::OffsetDateTime::now_local().format("%F %T");
                 writeln!(file, "{} - {} - {}", time, record.level(), record.args())
                     .expect("Failed to write to logfile");
             }
