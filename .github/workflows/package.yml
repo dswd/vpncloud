@@ -1,0 +1,45 @@
+on:
+  release:
+    types: [created]
+name: Build packages
+jobs:
+  deb:
+    name: "Build deb packages"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Run builder
+        uses: ./.github/actions/build-deb
+        with:
+          rust: '1.40.0'
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v1
+        with:
+          name: packages
+          path: dist
+      - name: Upload artifacts
+        uses: skx/github-action-publish-binaries@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: 'dist/*.deb'
+  rpm:
+    name: "Build rpm packages"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Run builder
+        uses: ./.github/actions/build-rpm
+        with:
+          rust: '1.40.0'
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v1
+        with:
+          name: packages
+          path: dist
+      - name: Upload artifacts
+        uses: skx/github-action-publish-binaries@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: 'dist/*.rpm'

@@ -1,0 +1,11 @@
+name: 'build-deb'
+description: 'Create deb packages'
+inputs:
+  rust:
+    description: Rust version
+    default: 'stable'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  env:
+    RUST: ${{ inputs.rust }}
