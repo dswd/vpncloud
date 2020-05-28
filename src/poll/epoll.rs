@@ -1,5 +1,5 @@
 // VpnCloud - Peer-to-Peer VPN
-// Copyright (C) 2015-2019  Dennis Schwerdel
+// Copyright (C) 2015-2020  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 use crate::device::Device;
@@ -44,13 +44,7 @@ impl EpollWait {
                 return Err(io::Error::last_os_error())
             }
         }
-        Ok(Self {
-            poll_fd,
-            event,
-            socket: socket.as_raw_fd(),
-            device: device.as_raw_fd(),
-            timeout
-        })
+        Ok(Self { poll_fd, event, socket: socket.as_raw_fd(), device: device.as_raw_fd(), timeout })
     }
 }
 
