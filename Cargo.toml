@@ -23,7 +23,7 @@ libc = "0.2"
 rand = "0.7"
 fnv = "1"
 yaml-rust = "0.4"
-igd = { version = "0.10", optional = true }
+igd = { version = "0.11", optional = true }
 siphasher = "0.3"
 daemonize = "0.4"
 ring = "0.16"
