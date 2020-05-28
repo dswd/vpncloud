@@ -206,12 +206,12 @@ fn switch() {
     let peer2 = "1.2.3.5:7890".to_socket_addrs().unwrap().next().unwrap();
     assert!(table.lookup(&addr).is_none());
     MockTimeSource::set_time(1000);
-    table.learn(addr.clone(), None, peer.clone());
+    table.learn(addr, None, peer);
     assert_eq!(table.lookup(&addr), Some(peer));
     MockTimeSource::set_time(1000);
-    table.learn(addr.clone(), None, peer2.clone());
+    table.learn(addr, None, peer2);
     assert_eq!(table.lookup(&addr), Some(peer));
     MockTimeSource::set_time(1010);
-    table.learn(addr.clone(), None, peer2.clone());
+    table.learn(addr, None, peer2);
     assert_eq!(table.lookup(&addr), Some(peer2));
 }
