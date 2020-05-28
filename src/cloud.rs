@@ -114,10 +114,18 @@ impl<TS: TimeSource> PeerList<TS> {
     fn add(&mut self, node_id: NodeId, addr: SocketAddr, peer_timeout: u16) {
         if self.nodes.insert(node_id, addr).is_none() {
             info!("New peer: {}", addr);
+            let mut alt_addrs = vec![];
+            if let SocketAddr::V6(v6_addr) = addr {
+                if let Some(ipv4) = v6_addr.ip().to_ipv4() {
+                    let v4_addr = SocketAddr::from((ipv4, v6_addr.port()));
+                    alt_addrs.push(v4_addr);
+                    self.addresses.insert(v4_addr, node_id);
+                }
+            }
             self.peers.insert(addr, PeerData {
                 timeout: TS::now() + Time::from(self.timeout),
                 node_id,
-                alt_addrs: vec![],
+                alt_addrs,
                 peer_timeout
             });
             self.addresses.insert(addr, node_id);
