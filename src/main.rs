@@ -30,7 +30,7 @@ pub mod traffic;
 pub mod types;
 pub mod udpmessage;
 
-use docopt::Docopt;
+use structopt::StructOpt;
 
 use std::{
     fs::{self, File, Permissions},
@@ -59,41 +59,127 @@ use crate::{
 const VERSION: u8 = 1;
 const MAGIC: HeaderMagic = *b"vpn\x01";
 
-static USAGE: &str = include_str!("usage.txt");
 
-
-#[derive(Deserialize, Debug, Default)]
+#[derive(StructOpt, Debug, Default)]
 pub struct Args {
-    flag_config: Option<String>,
-    flag_type: Option<Type>,
-    flag_device_path: Option<String>,
-    flag_mode: Option<Mode>,
-    flag_shared_key: Option<String>,
-    flag_crypto: Option<CryptoMethod>,
-    flag_subnet: Vec<String>,
-    flag_device: Option<String>,
-    flag_listen: Option<String>,
-    flag_network_id: Option<String>,
-    flag_magic: Option<String>,
-    flag_connect: Vec<String>,
-    flag_peer_timeout: Option<Duration>,
-    flag_keepalive: Option<Duration>,
-    flag_dst_timeout: Option<Duration>,
-    flag_beacon_store: Option<String>,
-    flag_beacon_load: Option<String>,
-    flag_beacon_interval: Option<Duration>,
-    flag_verbose: bool,
-    flag_quiet: bool,
-    flag_ifup: Option<String>,
-    flag_ifdown: Option<String>,
-    flag_version: bool,
-    flag_no_port_forwarding: bool,
-    flag_daemon: bool,
-    flag_pid_file: Option<String>,
-    flag_stats_file: Option<String>,
-    flag_user: Option<String>,
-    flag_group: Option<String>,
-    flag_log_file: Option<String>
+    /// Read configuration options from the specified file.
+    #[structopt(long)]
+    config: Option<String>,
+
+    /// Set the type of network ("tap" or "tun")
+    #[structopt(name = "type", short, long)]
+    type_: Option<Type>,
+
+    /// Set the path of the base device
+    #[structopt(long)]
+    device_path: Option<String>,
+
+    /// The mode of the VPN ("normal", "router", "switch", or "hub")
+    #[structopt(short, long)]
+    mode: Option<Mode>,
+
+    /// The shared key to encrypt all traffic
+    #[structopt(short, long, aliases=&["shared-key", "secret-key", "secret"])]
+    key: Option<String>,
+
+    /// The encryption method to use ("aes256", or "chacha20")
+    #[structopt(long)]
+    crypto: Option<CryptoMethod>,
+
+    /// The local subnets to use
+    #[structopt(short, long)]
+    subnets: Vec<String>,
+
+    /// Name of the virtual device
+    #[structopt(short, long)]
+    device: Option<String>,
+
+    /// The port number (or ip:port) on which to listen for data
+    #[structopt(short, long)]
+    listen: Option<String>,
+
+    /// Optional token that identifies the network. (DEPRECATED)
+    #[structopt(long)]
+    network_id: Option<String>,
+
+    /// Override the 4-byte magic header of each packet
+    #[structopt(long)]
+    magic: Option<String>,
+
+    /// Address of a peer to connect to
+    #[structopt(short, long)]
+    connect: Vec<String>,
+
+    /// Peer timeout in seconds
+    #[structopt(long)]
+    peer_timeout: Option<Duration>,
+    /// Periodically send message to keep connections alive
+    #[structopt(long)]
+    keepalive: Option<Duration>,
+
+    /// Switch table entry timeout in seconds
+    #[structopt(long)]
+    dst_timeout: Option<Duration>,
+
+    /// The file path or |command to store the beacon
+    #[structopt(long)]
+    beacon_store: Option<String>,
+
+    /// The file path or |command to load the beacon
+    #[structopt(long)]
+    beacon_load: Option<String>,
+
+    /// Beacon store/load interval in seconds
+    #[structopt(long)]
+    beacon_interval: Option<Duration>,
+
+    /// Print debug information
+    #[structopt(short, long, conflicts_with = "quiet")]
+    verbose: bool,
+
+    /// Only print errors and warnings
+    #[structopt(short, long)]
+    quiet: bool,
+
+    /// A command to setup the network interface
+    #[structopt(long)]
+    ifup: Option<String>,
+
+    /// A command to bring down the network interface
+    #[structopt(long)]
+    ifdown: Option<String>,
+
+    /// Print the version and exit
+    #[structopt(long)]
+    version: bool,
+
+    /// Disable automatic port forwarding
+    #[structopt(long)]
+    no_port_forwarding: bool,
+
+    /// Run the process in the background
+    #[structopt(long)]
+    daemon: bool,
+
+    /// Store the process id in this file when daemonizing
+    #[structopt(long)]
+    pid_file: Option<String>,
+
+    /// Print statistics to this file
+    #[structopt(long)]
+    stats_file: Option<String>,
+
+    /// Run as other user
+    #[structopt(long)]
+    user: Option<String>,
+
+    /// Run as other group
+    #[structopt(long)]
+    group: Option<String>,
+
+    /// Print logs also to this file
+    #[structopt(long)]
+    log_file: Option<String>
 }
 
 struct DualLogger {
@@ -326,23 +412,23 @@ fn run<P: Protocol>(config: Config) {
 }
 
 fn main() {
-    let args: Args = Docopt::new(USAGE).and_then(|d| d.deserialize()).unwrap_or_else(|e| e.exit());
-    if args.flag_version {
+    let args: Args = Args::from_args();
+    if args.version {
         println!("VpnCloud v{}, protocol version {}", env!("CARGO_PKG_VERSION"), VERSION);
         return
     }
-    let logger = try_fail!(DualLogger::new(args.flag_log_file.as_ref()), "Failed to open logfile: {}");
+    let logger = try_fail!(DualLogger::new(args.log_file.as_ref()), "Failed to open logfile: {}");
     log::set_boxed_logger(Box::new(logger)).unwrap();
-    assert!(!args.flag_verbose || !args.flag_quiet);
-    log::set_max_level(if args.flag_verbose {
+    assert!(!args.verbose || !args.quiet);
+    log::set_max_level(if args.verbose {
         log::LevelFilter::Debug
-    } else if args.flag_quiet {
+    } else if args.quiet {
         log::LevelFilter::Error
     } else {
         log::LevelFilter::Info
     });
     let mut config = Config::default();
-    if let Some(ref file) = args.flag_config {
+    if let Some(ref file) = args.config {
         info!("Reading config file '{}'", file);
         let f = try_fail!(File::open(file), "Failed to open config file: {:?}");
         let config_file = try_fail!(serde_yaml::from_reader(f), "Failed to load config file: {:?}");

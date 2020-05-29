@@ -206,6 +206,19 @@ impl fmt::Display for Mode {
         }
     }
 }
+impl FromStr for Mode {
+    type Err = &'static str;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Ok(match &text.to_lowercase() as &str {
+            "normal" => Self::Normal,
+            "hub" => Self::Hub,
+            "switch" => Self::Switch,
+            "router" => Self::Router,
+            _ => return Err("Unknown mode")
+        })
+    }
+}
 
 pub trait Table {
     fn learn(&mut self, _: Address, _: Option<u8>, _: SocketAddr);

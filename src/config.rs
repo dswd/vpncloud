@@ -172,76 +172,76 @@ impl Config {
     }
 
     pub fn merge_args(&mut self, mut args: Args) {
-        if let Some(val) = args.flag_type {
+        if let Some(val) = args.type_ {
             self.device_type = val;
         }
-        if let Some(val) = args.flag_device {
+        if let Some(val) = args.device {
             self.device_name = val;
         }
-        if let Some(val) = args.flag_device_path {
+        if let Some(val) = args.device_path {
             self.device_path = Some(val);
         }
-        if let Some(val) = args.flag_ifup {
+        if let Some(val) = args.ifup {
             self.ifup = Some(val);
         }
-        if let Some(val) = args.flag_ifdown {
+        if let Some(val) = args.ifdown {
             self.ifdown = Some(val);
         }
-        if let Some(val) = args.flag_crypto {
+        if let Some(val) = args.crypto {
             self.crypto = val;
         }
-        if let Some(val) = args.flag_shared_key {
+        if let Some(val) = args.key {
             self.shared_key = Some(val);
         }
-        if let Some(val) = args.flag_network_id {
+        if let Some(val) = args.network_id {
             warn!("The --network-id argument is deprecated, please use --magic instead.");
             self.magic = Some(val);
         }
-        if let Some(val) = args.flag_magic {
+        if let Some(val) = args.magic {
             self.magic = Some(val);
         }
-        if let Some(val) = args.flag_listen {
+        if let Some(val) = args.listen {
             self.listen = parse_listen(&val);
         }
-        self.peers.append(&mut args.flag_connect);
-        if let Some(val) = args.flag_peer_timeout {
+        self.peers.append(&mut args.connect);
+        if let Some(val) = args.peer_timeout {
             self.peer_timeout = val;
         }
-        if let Some(val) = args.flag_keepalive {
+        if let Some(val) = args.keepalive {
             self.keepalive = Some(val);
         }
-        if let Some(val) = args.flag_beacon_store {
+        if let Some(val) = args.beacon_store {
             self.beacon_store = Some(val);
         }
-        if let Some(val) = args.flag_beacon_load {
+        if let Some(val) = args.beacon_load {
             self.beacon_load = Some(val);
         }
-        if let Some(val) = args.flag_beacon_interval {
+        if let Some(val) = args.beacon_interval {
             self.beacon_interval = val;
         }
-        if let Some(val) = args.flag_mode {
+        if let Some(val) = args.mode {
             self.mode = val;
         }
-        if let Some(val) = args.flag_dst_timeout {
+        if let Some(val) = args.dst_timeout {
             self.dst_timeout = val;
         }
-        self.subnets.append(&mut args.flag_subnet);
-        if args.flag_no_port_forwarding {
+        self.subnets.append(&mut args.subnets);
+        if args.no_port_forwarding {
             self.port_forwarding = false;
         }
-        if args.flag_daemon {
+        if args.daemon {
             self.daemonize = true;
         }
-        if let Some(val) = args.flag_pid_file {
+        if let Some(val) = args.pid_file {
             self.pid_file = Some(val);
         }
-        if let Some(val) = args.flag_stats_file {
+        if let Some(val) = args.stats_file {
             self.stats_file = Some(val);
         }
-        if let Some(val) = args.flag_user {
+        if let Some(val) = args.user {
             self.user = Some(val);
         }
-        if let Some(val) = args.flag_group {
+        if let Some(val) = args.group {
             self.group = Some(val);
         }
     }
@@ -417,30 +417,30 @@ fn config_merge() {
         ..Default::default()
     });
     config.merge_args(Args {
-        flag_type: Some(Type::Tap),
-        flag_device: Some("vpncloud0".to_string()),
-        flag_device_path: Some("/dev/null".to_string()),
-        flag_ifup: Some("ifconfig $IFNAME 10.0.1.2/16 mtu 1400 up".to_string()),
-        flag_ifdown: Some("ifconfig $IFNAME down".to_string()),
-        flag_crypto: Some(CryptoMethod::ChaCha20),
-        flag_shared_key: Some("anothersecret".to_string()),
-        flag_magic: Some("hash:mynet".to_string()),
-        flag_listen: Some("3211".to_string()),
-        flag_peer_timeout: Some(1801),
-        flag_keepalive: Some(850),
-        flag_dst_timeout: Some(301),
-        flag_beacon_store: Some("/run/vpncloud.beacon.out2".to_string()),
-        flag_beacon_load: Some("/run/vpncloud.beacon.in2".to_string()),
-        flag_beacon_interval: Some(3600),
-        flag_mode: Some(Mode::Switch),
-        flag_subnet: vec![],
-        flag_connect: vec!["another:3210".to_string()],
-        flag_no_port_forwarding: true,
-        flag_daemon: true,
-        flag_pid_file: Some("/run/vpncloud-mynet.run".to_string()),
-        flag_stats_file: Some("/var/log/vpncloud-mynet.stats".to_string()),
-        flag_user: Some("root".to_string()),
-        flag_group: Some("root".to_string()),
+        type_: Some(Type::Tap),
+        device: Some("vpncloud0".to_string()),
+        device_path: Some("/dev/null".to_string()),
+        ifup: Some("ifconfig $IFNAME 10.0.1.2/16 mtu 1400 up".to_string()),
+        ifdown: Some("ifconfig $IFNAME down".to_string()),
+        crypto: Some(CryptoMethod::ChaCha20),
+        key: Some("anothersecret".to_string()),
+        magic: Some("hash:mynet".to_string()),
+        listen: Some("3211".to_string()),
+        peer_timeout: Some(1801),
+        keepalive: Some(850),
+        dst_timeout: Some(301),
+        beacon_store: Some("/run/vpncloud.beacon.out2".to_string()),
+        beacon_load: Some("/run/vpncloud.beacon.in2".to_string()),
+        beacon_interval: Some(3600),
+        mode: Some(Mode::Switch),
+        subnets: vec![],
+        connect: vec!["another:3210".to_string()],
+        no_port_forwarding: true,
+        daemon: true,
+        pid_file: Some("/run/vpncloud-mynet.run".to_string()),
+        stats_file: Some("/var/log/vpncloud-mynet.stats".to_string()),
+        user: Some("root".to_string()),
+        group: Some("root".to_string()),
         ..Default::default()
     });
     assert_eq!(config, Config {

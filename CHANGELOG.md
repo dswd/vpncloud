@@ -9,6 +9,7 @@ This project follows [semantic versioning](http://semver.org).
 - [changed] Warning for missing router is now info
 - [changed] New warning on claimed addresses in learning mode
 - [changed] Updated dependencies
+- [changed] Rewrote argument parsing
 - [fixed] Fixed problem that could lead to 100% cpu consumption
 
 

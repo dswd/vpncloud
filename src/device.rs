@@ -6,7 +6,8 @@ use std::{
     collections::VecDeque,
     fmt, fs,
     io::{self, Error as IoError, ErrorKind, Read, Write},
-    os::unix::io::{AsRawFd, RawFd}
+    os::unix::io::{AsRawFd, RawFd},
+    str::FromStr
 };
 
 use super::types::Error;
@@ -23,7 +24,7 @@ pub enum Type {
     /// Tun interface: This interface transports IP packets.
     #[serde(rename = "tun")]
     Tun,
-    /// Tap interface: This insterface transports Ethernet frames.
+    /// Tap interface: This interface transports Ethernet frames.
     #[serde(rename = "tap")]
     Tap,
     /// Dummy interface: This interface does nothing.
@@ -41,6 +42,18 @@ impl fmt::Display for Type {
     }
 }
 
+impl FromStr for Type {
+    type Err = &'static str;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Ok(match &text.to_lowercase() as &str {
+            "tun" => Self::Tun,
+            "tap" => Self::Tap,
+            "dummy" => Self::Dummy,
+            _ => return Err("Unknown device type")
+        })
+    }
+}
 
 pub trait Device: AsRawFd {
     /// Returns the type of this device

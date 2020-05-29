@@ -2,7 +2,7 @@
 // Copyright (C) 2015-2020  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, str::FromStr};
 
 use ring::{aead::*, pbkdf2, rand::*};
 
@@ -18,6 +18,17 @@ pub enum CryptoMethod {
     ChaCha20,
     #[serde(rename = "aes256")]
     AES256
+}
+impl FromStr for CryptoMethod {
+    type Err = &'static str;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Ok(match &text.to_lowercase() as &str {
+            "chacha20" | "chacha" => Self::ChaCha20,
+            "aes256" | "aes" => Self::AES256,
+            _ => return Err("Unknown method")
+        })
+    }
 }
 
 pub struct CryptoData {
