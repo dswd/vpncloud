@@ -8,7 +8,11 @@ use std::{
     net::SocketAddr
 };
 
-use super::{cloud::Hash, types::Address, util::Bytes};
+use super::{
+    cloud::Hash,
+    types::Address,
+    util::{addr_nice, Bytes}
+};
 
 
 #[derive(Default)]
@@ -58,7 +62,8 @@ impl TrafficEntry {
 #[derive(Default)]
 pub struct TrafficStats {
     peers: HashMap<SocketAddr, TrafficEntry, Hash>,
-    payload: HashMap<(Address, Address), TrafficEntry, Hash>
+    payload: HashMap<(Address, Address), TrafficEntry, Hash>,
+    dropped: TrafficEntry
 }
 
 impl TrafficStats {
@@ -82,6 +87,14 @@ impl TrafficStats {
         self.payload.entry((remote, local)).or_insert_with(TrafficEntry::default).count_in(bytes);
     }
 
+    pub fn count_invalid_protocol(&mut self, bytes: usize) {
+        self.dropped.count_in(bytes)
+    }
+
+    pub fn count_dropped_payload(&mut self, bytes: usize) {
+        self.dropped.count_out(bytes)
+    }
+
     pub fn period(&mut self, cleanup_idle: Option<usize>) {
         for entry in self.peers.values_mut() {
             entry.period();
@@ -89,6 +102,7 @@ impl TrafficStats {
         for entry in self.payload.values_mut() {
             entry.period();
         }
+        self.dropped.period();
         if let Some(periods) = cleanup_idle {
             self.peers.retain(|_, entry| entry.idle_periods < periods);
             self.payload.retain(|_, entry| entry.idle_periods < periods);
@@ -105,26 +119,55 @@ impl TrafficStats {
 
     #[inline]
     pub fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error> {
-        writeln!(out, "Peer traffic:")?;
+        writeln!(out, "peer_traffic:")?;
         let mut peers: Vec<_> = self.get_peer_traffic().collect();
         peers.sort_unstable_by_key(|(_, data)| (data.out_bytes + data.in_bytes));
         for (addr, data) in peers.iter().rev() {
-            writeln!(out, " - {}: in={}/s, out={}/s", addr, Bytes(data.in_bytes / 60), Bytes(data.out_bytes / 60))?;
+            writeln!(
+                out,
+                "  - peer: \"{}\"\n    in: {{ display: \"{}/s\", bytes: {}, packets: {} }}\n    out: {{ display: \"{}/s\", bytes: {}, packets: {} }}",
+                addr_nice(**addr),
+                Bytes(data.in_bytes / 60),
+                data.in_bytes,
+                data.in_packets,
+                Bytes(data.out_bytes / 60),
+                data.out_bytes,
+                data.out_packets
+            )?;
         }
         writeln!(out)?;
-        writeln!(out, "Payload traffic:")?;
+        writeln!(out, "payload_traffic:")?;
         let mut payload: Vec<_> = self.get_payload_traffic().collect();
         payload.sort_unstable_by_key(|(_, data)| (data.out_bytes + data.in_bytes));
         for ((remote, local), data) in payload.iter().rev() {
             writeln!(
                 out,
-                " - {} <-> {}: in={}/s, out={}/s",
+                "  - addrs: [\"{}\", \"{}\"]\n    in: {{ display: \"{}/s\", bytes: {}, packets: {} }}\n    out: {{ display: \"{}/s\", bytes: {}, packets: {} }}",
                 remote,
                 local,
                 Bytes(data.in_bytes / 60),
-                Bytes(data.out_bytes / 60)
+                data.in_bytes,
+                data.in_packets,
+                Bytes(data.out_bytes / 60),
+                data.out_bytes,
+                data.out_packets
             )?;
         }
+        writeln!(out)?;
+        writeln!(
+            out,
+            "invalid_protocol_traffic: {{ display: \"{}/s\", bytes: {}, packets: {} }}",
+            Bytes(self.dropped.in_bytes / 60),
+            self.dropped.in_bytes,
+            self.dropped.in_packets
+        )?;
+        writeln!(
+            out,
+            "dropped_payload_traffic: {{ display: \"{}/s\", bytes: {}, packets: {} }}",
+            Bytes(self.dropped.out_bytes / 60),
+            self.dropped.out_bytes,
+            self.dropped.out_packets
+        )?;
         Ok(())
     }
 }

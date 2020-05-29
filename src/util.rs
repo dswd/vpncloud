@@ -31,6 +31,15 @@ pub fn bytes_to_hex(bytes: &[u8]) -> String {
     s
 }
 
+pub fn addr_nice(addr: SocketAddr) -> SocketAddr {
+    if let SocketAddr::V6(v6addr) = addr {
+        if let Some(ip) = v6addr.ip().to_ipv4() {
+            return (ip, addr.port()).into()
+        }
+    }
+    addr
+}
+
 
 pub struct Encoder;
 

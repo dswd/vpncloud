@@ -11,7 +11,10 @@ use std::{
 
 use fnv::FnvHasher;
 
-use super::types::{Address, Error, Protocol, Table};
+use super::{
+    types::{Address, Error, Protocol, Table},
+    util::addr_nice
+};
 
 
 /// An IP packet dissector
@@ -153,10 +156,16 @@ impl Table for RoutingTable {
 
     /// Write out the table
     fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error> {
-        writeln!(out, "Routing table:")?;
+        writeln!(out, "routing_table:")?;
         for entries in self.0.values() {
             for entry in entries {
-                writeln!(out, " - {}/{} => {}", entry.bytes, entry.prefix_len, entry.address)?;
+                writeln!(
+                    out,
+                    "  - \"{}/{}\": {{ peer: \"{}\" }}",
+                    entry.bytes,
+                    entry.prefix_len,
+                    addr_nice(entry.address)
+                )?;
             }
         }
         Ok(())

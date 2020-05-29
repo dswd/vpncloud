@@ -28,7 +28,7 @@ use super::{
     traffic::TrafficStats,
     types::{Error, HeaderMagic, NodeId, Protocol, Range, Table},
     udpmessage::{decode, encode, Message},
-    util::{resolve, CtrlC, Duration, Time, TimeSource}
+    util::{addr_nice, resolve, CtrlC, Duration, Time, TimeSource}
 };
 
 pub type Hash = BuildHasherDefault<FnvHasher>;
@@ -199,10 +199,10 @@ impl<TS: TimeSource> PeerList<TS> {
 
     #[inline]
     fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error> {
-        writeln!(out, "Peers:")?;
+        writeln!(out, "peers:")?;
         let now = TS::now();
         for (addr, data) in &self.peers {
-            writeln!(out, " - {} (ttl: {} s)", addr, data.timeout - now)?;
+            writeln!(out, "  - \"{}\": {{ ttl_secs: {} }}", addr_nice(*addr), data.timeout - now)?;
         }
         Ok(())
     }
@@ -631,6 +631,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                     self.broadcast_msg(&mut msg)?;
                 } else {
                     debug!("No destination for {} found, dropping", dst);
+                    self.traffic.count_dropped_payload(end - start);
                 }
             }
         }
@@ -756,6 +757,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             self.handle_net_message(src, msg)
         }) {
             error!("Error: {}, from: {}", e, src);
+            self.traffic.count_invalid_protocol(size);
         }
     }
 

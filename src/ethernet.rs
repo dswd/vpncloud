@@ -14,7 +14,7 @@ use fnv::FnvHasher;
 
 use super::{
     types::{Address, Error, Protocol, Table},
-    util::{Duration, Time, TimeSource}
+    util::{addr_nice, Duration, Time, TimeSource}
 };
 
 /// An ethernet frame dissector
@@ -110,9 +110,15 @@ impl<TS: TimeSource> Table for SwitchTable<TS> {
     /// Write out the table
     fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error> {
         let now = TS::now();
-        writeln!(out, "Switch table:")?;
+        writeln!(out, "switch_table:")?;
         for (addr, val) in &self.table {
-            writeln!(out, " - {} => {} (ttl: {} s)", addr, val.address, val.timeout - now)?;
+            writeln!(
+                out,
+                "  - \"{}\": {{ peer: \"{}\", ttl_secs: {} }}",
+                addr,
+                addr_nice(val.address),
+                val.timeout - now
+            )?;
         }
         Ok(())
     }
