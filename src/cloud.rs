@@ -73,7 +73,7 @@ impl<TS: TimeSource> PeerList<TS> {
             }
         }
         for addr in &del {
-            info!("Forgot peer: {}", addr);
+            info!("Forgot peer: {}", addr_nice(*addr));
             if let Some(data) = self.peers.remove(addr) {
                 self.nodes.remove(&data.node_id);
                 self.addresses.remove(addr);
@@ -113,7 +113,7 @@ impl<TS: TimeSource> PeerList<TS> {
     #[inline]
     fn add(&mut self, node_id: NodeId, addr: SocketAddr, peer_timeout: u16) {
         if self.nodes.insert(node_id, addr).is_none() {
-            info!("New peer: {}", addr);
+            info!("New peer: {}", addr_nice(addr));
             let mut alt_addrs = vec![];
             if let SocketAddr::V6(v6_addr) = addr {
                 if let Some(ipv4) = v6_addr.ip().to_ipv4() {
@@ -188,7 +188,7 @@ impl<TS: TimeSource> PeerList<TS> {
     #[inline]
     fn remove(&mut self, addr: &SocketAddr) {
         if let Some(data) = self.peers.remove(addr) {
-            info!("Removed peer: {}", addr);
+            info!("Removed peer: {}", addr_nice(*addr));
             self.nodes.remove(&data.node_id);
             self.addresses.remove(addr);
             for addr in data.alt_addrs {
@@ -238,6 +238,7 @@ pub struct GenericCloud<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSou
     update_freq: u16,
     buffer_out: [u8; 64 * 1024],
     stats_file: Option<File>,
+    statsd_server: Option<String>,
     next_housekeep: Time,
     next_stats_out: Time,
     next_beacon: Time,
@@ -277,6 +278,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             next_peerlist: now,
             update_freq,
             stats_file,
+            statsd_server: config.statsd_server.clone(),
             buffer_out: [0; 64 * 1024],
             next_housekeep: now,
             next_stats_out: now + STATS_INTERVAL,
@@ -516,6 +518,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         if self.next_stats_out < now {
             // Write out the statistics
             self.write_out_stats().map_err(|err| Error::File("Failed to write stats file", err))?;
+            self.send_stats_to_statsd()?;
             self.next_stats_out = now + STATS_INTERVAL;
             self.traffic.period(Some(5));
         }
@@ -575,7 +578,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
         Ok(())
     }
 
-    /// Calculates, resets and writes out the statistics to a file
+    /// Writes out the statistics to a file
     fn write_out_stats(&mut self) -> Result<(), io::Error> {
         if let Some(ref mut f) = self.stats_file {
             debug!("Writing out stats");
@@ -587,6 +590,61 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             writeln!(f)?;
             self.traffic.write_out(f)?;
             writeln!(f)?;
+        }
+        Ok(())
+    }
+
+    /// Sends the statistics to a statsd endpoint
+    fn send_stats_to_statsd(&mut self) -> Result<(), Error> {
+        if let Some(ref endpoint) = self.statsd_server {
+            let peer_traffic = self.traffic.total_peer_traffic();
+            let payload_traffic = self.traffic.total_payload_traffic();
+            let dropped = &self.traffic.dropped;
+            let msg = format!(
+                "peer_count:{}|g\ntable_entries:{}|g\n\
+                traffic.protocol.inbound.bytes:{}\n\
+                traffic.protocol.inbound.packets:{}\n\
+                traffic.protocol.outbound.bytes:{}\n\
+                traffic.protocol.outbound.packets:{}\n\
+                traffic.payload.inbound.bytes:{}\n\
+                traffic.payload.inbound.packets:{}\n\
+                traffic.payload.outbound.bytes:{}\n\
+                traffic.payload.outbound.packets:{}\n\
+                invalid_protocol_traffic.bytes:{}\n\
+                invalid_protocol_traffic.packets:{}\n\
+                dropped_payload.bytes:{}\n\
+                dropped_payload.packets:{}",
+                self.peers.len(),
+                self.table.len(),
+                peer_traffic.in_bytes,
+                peer_traffic.in_packets,
+                peer_traffic.out_bytes,
+                peer_traffic.out_packets,
+                payload_traffic.in_bytes,
+                payload_traffic.in_packets,
+                payload_traffic.out_bytes,
+                payload_traffic.out_packets,
+                dropped.in_bytes,
+                dropped.in_packets,
+                dropped.out_bytes,
+                dropped.out_packets
+            );
+            let msg_data = msg.as_bytes();
+            let addrs = resolve(endpoint)?;
+            if let Some(addr) = addrs.first() {
+                match self.socket.send(msg_data, *addr) {
+                    Ok(written) if written == msg_data.len() => Ok(()),
+                    Ok(_) => {
+                        Err(Error::Socket(
+                            "Sent out truncated packet",
+                            io::Error::new(io::ErrorKind::Other, "truncated")
+                        ))
+                    }
+                    Err(e) => Err(Error::Socket("IOError when sending", e))
+                }?
+            } else {
+                error!("Failed to resolve statsd server {}", endpoint);
+            }
         }
         Ok(())
     }
@@ -619,7 +677,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                 if !self.peers.contains_addr(&addr) {
                     // If the peer is not actually connected, remove the entry in the table and try
                     // to reconnect.
-                    warn!("Destination for {} not found in peers: {}", dst, addr);
+                    warn!("Destination for {} not found in peers: {}", dst, addr_nice(addr));
                     self.table.remove(&dst);
                     self.connect_sock(addr)?;
                 }
@@ -715,7 +773,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                 } else {
                     self.peers.add(node_id, peer, peer_timeout);
                     if self.learning && !ranges.is_empty() {
-                        warn!("Ignoring claimed addresses received from {} in learning mode.", peer);
+                        warn!("Ignoring claimed addresses received from {} in learning mode.", addr_nice(peer));
                     } else {
                         for range in ranges {
                             self.table.learn(range.base, Some(range.prefix_len), peer);
@@ -756,7 +814,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             self.traffic.count_in_traffic(src, size);
             self.handle_net_message(src, msg)
         }) {
-            error!("Error: {}, from: {}", e, src);
+            error!("Error: {}, from: {}", e, addr_nice(src));
             self.traffic.count_invalid_protocol(size);
         }
     }

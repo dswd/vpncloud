@@ -5,7 +5,8 @@
 use std::{
     collections::HashMap,
     io::{self, Write},
-    net::SocketAddr
+    net::SocketAddr,
+    ops::AddAssign
 };
 
 use super::{
@@ -26,6 +27,19 @@ pub struct TrafficEntry {
     pub in_bytes: u64,
     pub in_packets: usize,
     pub idle_periods: usize
+}
+
+impl AddAssign<&TrafficEntry> for TrafficEntry {
+    fn add_assign(&mut self, other: &TrafficEntry) {
+        self.out_bytes_total += other.out_bytes_total;
+        self.out_packets_total += other.out_packets_total;
+        self.out_bytes += other.out_bytes;
+        self.out_packets += other.out_packets;
+        self.in_bytes_total += other.in_bytes_total;
+        self.in_packets_total += other.in_packets_total;
+        self.in_bytes += other.in_bytes;
+        self.in_packets += other.in_packets;
+    }
 }
 
 impl TrafficEntry {
@@ -63,7 +77,7 @@ impl TrafficEntry {
 pub struct TrafficStats {
     peers: HashMap<SocketAddr, TrafficEntry, Hash>,
     payload: HashMap<(Address, Address), TrafficEntry, Hash>,
-    dropped: TrafficEntry
+    pub dropped: TrafficEntry
 }
 
 impl TrafficStats {
@@ -115,6 +129,22 @@ impl TrafficStats {
 
     pub fn get_payload_traffic(&self) -> impl Iterator<Item = (&(Address, Address), &TrafficEntry)> {
         self.payload.iter()
+    }
+
+    pub fn total_peer_traffic(&self) -> TrafficEntry {
+        let mut total = TrafficEntry::default();
+        for e in self.peers.values() {
+            total += e
+        }
+        total
+    }
+
+    pub fn total_payload_traffic(&self) -> TrafficEntry {
+        let mut total = TrafficEntry::default();
+        for e in self.payload.values() {
+            total += e
+        }
+        total
     }
 
     #[inline]

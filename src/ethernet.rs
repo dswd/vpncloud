@@ -130,7 +130,7 @@ impl<TS: TimeSource> Table for SwitchTable<TS> {
         match self.table.entry(key) {
             Entry::Vacant(entry) => {
                 entry.insert(SwitchTableValue { address: addr, timeout: deadline });
-                info!("Learned address {} => {}", key, addr);
+                info!("Learned address {} => {}", key, addr_nice(addr));
             }
             Entry::Occupied(mut entry) => {
                 let mut entry = entry.get_mut();
@@ -170,6 +170,10 @@ impl<TS: TimeSource> Table for SwitchTable<TS> {
         for key in remove {
             self.table.remove(&key);
         }
+    }
+
+    fn len(&self) -> usize {
+        self.table.len()
     }
 }
 

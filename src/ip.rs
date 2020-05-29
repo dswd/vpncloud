@@ -88,7 +88,7 @@ impl Table for RoutingTable {
             Some(val) => val,
             None => addr.len * 8
         };
-        info!("New routing entry: {}/{} => {}", addr, prefix_len, address);
+        info!("New routing entry: {}/{} => {}", addr, prefix_len, addr_nice(address));
         // Round the prefix length down to the next multiple of 8 and extraxt a prefix of that
         // length.
         let group_len = prefix_len as usize / 8;
@@ -183,6 +183,10 @@ impl Table for RoutingTable {
         for entry in &mut self.0.values_mut() {
             entry.retain(|entr| &entr.address != addr);
         }
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
     }
 }
 

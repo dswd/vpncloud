@@ -169,6 +169,10 @@ pub struct Args {
     #[structopt(long)]
     stats_file: Option<String>,
 
+    /// Send statistics to this statsd server
+    #[structopt(long)]
+    statsd_server: Option<String>,
+
     /// Run as other user
     #[structopt(long)]
     user: Option<String>,

@@ -227,6 +227,7 @@ pub trait Table {
     fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error>;
     fn remove(&mut self, _: &Address) -> bool;
     fn remove_all(&mut self, _: &SocketAddr);
+    fn len(&self) -> usize;
 }
 
 pub trait Protocol: Sized {
