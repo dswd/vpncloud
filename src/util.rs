@@ -319,6 +319,35 @@ pub fn from_base62(data: &str) -> Result<Vec<u8>, char> {
 }
 
 
+#[derive(Default)]
+pub struct StatsdMsg {
+    entries: Vec<String>,
+    key: Vec<String>
+}
+
+impl StatsdMsg {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn add<T: fmt::Display>(&mut self, key: &str, val: T, type_: &str) -> &mut Self {
+        self.entries.push(format!("{}.{}:{}|{}", self.key.join("."), key, val, type_));
+        self
+    }
+
+    pub fn with_ns<F: FnOnce(&mut Self)>(&mut self, ns: &str, f: F) -> &mut Self {
+        self.key.push(ns.to_string());
+        f(self);
+        self.key.pop();
+        self
+    }
+
+    pub fn build(&self) -> String {
+        self.entries.join("\n")
+    }
+}
+
+
 #[test]
 fn base62() {
     assert_eq!("", to_base62(&[0]));

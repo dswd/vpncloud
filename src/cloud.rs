@@ -28,7 +28,7 @@ use super::{
     traffic::TrafficStats,
     types::{Error, HeaderMagic, NodeId, Protocol, Range, Table},
     udpmessage::{decode, encode, Message},
-    util::{addr_nice, resolve, CtrlC, Duration, Time, TimeSource}
+    util::{addr_nice, resolve, CtrlC, Duration, StatsdMsg, Time, TimeSource}
 };
 
 pub type Hash = BuildHasherDefault<FnvHasher>;
@@ -600,35 +600,43 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             let peer_traffic = self.traffic.total_peer_traffic();
             let payload_traffic = self.traffic.total_payload_traffic();
             let dropped = &self.traffic.dropped;
-            let msg = format!(
-                "peer_count:{}|g\ntable_entries:{}|g\n\
-                traffic.protocol.inbound.bytes:{}\n\
-                traffic.protocol.inbound.packets:{}\n\
-                traffic.protocol.outbound.bytes:{}\n\
-                traffic.protocol.outbound.packets:{}\n\
-                traffic.payload.inbound.bytes:{}\n\
-                traffic.payload.inbound.packets:{}\n\
-                traffic.payload.outbound.bytes:{}\n\
-                traffic.payload.outbound.packets:{}\n\
-                invalid_protocol_traffic.bytes:{}\n\
-                invalid_protocol_traffic.packets:{}\n\
-                dropped_payload.bytes:{}\n\
-                dropped_payload.packets:{}",
-                self.peers.len(),
-                self.table.len(),
-                peer_traffic.in_bytes,
-                peer_traffic.in_packets,
-                peer_traffic.out_bytes,
-                peer_traffic.out_packets,
-                payload_traffic.in_bytes,
-                payload_traffic.in_packets,
-                payload_traffic.out_bytes,
-                payload_traffic.out_packets,
-                dropped.in_bytes,
-                dropped.in_packets,
-                dropped.out_bytes,
-                dropped.out_packets
-            );
+            let prefix = self.config.statsd_prefix.as_ref().map(|s| s as &str).unwrap_or("vpncloud");
+            let msg = StatsdMsg::new()
+                .with_ns(prefix, |msg| {
+                    msg.add("peer_count", self.peers.len(), "g");
+                    msg.add("table_entries", self.table.len(), "g");
+                    msg.with_ns("traffic", |msg| {
+                        msg.with_ns("protocol", |msg| {
+                            msg.with_ns("inbound", |msg| {
+                                msg.add("bytes", peer_traffic.in_bytes, "c");
+                                msg.add("packets", peer_traffic.in_packets, "c");
+                            });
+                            msg.with_ns("outbound", |msg| {
+                                msg.add("bytes", peer_traffic.out_bytes, "c");
+                                msg.add("packets", peer_traffic.out_packets, "c");
+                            });
+                        });
+                        msg.with_ns("payload", |msg| {
+                            msg.with_ns("inbound", |msg| {
+                                msg.add("bytes", payload_traffic.in_bytes, "c");
+                                msg.add("packets", payload_traffic.in_packets, "c");
+                            });
+                            msg.with_ns("outbound", |msg| {
+                                msg.add("bytes", payload_traffic.out_bytes, "c");
+                                msg.add("packets", payload_traffic.out_packets, "c");
+                            });
+                        });
+                    });
+                    msg.with_ns("invalid_protocol_traffic", |msg| {
+                        msg.add("bytes", dropped.in_bytes, "c");
+                        msg.add("packets", dropped.in_packets, "c");
+                    });
+                    msg.with_ns("dropped_payload", |msg| {
+                        msg.add("bytes", dropped.out_bytes, "c");
+                        msg.add("packets", dropped.out_packets, "c");
+                    });
+                })
+                .build();
             let msg_data = msg.as_bytes();
             let addrs = resolve(endpoint)?;
             if let Some(addr) = addrs.first() {

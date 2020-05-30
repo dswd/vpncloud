@@ -59,6 +59,7 @@ pub struct Config {
     pub pid_file: Option<String>,
     pub stats_file: Option<String>,
     pub statsd_server: Option<String>,
+    pub statsd_prefix: Option<String>,
     pub user: Option<String>,
     pub group: Option<String>
 }
@@ -89,6 +90,7 @@ impl Default for Config {
             pid_file: None,
             stats_file: None,
             statsd_server: None,
+            statsd_prefix: None,
             user: None,
             group: None
         }
@@ -168,6 +170,9 @@ impl Config {
         if let Some(val) = file.statsd_server {
             self.statsd_server = Some(val);
         }
+        if let Some(val) = file.statsd_prefix {
+            self.statsd_prefix = Some(val);
+        }
         if let Some(val) = file.user {
             self.user = Some(val);
         }
@@ -246,6 +251,9 @@ impl Config {
         if let Some(val) = args.statsd_server {
             self.statsd_server = Some(val);
         }
+        if let Some(val) = args.statsd_prefix {
+            self.statsd_prefix = Some(val);
+        }
         if let Some(val) = args.user {
             self.user = Some(val);
         }
@@ -307,6 +315,7 @@ pub struct ConfigFile {
     pub pid_file: Option<String>,
     pub stats_file: Option<String>,
     pub statsd_server: Option<String>,
+    pub statsd_prefix: Option<String>,
     pub user: Option<String>,
     pub group: Option<String>
 }
@@ -342,6 +351,7 @@ group: nogroup
 pid_file: /run/vpncloud.run
 stats_file: /var/log/vpncloud.stats
 statsd_server: example.com:1234
+statsd_prefix: prefix
     ";
     assert_eq!(serde_yaml::from_str::<ConfigFile>(config_file).unwrap(), ConfigFile {
         device_type: Some(Type::Tun),
@@ -368,7 +378,8 @@ statsd_server: example.com:1234
         group: Some("nogroup".to_string()),
         pid_file: Some("/run/vpncloud.run".to_string()),
         stats_file: Some("/var/log/vpncloud.stats".to_string()),
-        statsd_server: Some("example.com:1234".to_string())
+        statsd_server: Some("example.com:1234".to_string()),
+        statsd_prefix: Some("prefix".to_string())
     })
 }
 
@@ -400,7 +411,8 @@ fn config_merge() {
         group: Some("nogroup".to_string()),
         pid_file: Some("/run/vpncloud.run".to_string()),
         stats_file: Some("/var/log/vpncloud.stats".to_string()),
-        statsd_server: Some("example.com:1234".to_string())
+        statsd_server: Some("example.com:1234".to_string()),
+        statsd_prefix: Some("prefix".to_string())
     });
     assert_eq!(config, Config {
         device_type: Type::Tun,
@@ -427,6 +439,7 @@ fn config_merge() {
         pid_file: Some("/run/vpncloud.run".to_string()),
         stats_file: Some("/var/log/vpncloud.stats".to_string()),
         statsd_server: Some("example.com:1234".to_string()),
+        statsd_prefix: Some("prefix".to_string()),
         ..Default::default()
     });
     config.merge_args(Args {
@@ -453,6 +466,7 @@ fn config_merge() {
         pid_file: Some("/run/vpncloud-mynet.run".to_string()),
         stats_file: Some("/var/log/vpncloud-mynet.stats".to_string()),
         statsd_server: Some("example.com:2345".to_string()),
+        statsd_prefix: Some("prefix2".to_string()),
         user: Some("root".to_string()),
         group: Some("root".to_string()),
         ..Default::default()
@@ -486,6 +500,7 @@ fn config_merge() {
         pid_file: Some("/run/vpncloud-mynet.run".to_string()),
         stats_file: Some("/var/log/vpncloud-mynet.stats".to_string()),
         statsd_server: Some("example.com:2345".to_string()),
+        statsd_prefix: Some("prefix2".to_string()),
         daemonize: true
     });
 }

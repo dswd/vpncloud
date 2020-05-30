@@ -10,7 +10,7 @@ use std::{
 };
 
 use super::{
-    cloud::Hash,
+    cloud::{Hash, STATS_INTERVAL},
     types::Address,
     util::{addr_nice, Bytes}
 };
@@ -157,10 +157,10 @@ impl TrafficStats {
                 out,
                 "  - peer: \"{}\"\n    in: {{ display: \"{}/s\", bytes: {}, packets: {} }}\n    out: {{ display: \"{}/s\", bytes: {}, packets: {} }}",
                 addr_nice(**addr),
-                Bytes(data.in_bytes / 60),
+                Bytes(data.in_bytes / STATS_INTERVAL as u64),
                 data.in_bytes,
                 data.in_packets,
-                Bytes(data.out_bytes / 60),
+                Bytes(data.out_bytes / STATS_INTERVAL as u64),
                 data.out_bytes,
                 data.out_packets
             )?;
@@ -175,10 +175,10 @@ impl TrafficStats {
                 "  - addrs: [\"{}\", \"{}\"]\n    in: {{ display: \"{}/s\", bytes: {}, packets: {} }}\n    out: {{ display: \"{}/s\", bytes: {}, packets: {} }}",
                 remote,
                 local,
-                Bytes(data.in_bytes / 60),
+                Bytes(data.in_bytes / STATS_INTERVAL as u64),
                 data.in_bytes,
                 data.in_packets,
-                Bytes(data.out_bytes / 60),
+                Bytes(data.out_bytes / STATS_INTERVAL as u64),
                 data.out_bytes,
                 data.out_packets
             )?;
@@ -187,14 +187,14 @@ impl TrafficStats {
         writeln!(
             out,
             "invalid_protocol_traffic: {{ display: \"{}/s\", bytes: {}, packets: {} }}",
-            Bytes(self.dropped.in_bytes / 60),
+            Bytes(self.dropped.in_bytes / STATS_INTERVAL as u64),
             self.dropped.in_bytes,
             self.dropped.in_packets
         )?;
         writeln!(
             out,
             "dropped_payload_traffic: {{ display: \"{}/s\", bytes: {}, packets: {} }}",
-            Bytes(self.dropped.out_bytes / 60),
+            Bytes(self.dropped.out_bytes / STATS_INTERVAL as u64),
             self.dropped.out_bytes,
             self.dropped.out_packets
         )?;

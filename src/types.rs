@@ -228,6 +228,9 @@ pub trait Table {
     fn remove(&mut self, _: &Address) -> bool;
     fn remove_all(&mut self, _: &SocketAddr);
     fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 pub trait Protocol: Sized {

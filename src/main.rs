@@ -173,6 +173,10 @@ pub struct Args {
     #[structopt(long)]
     statsd_server: Option<String>,
 
+    /// Use the given prefix for statsd records
+    #[structopt(long)]
+    statsd_prefix: Option<String>,
+
     /// Run as other user
     #[structopt(long)]
     user: Option<String>,
