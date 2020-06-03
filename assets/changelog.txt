@@ -1,3 +1,19 @@
+vpncloud (1.4.0) stable; urgency=medium
+
+  * [added] Added option to listen on specified IP
+  * [added] Added support for statsd monitoring
+  * [changed] No longer using two sockets for ipv4 and ipv6
+  * [changed] Warning for missing router is now info
+  * [changed] New warning on claimed addresses in learning mode
+  * [changed] Rewrote argument parsing
+  * [changed] Changed stats file format to YAML
+  * [changed] Using asciidoc for manpage
+  * [changed] Updated dependencies
+  * [fixed] Fixed problem that could lead to 100% cpu consumption
+  * [fixed] Fixed startup race condition
+
+ -- Dennis Schwerdel <schwerdel@googlemail.com>  Wed, 03 Jun 2020 17:46:00 +0200
+
 vpncloud (1.3.0) stable; urgency=medium
 
   * [added] Building for aarch64 aka arm64 (thanks to Ivan)

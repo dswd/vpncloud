@@ -2,7 +2,7 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### UNRELEASED
+### v1.4.0 (2020-06-03)
 
 - [added] Added option to listen on specified IP
 - [added] Added support for statsd monitoring
@@ -15,7 +15,6 @@ This project follows [semantic versioning](http://semver.org).
 - [changed] Updated dependencies
 - [fixed] Fixed problem that could lead to 100% cpu consumption
 - [fixed] Fixed startup race condition
-
 
 ### v1.3.0 (2020-01-25)
 
