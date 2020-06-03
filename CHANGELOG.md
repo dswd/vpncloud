@@ -11,6 +11,7 @@ This project follows [semantic versioning](http://semver.org).
 - [changed] Updated dependencies
 - [changed] Rewrote argument parsing
 - [fixed] Fixed problem that could lead to 100% cpu consumption
+- [fixed] Fixed startup race condition
 
 
 ### v1.3.0 (2020-01-25)
