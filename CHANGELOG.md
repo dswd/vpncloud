@@ -5,11 +5,14 @@ This project follows [semantic versioning](http://semver.org).
 ### UNRELEASED
 
 - [added] Added option to listen on specified IP
+- [added] Added support for statsd monitoring
 - [changed] No longer using two sockets for ipv4 and ipv6
 - [changed] Warning for missing router is now info
 - [changed] New warning on claimed addresses in learning mode
-- [changed] Updated dependencies
 - [changed] Rewrote argument parsing
+- [changed] Changed stats file format to YAML
+- [changed] Using asciidoc for manpage
+- [changed] Updated dependencies
 - [fixed] Fixed problem that could lead to 100% cpu consumption
 - [fixed] Fixed startup race condition
 

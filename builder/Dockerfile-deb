@@ -10,7 +10,7 @@ RUN apt-get update \
     libc6-dev-armhf-cross \
     libc6-dev-i386 \
     gcc-5-multilib \
-    ruby-ronn \
+    asciidoctor \
  && rm -rf /var/cache/dpkg
 
 RUN ln -s asm-generic/ /usr/include/asm

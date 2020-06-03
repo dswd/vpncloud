@@ -38,7 +38,7 @@ somewhat stable state. VpnCloud features the following functionality:
 ### Installing
 
 #### Compiling from source
-Prerequisites: Git, [Cargo](https://www.rust-lang.org/install.html), Ronn
+Prerequisites: Git, [Cargo](https://www.rust-lang.org/install.html), asciidoctor
 
 The checked-out code can be compiled with ``cargo build`` or ``cargo build --release`` (release version). The binary could then be found in `target/release/vpncloud`.
 
