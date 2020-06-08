@@ -1,0 +1,227 @@
+{
+  "aes256-7000": {
+    "ping_500": {
+      "rtt_min": 0.077, 
+      "rtt_avg": 0.091, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 0.22
+    }, 
+    "iperf": {
+      "cpu_sender": 4.870841, 
+      "cpu_receiver": 58.056654, 
+      "throughput": 2906372000.0
+    }, 
+    "ping_100": {
+      "rtt_min": 0.076, 
+      "rtt_avg": 0.09, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 0.597
+    }, 
+    "ping_1000": {
+      "rtt_min": 0.078, 
+      "rtt_avg": 0.093, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 0.925
+    }
+  }, 
+  "results": {
+    "throughput_mbits": {
+      "aes256-7000": 2906.372, 
+      "plain-1400": 845.4989025966671, 
+      "chacha20-1400": 593.980680023114, 
+      "chacha20-7000": 2290.887, 
+      "aes256-1400": 752.968939682118, 
+      "plain-7000": 4438.046, 
+      "native": 9680.156
+    }, 
+    "latency_ms": {
+      "aes256-7000": {
+        "100": 22.0, 
+        "500": 21.5, 
+        "1000": 22.0
+      }, 
+      "plain-1400": {
+        "100": 20.499999999999996, 
+        "500": 20.499999999999996, 
+        "1000": 20.999999999999996
+      }, 
+      "chacha20-1400": {
+        "100": 23.5, 
+        "500": 25.500000000000004, 
+        "1000": 27.499999999999996
+      }, 
+      "chacha20-7000": {
+        "100": 23.5, 
+        "500": 25.500000000000004, 
+        "1000": 26.999999999999996
+      }, 
+      "aes256-1400": {
+        "100": 21.5, 
+        "500": 22.0, 
+        "1000": 22.5
+      }, 
+      "plain-7000": {
+        "100": 20.499999999999996, 
+        "500": 20.499999999999996, 
+        "1000": 20.499999999999996
+      }
+    }
+  }, 
+  "plain-1400": {
+    "ping_500": {
+      "rtt_min": 0.074, 
+      "rtt_avg": 0.089, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 3.605
+    }, 
+    "iperf": {
+      "cpu_sender": 1.925076, 
+      "cpu_receiver": 65.76581, 
+      "throughput": 845498902.596667
+    }, 
+    "ping_100": {
+      "rtt_min": 0.071, 
+      "rtt_avg": 0.087, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 0.381
+    }, 
+    "ping_1000": {
+      "rtt_min": 0.077, 
+      "rtt_avg": 0.091, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 3.54
+    }
+  }, 
+  "chacha20-1400": {
+    "ping_500": {
+      "rtt_min": 0.085, 
+      "rtt_avg": 0.099, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 1.654
+    }, 
+    "iperf": {
+      "cpu_sender": 1.538928, 
+      "cpu_receiver": 59.900258, 
+      "throughput": 593980680.023114
+    }, 
+    "ping_100": {
+      "rtt_min": 0.074, 
+      "rtt_avg": 0.093, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 0.382
+    }, 
+    "ping_1000": {
+      "rtt_min": 0.088, 
+      "rtt_avg": 0.104, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 3.686
+    }
+  }, 
+  "meta": {
+    "ami": "ami-0a02ee601d742e89f", 
+    "instance_type": "m5.large", 
+    "region": "eu-central-1", 
+    "version": "1.2.0", 
+    "duration": 870.1119563579559
+  }, 
+  "chacha20-7000": {
+    "ping_500": {
+      "rtt_min": 0.082, 
+      "rtt_avg": 0.099, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 0.702
+    }, 
+    "iperf": {
+      "cpu_sender": 4.365811, 
+      "cpu_receiver": 57.666402, 
+      "throughput": 2290887000.0
+    }, 
+    "ping_100": {
+      "rtt_min": 0.075, 
+      "rtt_avg": 0.093, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 0.591
+    }, 
+    "ping_1000": {
+      "rtt_min": 0.09, 
+      "rtt_avg": 0.103, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 0.352
+    }
+  }, 
+  "aes256-1400": {
+    "ping_500": {
+      "rtt_min": 0.077, 
+      "rtt_avg": 0.092, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 0.239
+    }, 
+    "iperf": {
+      "cpu_sender": 1.643239, 
+      "cpu_receiver": 64.53098, 
+      "throughput": 752968939.682118
+    }, 
+    "ping_100": {
+      "rtt_min": 0.075, 
+      "rtt_avg": 0.089, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 1.615
+    }, 
+    "ping_1000": {
+      "rtt_min": 0.08, 
+      "rtt_avg": 0.094, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 0.676
+    }
+  }, 
+  "plain-7000": {
+    "ping_500": {
+      "rtt_min": 0.074, 
+      "rtt_avg": 0.089, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 0.586
+    }, 
+    "iperf": {
+      "cpu_sender": 13.25846, 
+      "cpu_receiver": 68.481618, 
+      "throughput": 4438046000.0
+    }, 
+    "ping_100": {
+      "rtt_min": 0.071, 
+      "rtt_avg": 0.087, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 0.503
+    }, 
+    "ping_1000": {
+      "rtt_min": 0.076, 
+      "rtt_avg": 0.09, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 0.234
+    }
+  }, 
+  "native": {
+    "ping_500": {
+      "rtt_min": 0.042, 
+      "rtt_avg": 0.048, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 0.305
+    }, 
+    "iperf": {
+      "cpu_sender": 19.960378, 
+      "cpu_receiver": 65.885621, 
+      "throughput": 9680156000.0
+    }, 
+    "ping_100": {
+      "rtt_min": 0.041, 
+      "rtt_avg": 0.046, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 0.312
+    }, 
+    "ping_1000": {
+      "rtt_min": 0.043, 
+      "rtt_avg": 0.049, 
+      "pkt_loss": 0.0, 
+      "rtt_max": 0.509
+    }
+  }
+}
