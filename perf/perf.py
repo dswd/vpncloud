@@ -13,7 +13,7 @@ import sys
 from datetime import date
 
 
-# Note: this script will run for 15 minutes and incur costs of about $ 0.03
+# Note: this script will run for ~8 minutes and incur costs of about $ 0.02
 
 REGION = "eu-central-1"
 AMI = "ami-0a02ee601d742e89f"
@@ -65,6 +65,7 @@ class EC2Environment:
         self.sender_ssh = None
         self.receiver_ssh = None
         try:
+            eprint("Setting up resources...")
             self.setup()
             self.wait_until_ready()
             eprint("Setup done")
@@ -78,36 +79,36 @@ class EC2Environment:
         ec2client = boto3.client('ec2', region_name=REGION)
 
         self.vpc = ec2.create_vpc(CidrBlock='172.16.0.0/16')
-        eprint("Created VPC {}".format(self.vpc.id))
+        eprint("\tCreated VPC {}".format(self.vpc.id))
         self.vpc.create_tags(Tags=[{"Key": "Name", "Value": "vpncloud-perf-test"}])
         self.vpc.wait_until_available()
         ec2client.modify_vpc_attribute(VpcId=self.vpc.id, EnableDnsSupport={'Value': True})
         ec2client.modify_vpc_attribute(VpcId=self.vpc.id, EnableDnsHostnames={'Value': True})
 
         self.igw = ec2.create_internet_gateway()
-        eprint("Created Internet Gateway {}".format(self.igw.id))
+        eprint("\tCreated Internet Gateway {}".format(self.igw.id))
         self.igw.attach_to_vpc(VpcId=self.vpc.id)
 
         self.rtb = self.vpc.create_route_table()
-        eprint("Created Routing table {}".format(self.rtb.id))
+        eprint("\tCreated Routing table {}".format(self.rtb.id))
         self.rtb.create_route(DestinationCidrBlock='0.0.0.0/0', GatewayId=self.igw.id)
 
         self.subnet = ec2.create_subnet(CidrBlock='172.16.1.0/24', VpcId=self.vpc.id)
-        eprint("Created Subnet {}".format(self.subnet.id))
+        eprint("\tCreated Subnet {}".format(self.subnet.id))
         self.rtb.associate_with_subnet(SubnetId=self.subnet.id)
 
         self.sg = ec2.create_security_group(GroupName='SSH-ONLY', Description='only allow SSH traffic', VpcId=self.vpc.id)
-        eprint("Created security group {}".format(self.sg.id))
+        eprint("\tCreated security group {}".format(self.sg.id))
         self.sg.authorize_ingress(CidrIp='0.0.0.0/0', IpProtocol='tcp', FromPort=22, ToPort=22)
         self.sg.authorize_ingress(CidrIp='172.16.1.0/24', IpProtocol='icmp', FromPort=-1, ToPort=-1)
         self.sg.authorize_ingress(CidrIp='172.16.1.0/24', IpProtocol='tcp', FromPort=0, ToPort=65535)
         self.sg.authorize_ingress(CidrIp='172.16.1.0/24', IpProtocol='udp', FromPort=0, ToPort=65535)
 
         self.key_pair = ec2.create_key_pair(KeyName='vpncloud-perf-test-keypair')
-        eprint("Created key pair {}".format(self.key_pair.name))
+        eprint("\tCreated key pair {}".format(self.key_pair.name))
         self.rsa_key = paramiko.RSAKey.from_private_key(io.StringIO(self.key_pair.key_material))
         self.placement_group = ec2.create_placement_group(GroupName="vpncloud-test-placement", Strategy="cluster")
-        eprint("Created placement group {}".format(self.placement_group.name))
+        eprint("\tCreated placement group {}".format(self.placement_group.name))
         if SPOT:
             response = ec2client.request_spot_instances(
                 SpotPrice = MAX_PRICE,
@@ -144,8 +145,8 @@ class EC2Environment:
             sender, receiver = response['SpotInstanceRequests']
             self.sender_request = sender['SpotInstanceRequestId']
             self.receiver_request = receiver['SpotInstanceRequestId']
-            eprint("Created spot instance requests {} and {}".format(self.sender_request, self.receiver_request))
-            eprint("Waiting for spot instance requests")
+            eprint("\tCreated spot instance requests {} and {}".format(self.sender_request, self.receiver_request))
+            eprint("\tWaiting for spot instance requests")
             waited = 0
             while waited < MAX_WAIT:
                 time.sleep(1.0)
@@ -181,8 +182,8 @@ class EC2Environment:
                 UserData=USERDATA,
                 KeyName='vpncloud-perf-test-keypair'
             )
-        eprint("Created EC2 instances {} and {}".format(self.sender.id, self.receiver.id))
-        eprint("Waiting for instances to start...")
+        eprint("\tCreated EC2 instances {} and {}".format(self.sender.id, self.receiver.id))
+        eprint("\tWaiting for instances to start...")
         self.sender.wait_until_running()
         self.receiver.wait_until_running()
         self.sender.reload()
@@ -190,7 +191,7 @@ class EC2Environment:
 
     def wait_until_ready(self):
         waited = 0
-        eprint("Waiting for SSH to be ready...")
+        eprint("\tWaiting for SSH to be ready...")
         while waited < MAX_WAIT:
             try:
                 if not self.sender_ssh:
@@ -202,7 +203,7 @@ class EC2Environment:
                 pass
             time.sleep(1.0)
             waited += 1
-        eprint("Waiting for instances to finish setup...")
+        eprint("\tWaiting for instances to finish setup...")
         while waited < MAX_WAIT:
             try:
                 run_cmd(self.sender_ssh, 'test -f /var/lib/cloud/instance/boot-finished')
@@ -288,7 +289,7 @@ class PerfTest:
         return run_cmd(self.receiver_ssh, cmd)
 
     def run_ping(self, dst, size):
-        eprint("Running ping {} with size {} ...".format(dst, size))
+        eprint("\tRunning ping {} with size {} ...".format(dst, size))
         (out, _) = self.run_sender('sudo ping {dst} -c 30000 -i 0.001 -s {size} -U -q'.format(dst=dst, size=size))
         match = re.search(r'([\d]*\.[\d]*)/([\d]*\.[\d]*)/([\d]*\.[\d]*)/([\d]*\.[\d]*)', out)
         ping_min = float(match.group(1))
@@ -304,7 +305,7 @@ class PerfTest:
         }
 
     def run_iperf(self, dst):
-        eprint("Running iperf on {} ...".format(dst))
+        eprint("\tRunning iperf on {} ...".format(dst))
         self.run_receiver('iperf3 -s -D')
         time.sleep(0.1)
         (out, _) = self.run_sender('iperf3 -c {dst} -t 30 --json'.format(dst=dst))
@@ -324,12 +325,12 @@ class PerfTest:
             "ping_1000": self.run_ping(dst, 1000),
         }
 
-    def start_vpncloud(self, mtu=1400, crypto=None):
-        eprint("Setting up vpncloud on receiver")
+    def start_vpncloud(self, mtu=8800, crypto=None):
+        eprint("\tSetting up vpncloud on receiver")
         crypto_str = " --shared-key test --crypto {}".format(crypto) if crypto else ""
         args = "-t tap --daemon -l 3210 --no-port-forwarding" + crypto_str
         self.run_receiver("sudo vpncloud {args} --ifup 'ifconfig $IFNAME {ip}/24 mtu {mtu} up'".format(args=args, mtu=mtu, ip=self.receiver_ip_vpncloud))
-        eprint("Setting up vpncloud on sender")
+        eprint("\tSetting up vpncloud on sender")
         self.run_sender("sudo vpncloud {args} -c {peer}:3210 --ifup 'ifconfig $IFNAME {ip}/24 mtu {mtu} up'".format(args=args, mtu=mtu, ip=self.sender_ip_vpncloud, peer=self.receiver_ip))
         time.sleep(1.0)
 
@@ -339,6 +340,7 @@ class PerfTest:
         time.sleep(3.0)
 
     def run(self):
+        eprint("Testing native network")
         results = {
             "meta": {
                 "region": REGION,
@@ -348,21 +350,20 @@ class PerfTest:
             },
             "native": self.run_suite(self.receiver_ip)
         }
-        for mtu in [1400, 7000]:
-            for crypto in [None, "aes256", "chacha20"]:
-                eprint("Running with mtu {} and crypto {}".format(mtu, crypto or "plain"))
-                self.start_vpncloud(mtu=mtu, crypto=crypto)
-                res = self.run_suite(self.receiver_ip_vpncloud)
-                self.stop_vpncloud()
-                results["{}-{}".format(crypto or "plain", mtu)] = res
+        for crypto in [None, "aes256", "chacha20"]:
+            eprint("Running with crypto {}".format(crypto or "plain"))
+            self.start_vpncloud(mtu=8800, crypto=crypto)
+            res = self.run_suite(self.receiver_ip_vpncloud)
+            self.stop_vpncloud()
+            results[str(crypto or "plain")] = res
         results['results'] = {
             "throughput_mbits": dict([
-                (k, results[k]["iperf"]["throughput"] / 1000000.0) for k in ["native", "plain-1400", "aes256-1400", "chacha20-1400", "plain-7000", "aes256-7000", "chacha20-7000"]
+                (k, results[k]["iperf"]["throughput"] / 1000000.0) for k in ["native", "plain", "aes256", "chacha20"]
             ]),
-            "latency_ms": dict([
+            "latency_us": dict([
                 (k, dict([
                     (str(s), (results[k]["ping_%s" % s]["rtt_avg"] - results["native"]["ping_%s" % s]["rtt_avg"])*1000.0/2.0) for s in [100, 500, 1000]
-                ])) for k in ["plain-1400", "aes256-1400", "chacha20-1400", "plain-7000", "aes256-7000", "chacha20-7000"]
+                ])) for k in ["plain", "aes256", "chacha20"]
             ])
         }
         return results
