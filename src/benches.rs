@@ -51,6 +51,19 @@ fn crypto_aes256(b: &mut Bencher) {
 }
 
 #[bench]
+fn crypto_aes128(b: &mut Bencher) {
+    let mut crypto = Crypto::from_shared_key(CryptoMethod::AES128, "test");
+    let mut payload = [0; 1500];
+    let header = [0; 8];
+    let mut nonce_bytes = [0; 12];
+    b.iter(|| {
+        let len = crypto.encrypt(&mut payload, 1400, &mut nonce_bytes, &header);
+        assert!(crypto.decrypt(&mut payload[..len], &nonce_bytes, &header).is_ok());
+    });
+    b.bytes = 1400;
+}
+
+#[bench]
 fn message_encode(b: &mut Bencher) {
     let mut crypto = Crypto::None;
     let mut payload = [0; 1600];

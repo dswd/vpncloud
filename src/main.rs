@@ -83,7 +83,7 @@ pub struct Args {
     #[structopt(short, long, aliases=&["shared-key", "secret-key", "secret"])]
     key: Option<String>,
 
-    /// The encryption method to use ("aes256", or "chacha20")
+    /// The encryption method to use ("aes128", "aes256", or "chacha20")
     #[structopt(long)]
     crypto: Option<CryptoMethod>,
 

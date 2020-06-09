@@ -2,6 +2,12 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+
+### UNRELEASED
+
+- [added] Added crypto option AES128
+
+
 ### v1.4.0 (2020-06-03)
 
 - [added] Added option to listen on specified IP

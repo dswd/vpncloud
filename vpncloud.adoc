@@ -59,9 +59,9 @@ vpncloud - Peer-to-peer VPN
   the traffic will be sent unencrypted.
 
 *--crypto <method>*::
-  The encryption method to use ("aes256", or "chacha20"). Most current CPUs
-  have special support for AES256 so this should be faster. For older
-  computers lacking this support, only CHACHA20 is supported.
+  The encryption method to use ("aes128", "aes256", or "chacha20"). Most 
+  current CPUs have special support for AES256 so this should be faster. For 
+  older computers lacking this support, CHACHA20 is the fastest option.
   [default: *chacha20*]
 
 *--magic <id>*::
@@ -258,10 +258,10 @@ side effects.
 . VpnCloud is not designed for high security use cases. Although the used crypto
 primitives are expected to be very secure, their application has not been
 reviewed.
-The shared key is hashed using _ScryptSalsa208Sha256_ to derive a key,
-which is used to encrypt the payload of messages using _ChaCha20Poly1305_ or
-_AES256-GCM_. The encryption includes an authentication that also protects the
-header.
+The shared key is hashed using _PBKDF2_HMAC_SHA256_ to derive a key,
+which is used to encrypt the payload of messages using _ChaCha20Poly1305_,
+_AES128-GCM_, or _AES256-GCM_. The encryption includes an authentication that
+also protects the header.
 This method does only protect against attacks on single messages but not
 against attacks that manipulate the message series itself (i.e. suppress
 messages, reorder them, or duplicate them).
