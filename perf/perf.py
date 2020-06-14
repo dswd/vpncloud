@@ -34,6 +34,8 @@ runcmd:
 
 MAX_WAIT = 300
 
+CRYPTO = ["aes256", "aes128", "chacha20"] if VERSION >= "1.5.0" else ["aes256", "chacha20"]
+
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
@@ -350,7 +352,7 @@ class PerfTest:
             },
             "native": self.run_suite(self.receiver_ip)
         }
-        for crypto in [None, "aes256", "chacha20"]:
+        for crypto in [None] + CRYPTO:
             eprint("Running with crypto {}".format(crypto or "plain"))
             self.start_vpncloud(mtu=8800, crypto=crypto)
             res = self.run_suite(self.receiver_ip_vpncloud)
@@ -358,12 +360,12 @@ class PerfTest:
             results[str(crypto or "plain")] = res
         results['results'] = {
             "throughput_mbits": dict([
-                (k, results[k]["iperf"]["throughput"] / 1000000.0) for k in ["native", "plain", "aes256", "chacha20"]
+                (k, results[k]["iperf"]["throughput"] / 1000000.0) for k in ["native", "plain"] + CRYPTO
             ]),
             "latency_us": dict([
                 (k, dict([
                     (str(s), (results[k]["ping_%s" % s]["rtt_avg"] - results["native"]["ping_%s" % s]["rtt_avg"])*1000.0/2.0) for s in [100, 500, 1000]
-                ])) for k in ["plain", "aes256", "chacha20"]
+                ])) for k in ["plain"] + CRYPTO
             ])
         }
         return results

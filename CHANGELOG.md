@@ -6,6 +6,7 @@ This project follows [semantic versioning](http://semver.org).
 ### UNRELEASED
 
 - [added] Added crypto option AES128
+- [changed] Updated dependencies
 
 
 ### v1.4.0 (2020-06-03)
