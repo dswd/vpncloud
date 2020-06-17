@@ -83,13 +83,13 @@ impl RoutingTable {
 impl Table for RoutingTable {
     /// Learns the given address, inserting it in the hash map
     fn learn(&mut self, addr: Address, prefix_len: Option<u8>, address: SocketAddr) {
-        // If prefix length is not set, treat the whole addess as significant
+        // If prefix length is not set, treat the whole address as significant
         let prefix_len = match prefix_len {
             Some(val) => val,
             None => addr.len * 8
         };
         info!("New routing entry: {}/{} => {}", addr, prefix_len, addr_nice(address));
-        // Round the prefix length down to the next multiple of 8 and extraxt a prefix of that
+        // Round the prefix length down to the next multiple of 8 and extract a prefix of that
         // length.
         let group_len = prefix_len as usize / 8;
         assert!(group_len <= 16);
@@ -97,7 +97,7 @@ impl Table for RoutingTable {
         group_bytes[..group_len].copy_from_slice(&addr.data[..group_len]);
         // Create an entry
         let routing_entry = RoutingEntry { address, bytes: addr, prefix_len };
-        // Add the entry to the routing table, creating a new list of the prefix group is empty.
+        // Add the entry to the routing table, creating a new list if the prefix group is empty.
         match self.0.entry(group_bytes) {
             hash_map::Entry::Occupied(mut entry) => entry.get_mut().push(routing_entry),
             hash_map::Entry::Vacant(entry) => {
