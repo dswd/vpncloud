@@ -15,7 +15,7 @@ parser.add_argument('--count', '-c', dest="count", type=int, default=2, help='Nu
 parser.add_argument('--cluster', action="store_true", help='Cluster instances to get reliable throughput')
 parser.add_argument('--subnet', help='AWS subnet id to use (empty = create new one)')
 parser.add_argument('--keyname', help='Name of AWS keypair to use (empty = create new one)')
-parser.add_argument('--keyfile', help='Path of the private key file')
+parser.add_argument('--keyfile', default="key.pem", help='Path of the private key file')
 
 
 args = parser.parse_args()
