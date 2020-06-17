@@ -219,6 +219,7 @@ class EC2Environment:
         userdata = """#cloud-config
 packages:
   - iperf3
+  - socat
 runcmd:
   - wget https://github.com/dswd/vpncloud/releases/download/v{version}/vpncloud_{version}.x86_64.rpm -O /tmp/vpncloud.rpm
   - yum install -y /tmp/vpncloud.rpm
