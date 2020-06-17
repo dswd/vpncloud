@@ -7,6 +7,7 @@ This project follows [semantic versioning](http://semver.org).
 
 - [added] Added crypto option AES128
 - [changed] Updated dependencies
+- [fixed] Fixed keepalive for small timeouts
 
 
 ### v1.4.0 (2020-06-03)

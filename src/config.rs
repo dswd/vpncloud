@@ -14,7 +14,8 @@ use super::{
 use siphasher::sip::SipHasher24;
 use std::{
     hash::{Hash, Hasher},
-    net::{IpAddr, Ipv6Addr, SocketAddr}
+    net::{IpAddr, Ipv6Addr, SocketAddr},
+    cmp::max
 };
 
 
@@ -284,7 +285,7 @@ impl Config {
     pub fn get_keepalive(&self) -> Duration {
         match self.keepalive {
             Some(dur) => dur,
-            None => self.peer_timeout / 2 - 60
+            None => max(self.peer_timeout / 2 - 60, 1)
         }
     }
 }

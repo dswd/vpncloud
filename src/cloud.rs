@@ -3,7 +3,7 @@
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 use std::{
-    cmp::min,
+    cmp::{min, max},
     collections::HashMap,
     fmt,
     fs::{self, File},
@@ -473,7 +473,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             let mut msg = Message::Peers(peers);
             self.broadcast_msg(&mut msg)?;
             // Reschedule for next update
-            let interval = min(self.update_freq as u16, self.peers.min_peer_timeout());
+            let interval = min(self.update_freq as u16, max(self.peers.min_peer_timeout()/2-60, 1));
             self.next_peerlist = now + Time::from(interval);
         }
         // Connect to those reconnect_peers that are due
