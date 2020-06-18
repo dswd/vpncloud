@@ -11,7 +11,7 @@ between two nodes can be as easy as:
 
        $> vpncloud -c REMOTE_HOST:PORT --ifup 'ifconfig $IFNAME 10.0.0.1/24 mtu 1400 up'
 
-For more information, please see the [Website](https://vpncloud.ddswd.de).
+For more information, please see the [Website](https://vpncloud.ddswd.de) or the [Forum](https://groups.google.com/forum/#!forum/vpncloud).
 
 
 ### Project Status
