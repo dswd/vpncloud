@@ -293,7 +293,7 @@ fn address_decode_encode() {
     assert_eq!(&buf[0..7], &[6, 0x78, 0x2d, 0x16, 0x05, 0x01, 0x02]);
     assert_eq!((addr, 7), Address::read_from(&buf).unwrap());
     assert_eq!(addr, Address::read_from_fixed(&buf[1..], 6).unwrap());
-    assert!(Address::read_from(&buf[0..0]).is_err()); // Address too short
+    assert!(Address::read_from(&buf[0..1]).is_err()); // Address too short
     buf[0] = 100;
     assert!(Address::read_from(&buf).is_err()); // Invalid address, too long
     buf[0] = 5;

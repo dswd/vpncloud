@@ -21,6 +21,7 @@ use std::{
 
 const HASH_PREFIX: &str = "hash:";
 pub const DEFAULT_PEER_TIMEOUT: u16 = 600;
+pub const DEFAULT_PORT: u16 = 3210;
 
 
 fn parse_listen(addr: &str) -> SocketAddr {

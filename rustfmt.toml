@@ -15,3 +15,5 @@ overflow_delimited_expr = true
 blank_lines_upper_bound = 2
 normalize_doc_attributes = true
 inline_attribute_width = 50
+edition = "2018"
+reorder_impl_items = true

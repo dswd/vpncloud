@@ -6,9 +6,9 @@ This project follows [semantic versioning](http://semver.org).
 ### UNRELEASED
 
 - [added] Added crypto option AES128
+- [added] Default port for peers
 - [changed] Updated dependencies
 - [fixed] Fixed keepalive for small timeouts
-
 
 ### v1.4.0 (2020-06-03)
 

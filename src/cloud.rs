@@ -19,7 +19,7 @@ use rand::{prelude::*, random, thread_rng};
 
 use super::{
     beacon::BeaconSerializer,
-    config::{Config, DEFAULT_PEER_TIMEOUT},
+    config::{Config, DEFAULT_PEER_TIMEOUT, DEFAULT_PORT},
     crypto::Crypto,
     device::Device,
     net::Socket,
@@ -364,8 +364,11 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     ///
     /// This method adds a peer to the list of nodes to reconnect to. A periodic task will try to
     /// connect to the peer if it is not already connected.
-    pub fn add_reconnect_peer(&mut self, add: String) {
+    pub fn add_reconnect_peer(&mut self, mut add: String) {
         let now = TS::now();
+        if add.find(':').unwrap_or(0) <= add.find(']').unwrap_or(0)  { // : not present or only in IPv6 address
+            add = format!("{}:{}", add, DEFAULT_PORT)
+        }
         let resolved = match resolve(&add as &str) {
             Ok(addrs) => addrs,
             Err(err) => {
