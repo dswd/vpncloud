@@ -13,9 +13,9 @@ use super::{
 
 use siphasher::sip::SipHasher24;
 use std::{
+    cmp::max,
     hash::{Hash, Hasher},
-    net::{IpAddr, Ipv6Addr, SocketAddr},
-    cmp::max
+    net::{IpAddr, Ipv6Addr, SocketAddr}
 };
 
 
@@ -294,29 +294,43 @@ impl Config {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
 pub struct ConfigFile {
+    #[serde(alias = "device-type")]
     pub device_type: Option<Type>,
+    #[serde(alias = "device-name")]
     pub device_name: Option<String>,
+    #[serde(alias = "device-path")]
     pub device_path: Option<String>,
     pub ifup: Option<String>,
     pub ifdown: Option<String>,
     pub crypto: Option<CryptoMethod>,
+    #[serde(alias = "shared-key")]
     pub shared_key: Option<String>,
     pub magic: Option<String>,
     pub port: Option<u16>,
     pub listen: Option<String>,
     pub peers: Option<Vec<String>>,
+    #[serde(alias = "peer-timeout")]
     pub peer_timeout: Option<Duration>,
     pub keepalive: Option<Duration>,
+    #[serde(alias = "beacon-store")]
     pub beacon_store: Option<String>,
+    #[serde(alias = "beacon-load")]
     pub beacon_load: Option<String>,
+    #[serde(alias = "beacon-interval")]
     pub beacon_interval: Option<Duration>,
     pub mode: Option<Mode>,
+    #[serde(alias = "dst-timeout")]
     pub dst_timeout: Option<Duration>,
     pub subnets: Option<Vec<String>>,
+    #[serde(alias = "port-forwarding")]
     pub port_forwarding: Option<bool>,
+    #[serde(alias = "pid-file")]
     pub pid_file: Option<String>,
+    #[serde(alias = "stats-file")]
     pub stats_file: Option<String>,
+    #[serde(alias = "statsd-server")]
     pub statsd_server: Option<String>,
+    #[serde(alias = "statsd-prefix")]
     pub statsd_prefix: Option<String>,
     pub user: Option<String>,
     pub group: Option<String>
