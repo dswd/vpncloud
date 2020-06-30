@@ -48,7 +48,7 @@ vpncloud - Peer-to-peer VPN
   *addr:port*. If the node is not started, the connection will be retried
   periodically. This parameter can be repeated to connect to multiple peers.
 
-*-s <subnet>*, *--subnet <subnet>*:
+*-s <subnet>*, *--subnet <subnet>*::
   The local subnets to use. This parameter should be in the form
   *address/prefixlen* where address is an IPv4 address, an IPv6 address, or a
   MAC address. The prefix length is the number of significant front bits that
@@ -141,6 +141,13 @@ vpncloud - Peer-to-peer VPN
 *--stats-file <file>*::
   If set, periodically write statistics on peers and current traffic to the
   given file. The file will be periodically overwritten with new data.
+
+*--statsd-server <server>*::
+  If set, periodically send statistics on current traffic and some important
+  events to the given statsd server (host:port).
+
+*--statsd-prefix <prefix>*::
+  Sets the prefix to use for all statsd entries. [default: **vpncloud**]
 
 *--daemon*::
   Spawn a background process instead of running the process in the foreground.
@@ -291,10 +298,12 @@ detailed descriptions of the options.
 *dst_timeout*:: Switch table entry timeout in seconds. Same as *--dst-timeout*
 *subnets*:: A list of local subnets to use. See *--subnet*
 *port_forwarding*:: Whether to activate port forwardig. See *--no-port-forwarding*
-*user*:: The name of a user to run the background process under. See *--user*
-*group*:: The name of a group to run the background process under. See *--group*
-*pid_file*:: The path of the pid file to create. See *--pid-file*
-*stats_file*:: The path of the statistics file. See *--stats-file*
+*user*:: The name of a user to run the background process under. Same as *--user*
+*group*:: The name of a group to run the background process under. Same as *--group*
+*pid_file*:: The path of the pid file to create. Same as *--pid-file*
+*stats_file*:: The path of the statistics file. Same as *--stats-file*
+*statsd_server*:: Server to report statistics to. Same as *--statsd-server*
+*statsd_prefix*:: Prefix to use when reporting to statsd. Same as *--statsd-prefix*
 
 === Example
 
@@ -348,6 +357,31 @@ without prefix and suffix!
 suffix.
 The commands are called in separate threads, so even longer running commands
 will not block the node.
+
+
+== STATSD SUPPORT
+
+When a statsd server is configured (either via **--statsd-server** or the 
+config option **statsd_server**), VpnCloud sends out the following statistics
+every minute.
+
+Gauge values:
+*peer_count*:: Current number of peers
+*table_entries*:: Number of routing table / switch table entries
+
+The following statistics consist of two keys: *.bytes* and *.packets* that hold
+the values in bytes and packets. All values refer to the traffic during the 
+last minute:
+*traffic.protocol.inbound*:: Complete incoming traffic with all peers
+*traffic.protocol.outbound*:: Complete outgoing traffic with all peers
+*traffic.payload.inbound*:: Incoming payload traffic with all peers
+*traffic.payload.outbound*:: Outgoing payload traffic with all peers
+*invalid_protocol_traffic*:: Invalid incoming protocol traffic
+*dropped_payload*:: Outgoing traffic that could not be routed
+
+All keys are prefixed by a common prefix. The prefix defaults to *vpncloud* but
+can be changed via **--statsd-prefix** or the config option **statsd_prefix**.
+
 
 == NETWORK PROTOCOL
 
