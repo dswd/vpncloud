@@ -60,6 +60,7 @@ license-file = ["LICENSE.md", "1"]
 changelog = "assets/changelog.txt"
 section = "net"
 depends = "libc6 (>= 2.23), libgcc1 (>= 1:6.0.1)"
+maintainer-scripts = "assets/deb-scripts"
 assets = [
   ["target/release/vpncloud", "/usr/bin/vpncloud", "755"],
   ["assets/example.net.disabled", "/etc/vpncloud/example.net.disabled", "600"],
