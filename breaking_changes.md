@@ -8,3 +8,4 @@ This is a list of breaking changes to do in such a case:
 - Make encryption the default, --unencrypted for no encryption
 - Remove network-id parameter
 - Remove port config option
+- Rename peers to connect
