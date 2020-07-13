@@ -2,19 +2,40 @@
 // Copyright (C) 2015-2020  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
+use libc::{c_short, c_ulong, ioctl, IFF_NO_PI, IFF_TAP, IFF_TUN, IF_NAMESIZE};
 use std::{
     collections::VecDeque,
     fmt, fs,
     io::{self, Error as IoError, ErrorKind, Read, Write},
     os::unix::io::{AsRawFd, RawFd},
+    str,
     str::FromStr
 };
 
 use super::types::Error;
 
-extern "C" {
-    fn setup_tap_device(fd: i32, ifname: *mut u8) -> i32;
-    fn setup_tun_device(fd: i32, ifname: *mut u8) -> i32;
+static TUNSETIFF: c_ulong = 1074025674;
+
+
+#[repr(C)]
+union IfReqData {
+    flags: c_short,
+    _dummy: [u8; 24]
+}
+
+#[repr(C)]
+struct IfReq {
+    ifr_name: [u8; IF_NAMESIZE],
+    data: IfReqData    
+}
+
+impl IfReq {
+    fn new(name: &str, flags: c_short) -> Self {
+        assert!(name.len() < IF_NAMESIZE);
+        let mut ifr_name = [0 as u8; IF_NAMESIZE];
+        ifr_name[..name.len()].clone_from_slice(name.as_bytes());
+        Self { ifr_name, data: IfReqData { flags } }
+    }
 }
 
 
@@ -120,24 +141,18 @@ impl TunTapDevice {
             return Self::dummy(ifname, path, type_)
         }
         let fd = fs::OpenOptions::new().read(true).write(true).open(path)?;
-        // Add trailing \0 to interface name
-        let mut ifname_string = String::with_capacity(32);
-        ifname_string.push_str(ifname);
-        ifname_string.push('\0');
-        assert!(ifname_string.len() <= 32);
-        let mut ifname_c = ifname_string.into_bytes();
-        let res = match type_ {
-            Type::Tun => unsafe { setup_tun_device(fd.as_raw_fd(), ifname_c.as_mut_ptr()) },
-            Type::Tap => unsafe { setup_tap_device(fd.as_raw_fd(), ifname_c.as_mut_ptr()) },
+        let flags = match type_ {
+            Type::Tun => IFF_TUN | IFF_NO_PI,
+            Type::Tap => IFF_TAP | IFF_NO_PI,
             Type::Dummy => unreachable!()
         };
+        let mut ifreq = IfReq::new(ifname, flags as c_short);
+        let res = unsafe { ioctl(fd.as_raw_fd(), TUNSETIFF, &mut ifreq) };
         match res {
             0 => {
-                // Remove trailing \0 from name
-                while ifname_c.last() == Some(&0) {
-                    ifname_c.pop();
-                }
-                Ok(Self { fd, ifname: String::from_utf8(ifname_c).unwrap(), type_ })
+                let nul_range_end = ifreq.ifr_name.iter().position(|&c| c == b'\0').unwrap_or(ifreq.ifr_name.len());
+                let ifname = unsafe { str::from_utf8_unchecked(&ifreq.ifr_name[0..nul_range_end]) }.to_string();
+                Ok(Self { fd, ifname, type_ })
             }
             _ => Err(IoError::last_os_error())
         }

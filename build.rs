@@ -2,16 +2,10 @@
 // Copyright (C) 2015-2020  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-extern crate cc;
-
 use std::{env, fs, path::Path, process::Command};
 
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
-
-    // Compile tun/tap C code
-    println!("cargo:rerun-if-changed=src/c/tuntap.c");
-    cc::Build::new().file("src/c/tuntap.c").include("src").compile("libtuntap.a");
 
     // Process manpage using asciidoctor command
     println!("cargo:rerun-if-changed=vpncloud.adoc");
