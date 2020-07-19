@@ -52,7 +52,7 @@ mod internal {
             if let Ok((port, timeout)) = Self::get_any_forwarding(&gateway, internal_addr, port) {
                 info!("Port-forwarding: external IP is {}", external_ip);
                 let external_addr = SocketAddrV4::new(external_ip, port);
-                info!("Port-forwarding: sucessfully activated port forward on {}, timeout: {}", external_addr, timeout);
+                info!("Port-forwarding: successfully activated port forward on {}, timeout: {}", external_addr, timeout);
                 let next_extension =
                     if timeout > 0 { Some(SystemTimeSource::now() + Time::from(timeout) - 60) } else { None };
                 Some(PortForwarding { internal_addr, external_addr, gateway, next_extension })
@@ -101,6 +101,7 @@ mod internal {
                     }
                 }
             } else {
+                gateway.remove_port(PortMappingProtocol::UDP, port).ok();
                 match gateway.add_port(PortMappingProtocol::UDP, port, addr, LEASE_TIME, DESCRIPTION) {
                     Ok(()) => Ok((port, LEASE_TIME)),
                     Err(AddPortError::OnlyPermanentLeasesSupported) => {
