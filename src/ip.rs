@@ -12,7 +12,7 @@ use std::{
 use fnv::FnvHasher;
 
 use super::{
-    types::{Address, Error, Protocol, Table},
+    types::{Address, Error, NodeId, Protocol, Table},
     util::addr_nice
 };
 
@@ -59,6 +59,7 @@ impl Protocol for Packet {
 
 struct RoutingEntry {
     address: SocketAddr,
+    node_id: NodeId,
     bytes: Address,
     prefix_len: u8
 }
@@ -82,7 +83,7 @@ impl RoutingTable {
 
 impl Table for RoutingTable {
     /// Learns the given address, inserting it in the hash map
-    fn learn(&mut self, addr: Address, prefix_len: Option<u8>, address: SocketAddr) {
+    fn learn(&mut self, addr: Address, prefix_len: Option<u8>, node_id: NodeId, address: SocketAddr) {
         // If prefix length is not set, treat the whole address as significant
         let prefix_len = match prefix_len {
             Some(val) => val,
@@ -96,10 +97,14 @@ impl Table for RoutingTable {
         let mut group_bytes = [0; 16];
         group_bytes[..group_len].copy_from_slice(&addr.data[..group_len]);
         // Create an entry
-        let routing_entry = RoutingEntry { address, bytes: addr, prefix_len };
+        let routing_entry = RoutingEntry { address, bytes: addr, node_id, prefix_len };
         // Add the entry to the routing table, creating a new list if the prefix group is empty.
         match self.0.entry(group_bytes) {
-            hash_map::Entry::Occupied(mut entry) => entry.get_mut().push(routing_entry),
+            hash_map::Entry::Occupied(mut entry) => {
+                let list = entry.get_mut();
+                list.retain(|e| e.node_id != routing_entry.node_id || e.address == routing_entry.address);
+                list.push(routing_entry)
+            }
             hash_map::Entry::Vacant(entry) => {
                 entry.insert(vec![routing_entry]);
             }
@@ -241,33 +246,36 @@ fn decode_invalid_packet() {
 fn routing_table_ipv4() {
     let mut table = RoutingTable::new();
     let peer1 = "1.2.3.4:1".to_socket_addrs().unwrap().next().unwrap();
+    let node1 = [1; 16];
     let peer2 = "1.2.3.4:2".to_socket_addrs().unwrap().next().unwrap();
+    let node2 = [2; 16];
     let peer3 = "1.2.3.4:3".to_socket_addrs().unwrap().next().unwrap();
+    let node3 = [3; 16];
     assert!(table.lookup(&Address::from_str("192.168.1.1").unwrap()).is_none());
-    table.learn(Address::from_str("192.168.1.1").unwrap(), Some(32), peer1);
+    table.learn(Address::from_str("192.168.1.1").unwrap(), Some(32), node1, peer1);
     assert_eq!(table.lookup(&Address::from_str("192.168.1.1").unwrap()), Some(peer1));
-    table.learn(Address::from_str("192.168.1.2").unwrap(), None, peer2);
+    table.learn(Address::from_str("192.168.1.2").unwrap(), None, node2, peer2);
     assert_eq!(table.lookup(&Address::from_str("192.168.1.1").unwrap()), Some(peer1));
     assert_eq!(table.lookup(&Address::from_str("192.168.1.2").unwrap()), Some(peer2));
-    table.learn(Address::from_str("192.168.1.0").unwrap(), Some(24), peer3);
+    table.learn(Address::from_str("192.168.1.0").unwrap(), Some(24), node3, peer3);
     assert_eq!(table.lookup(&Address::from_str("192.168.1.1").unwrap()), Some(peer1));
     assert_eq!(table.lookup(&Address::from_str("192.168.1.2").unwrap()), Some(peer2));
     assert_eq!(table.lookup(&Address::from_str("192.168.1.3").unwrap()), Some(peer3));
-    table.learn(Address::from_str("192.168.0.0").unwrap(), Some(16), peer1);
+    table.learn(Address::from_str("192.168.0.0").unwrap(), Some(16), node1, peer1);
     assert_eq!(table.lookup(&Address::from_str("192.168.2.1").unwrap()), Some(peer1));
     assert_eq!(table.lookup(&Address::from_str("192.168.1.1").unwrap()), Some(peer1));
     assert_eq!(table.lookup(&Address::from_str("192.168.1.2").unwrap()), Some(peer2));
     assert_eq!(table.lookup(&Address::from_str("192.168.1.3").unwrap()), Some(peer3));
-    table.learn(Address::from_str("0.0.0.0").unwrap(), Some(0), peer2);
+    table.learn(Address::from_str("0.0.0.0").unwrap(), Some(0), node2, peer2);
     assert_eq!(table.lookup(&Address::from_str("192.168.2.1").unwrap()), Some(peer1));
     assert_eq!(table.lookup(&Address::from_str("192.168.1.1").unwrap()), Some(peer1));
     assert_eq!(table.lookup(&Address::from_str("192.168.1.2").unwrap()), Some(peer2));
     assert_eq!(table.lookup(&Address::from_str("192.168.1.3").unwrap()), Some(peer3));
     assert_eq!(table.lookup(&Address::from_str("1.2.3.4").unwrap()), Some(peer2));
-    table.learn(Address::from_str("192.168.2.0").unwrap(), Some(27), peer3);
+    table.learn(Address::from_str("192.168.2.0").unwrap(), Some(27), node3, peer3);
     assert_eq!(table.lookup(&Address::from_str("192.168.2.31").unwrap()), Some(peer3));
     assert_eq!(table.lookup(&Address::from_str("192.168.2.32").unwrap()), Some(peer1));
-    table.learn(Address::from_str("192.168.2.0").unwrap(), Some(28), peer3);
+    table.learn(Address::from_str("192.168.2.0").unwrap(), Some(28), node3, peer3);
     assert_eq!(table.lookup(&Address::from_str("192.168.2.1").unwrap()), Some(peer3));
 }
 
@@ -275,34 +283,37 @@ fn routing_table_ipv4() {
 fn routing_table_ipv6() {
     let mut table = RoutingTable::new();
     let peer1 = "::1:1".to_socket_addrs().unwrap().next().unwrap();
+    let node1 = [1; 16];
     let peer2 = "::1:2".to_socket_addrs().unwrap().next().unwrap();
+    let node2 = [2; 16];
     let peer3 = "::1:3".to_socket_addrs().unwrap().next().unwrap();
+    let node3 = [3; 16];
     assert!(table.lookup(&Address::from_str("::1").unwrap()).is_none());
-    table.learn(Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap(), Some(128), peer1);
+    table.learn(Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap(), Some(128), node1, peer1);
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap()), Some(peer1));
-    table.learn(Address::from_str("dead:beef:dead:beef:dead:beef:dead:2").unwrap(), None, peer2);
+    table.learn(Address::from_str("dead:beef:dead:beef:dead:beef:dead:2").unwrap(), None, node2, peer2);
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap()), Some(peer1));
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:2").unwrap()), Some(peer2));
-    table.learn(Address::from_str("dead:beef:dead:beef::").unwrap(), Some(64), peer3);
+    table.learn(Address::from_str("dead:beef:dead:beef::").unwrap(), Some(64), node3, peer3);
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap()), Some(peer1));
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:2").unwrap()), Some(peer2));
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:3").unwrap()), Some(peer3));
-    table.learn(Address::from_str("dead:beef:dead:be00::").unwrap(), Some(56), peer1);
+    table.learn(Address::from_str("dead:beef:dead:be00::").unwrap(), Some(56), node1, peer1);
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:1::").unwrap()), Some(peer3));
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:be01::").unwrap()), Some(peer1));
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap()), Some(peer1));
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:2").unwrap()), Some(peer2));
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:3").unwrap()), Some(peer3));
-    table.learn(Address::from_str("::").unwrap(), Some(0), peer2);
+    table.learn(Address::from_str("::").unwrap(), Some(0), node2, peer2);
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:1::").unwrap()), Some(peer3));
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:be01::").unwrap()), Some(peer1));
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:1").unwrap()), Some(peer1));
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:2").unwrap()), Some(peer2));
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:3").unwrap()), Some(peer3));
     assert_eq!(table.lookup(&Address::from_str("::1").unwrap()), Some(peer2));
-    table.learn(Address::from_str("dead:beef:dead:beef:dead:beef:dead:be00").unwrap(), Some(123), peer2);
+    table.learn(Address::from_str("dead:beef:dead:beef:dead:beef:dead:be00").unwrap(), Some(123), node2, peer2);
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:be1f").unwrap()), Some(peer2));
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:be20").unwrap()), Some(peer3));
-    table.learn(Address::from_str("dead:beef:dead:beef:dead:beef:dead:be00").unwrap(), Some(124), peer3);
+    table.learn(Address::from_str("dead:beef:dead:beef:dead:beef:dead:be00").unwrap(), Some(124), node3, peer3);
     assert_eq!(table.lookup(&Address::from_str("dead:beef:dead:beef:dead:beef:dead:be01").unwrap()), Some(peer3));
 }

@@ -13,7 +13,7 @@ use std::{
 use fnv::FnvHasher;
 
 use super::{
-    types::{Address, Error, Protocol, Table},
+    types::{Address, Error, NodeId, Protocol, Table},
     util::{addr_nice, Duration, Time, TimeSource}
 };
 
@@ -125,7 +125,7 @@ impl<TS: TimeSource> Table for SwitchTable<TS> {
 
     /// Learns the given address, inserting it in the hash map
     #[inline]
-    fn learn(&mut self, key: Address, _prefix_len: Option<u8>, addr: SocketAddr) {
+    fn learn(&mut self, key: Address, _prefix_len: Option<u8>, _: NodeId, addr: SocketAddr) {
         let deadline = TS::now() + Time::from(self.timeout);
         match self.table.entry(key) {
             Entry::Vacant(entry) => {
@@ -212,16 +212,17 @@ fn switch() {
     MockTimeSource::set_time(1000);
     let mut table = SwitchTable::<MockTimeSource>::new(10, 1);
     let addr = Address::from_str("12:34:56:78:90:ab").unwrap();
+    let node_id = [0; 16];
     let peer = "1.2.3.4:5678".to_socket_addrs().unwrap().next().unwrap();
     let peer2 = "1.2.3.5:7890".to_socket_addrs().unwrap().next().unwrap();
     assert!(table.lookup(&addr).is_none());
     MockTimeSource::set_time(1000);
-    table.learn(addr, None, peer);
+    table.learn(addr, None, node_id, peer);
     assert_eq!(table.lookup(&addr), Some(peer));
     MockTimeSource::set_time(1000);
-    table.learn(addr, None, peer2);
+    table.learn(addr, None, node_id, peer2);
     assert_eq!(table.lookup(&addr), Some(peer));
     MockTimeSource::set_time(1010);
-    table.learn(addr, None, peer2);
+    table.learn(addr, None, node_id, peer2);
     assert_eq!(table.lookup(&addr), Some(peer2));
 }

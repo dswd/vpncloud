@@ -221,7 +221,7 @@ impl FromStr for Mode {
 }
 
 pub trait Table {
-    fn learn(&mut self, _: Address, _: Option<u8>, _: SocketAddr);
+    fn learn(&mut self, _: Address, _: Option<u8>, _: NodeId, _: SocketAddr);
     fn lookup(&mut self, _: &Address) -> Option<SocketAddr>;
     fn housekeep(&mut self);
     fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error>;

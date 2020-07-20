@@ -8,7 +8,10 @@ This project follows [semantic versioning](http://semver.org).
 - [added] Added crypto option AES128
 - [added] Default port for peers
 - [changed] Updated dependencies
+- [changed] Removed C code, now 100% Rust
 - [fixed] Fixed keepalive for small timeouts
+- [fixed] Fixed problem with port forwarding
+- [fixed] Fixed problem with TUN on dynamic host addresses
 
 ### v1.4.0 (2020-06-03)
 

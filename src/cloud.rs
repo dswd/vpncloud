@@ -3,7 +3,7 @@
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 use std::{
-    cmp::{min, max},
+    cmp::{max, min},
     collections::HashMap,
     fmt,
     fs::{self, File},
@@ -108,7 +108,6 @@ impl<TS: TimeSource> PeerList<TS> {
     pub fn contains_node(&self, node_id: &NodeId) -> bool {
         self.nodes.contains_key(node_id)
     }
-
 
     #[inline]
     fn add(&mut self, node_id: NodeId, addr: SocketAddr, peer_timeout: u16) {
@@ -366,7 +365,8 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
     /// connect to the peer if it is not already connected.
     pub fn add_reconnect_peer(&mut self, mut add: String) {
         let now = TS::now();
-        if add.find(':').unwrap_or(0) <= add.find(']').unwrap_or(0)  { // : not present or only in IPv6 address
+        if add.find(':').unwrap_or(0) <= add.find(']').unwrap_or(0) {
+            // : not present or only in IPv6 address
             add = format!("{}:{}", add, DEFAULT_PORT)
         }
         let resolved = match resolve(&add as &str) {
@@ -476,7 +476,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
             let mut msg = Message::Peers(peers);
             self.broadcast_msg(&mut msg)?;
             // Reschedule for next update
-            let interval = min(self.update_freq as u16, max(self.peers.min_peer_timeout()/2-60, 1));
+            let interval = min(self.update_freq as u16, max(self.peers.min_peer_timeout() / 2 - 60, 1));
             self.next_peerlist = now + Time::from(interval);
         }
         // Connect to those reconnect_peers that are due
@@ -753,7 +753,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                 }
                 if self.learning {
                     // Learn single address
-                    self.table.learn(src, None, peer);
+                    self.table.learn(src, None, self.node_id, peer);
                 }
                 // Not adding peer in this case to increase performance
             }
@@ -787,7 +787,7 @@ impl<D: Device, P: Protocol, T: Table, S: Socket, TS: TimeSource> GenericCloud<D
                         warn!("Ignoring claimed addresses received from {} in learning mode.", addr_nice(peer));
                     } else {
                         for range in ranges {
-                            self.table.learn(range.base, Some(range.prefix_len), peer);
+                            self.table.learn(range.base, Some(range.prefix_len), node_id, peer);
                         }
                     }
                 }
