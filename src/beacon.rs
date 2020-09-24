@@ -44,16 +44,14 @@ struct FutureResult<T> {
 
 #[derive(Clone)]
 pub struct BeaconSerializer<TS> {
-    magic: Vec<u8>,
     shared_key: Vec<u8>,
     future_peers: Arc<FutureResult<Vec<SocketAddr>>>,
     _dummy_ts: PhantomData<TS>
 }
 
 impl<TS: TimeSource> BeaconSerializer<TS> {
-    pub fn new(magic: &[u8], shared_key: &[u8]) -> Self {
+    pub fn new(shared_key: &[u8]) -> Self {
         Self {
-            magic: magic.to_owned(),
             shared_key: shared_key.to_owned(),
             future_peers: Arc::new(FutureResult { has_result: AtomicBool::new(false), result: Mutex::new(Vec::new()) }),
             _dummy_ts: PhantomData
@@ -67,7 +65,6 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
     fn get_keystream(&self, type_: u8, seed: u8, iter: u8) -> Vec<u8> {
         let mut data = Vec::new();
         data.extend_from_slice(&[type_, seed, iter]);
-        data.extend_from_slice(&self.magic);
         data.extend_from_slice(&self.shared_key);
         sha512(&data)
     }
@@ -325,122 +322,122 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
 #[test]
 fn encode() {
     MockTimeSource::set_time(2000 * 3600);
-    let ser = BeaconSerializer::<MockTimeSource>::new(b"vpnc", b"mysecretkey");
+    let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
-    assert_eq!("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", ser.encode(&peers));
+    assert_eq!("WsHI31EWDMBYxvITiILIrm2k9gEik22E", ser.encode(&peers));
     peers.push(SocketAddr::from_str("[::1]:5678").unwrap());
-    assert_eq!("3hRD8BKvg7jotek0FGLeYtIc1zj7jzPRyQscQAe9tCqnFJ0vyVfIxYMB", ser.encode(&peers));
+    assert_eq!("WsHI3GXKaXCveo6uejmZizZ72kR6Y0L9T7h49TXONp1ugfKvvvEik22E", ser.encode(&peers));
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:54").unwrap());
-    assert_eq!("3hRD86NwMC5dPp8bh5idzhMal4AIxYMB", ser.encode(&peers));
+    assert_eq!("WsHI32gm9eMSHP3Lm1GXcdP7rD3ik22E", ser.encode(&peers));
 }
 
 #[test]
 fn decode() {
     MockTimeSource::set_time(2000 * 3600);
-    let ser = BeaconSerializer::<MockTimeSource>::new(b"vpnc", b"mysecretkey");
+    let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
-    assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", None)));
+    assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode("WsHI31EWDMBYxvITiILIrm2k9gEik22E", None)));
     peers.push(SocketAddr::from_str("[::1]:5678").unwrap());
     assert_eq!(
         format!("{:?}", peers),
-        format!("{:?}", ser.decode("3hRD8BKvg7jotek0FGLeYtIc1zj7jzPRyQscQAe9tCqnFJ0vyVfIxYMB", None))
+        format!("{:?}", ser.decode("WsHI3GXKaXCveo6uejmZizZ72kR6Y0L9T7h49TXONp1ugfKvvvEik22E", None))
     );
 }
 
 #[test]
 fn decode_split() {
     MockTimeSource::set_time(2000 * 3600);
-    let ser = BeaconSerializer::<MockTimeSource>::new(b"vpnc", b"mysecretkey");
+    let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
     assert_eq!(
         format!("{:?}", peers),
-        format!("{:?}", ser.decode("3hRD8-5V.3h:1P 0g\t5U\nn9(ZW)no[qR]Doü7ZäIxYMB", None))
+        format!("{:?}", ser.decode("WsHI3-1E.WD:MB Yx\tvI\nTi(IL)Ir[m2]k9ügEäik22E", None))
     );
     assert_eq!(
         format!("{:?}", peers),
-        format!("{:?}", ser.decode("3 -, \nhR--D85V3h1P0g5Un9ZWnoqRDo7ZI(x}YÖÄÜ\nMB", None))
+        format!("{:?}", ser.decode("W -, \nsH--I31EWDMBYxvITiILIrm2k9gEi(k)2ÖÄÜ\n2E", None))
     );
 }
 
 #[test]
 fn decode_offset() {
     MockTimeSource::set_time(2000 * 3600);
-    let ser = BeaconSerializer::<MockTimeSource>::new(b"vpnc", b"mysecretkey");
+    let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
     assert_eq!(
         format!("{:?}", peers),
-        format!("{:?}", ser.decode("Hello World: 3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB! End of the World", None))
+        format!("{:?}", ser.decode("Hello World: WsHI31EWDMBYxvITiILIrm2k9gEik22E! End of the World", None))
     );
 }
 
 #[test]
 fn decode_multiple() {
     MockTimeSource::set_time(2000 * 3600);
-    let ser = BeaconSerializer::<MockTimeSource>::new(b"vpnc", b"mysecretkey");
+    let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
     assert_eq!(
         format!("{:?}", peers),
-        format!("{:?}", ser.decode("3hRD850fTOmqFffvcJEIxYMB 3hRD823uwTS47pupeONIxYMB", None))
+        format!("{:?}", ser.decode("WsHI31HVpqxFNMNSPrvik22E WsHI34yOBcZIulKdtn2ik22E", None))
     );
 }
 
 #[test]
 fn decode_ttl() {
     MockTimeSource::set_time(2000 * 3600);
-    let ser = BeaconSerializer::<MockTimeSource>::new(b"vpnc", b"mysecretkey");
+    let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
     MockTimeSource::set_time(2000 * 3600);
-    assert_eq!(2, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", None).len());
+    assert_eq!(2, ser.decode("WsHI31EWDMBYxvITiILIrm2k9gEik22E", None).len());
     MockTimeSource::set_time(2100 * 3600);
-    assert_eq!(2, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", None).len());
+    assert_eq!(2, ser.decode("WsHI31EWDMBYxvITiILIrm2k9gEik22E", None).len());
     MockTimeSource::set_time(2005 * 3600);
-    assert_eq!(2, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", None).len());
+    assert_eq!(2, ser.decode("WsHI31EWDMBYxvITiILIrm2k9gEik22E", None).len());
     MockTimeSource::set_time(1995 * 3600);
-    assert_eq!(2, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", None).len());
+    assert_eq!(2, ser.decode("WsHI31EWDMBYxvITiILIrm2k9gEik22E", None).len());
     MockTimeSource::set_time(2000 * 3600);
-    assert_eq!(2, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", Some(24)).len());
+    assert_eq!(2, ser.decode("WsHI31EWDMBYxvITiILIrm2k9gEik22E", Some(24)).len());
     MockTimeSource::set_time(1995 * 3600);
-    assert_eq!(2, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", Some(24)).len());
+    assert_eq!(2, ser.decode("WsHI31EWDMBYxvITiILIrm2k9gEik22E", Some(24)).len());
     MockTimeSource::set_time(2005 * 3600);
-    assert_eq!(2, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", Some(24)).len());
+    assert_eq!(2, ser.decode("WsHI31EWDMBYxvITiILIrm2k9gEik22E", Some(24)).len());
     MockTimeSource::set_time(2100 * 3600);
-    assert_eq!(0, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", Some(24)).len());
+    assert_eq!(0, ser.decode("WsHI31EWDMBYxvITiILIrm2k9gEik22E", Some(24)).len());
     MockTimeSource::set_time(1900 * 3600);
-    assert_eq!(0, ser.decode("3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB", Some(24)).len());
+    assert_eq!(0, ser.decode("WsHI31EWDMBYxvITiILIrm2k9gEik22E", Some(24)).len());
 }
 
 #[test]
 fn decode_invalid() {
     MockTimeSource::set_time(2000 * 3600);
-    let ser = BeaconSerializer::<MockTimeSource>::new(b"vpnc", b"mysecretkey");
+    let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     assert_eq!(0, ser.decode("", None).len());
-    assert_eq!(0, ser.decode("3hRD8IxYMB", None).len());
-    assert_eq!(0, ser.decode("3hRD8--", None).len());
-    assert_eq!(0, ser.decode("--IxYMB", None).len());
-    assert_eq!(0, ser.decode("3hRD85V3h1P0g5Un8ZWnoqRDo7ZIxYMB", None).len());
-    assert_eq!(2, ser.decode("IxYMB3hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMB3hRD8", None).len());
-    assert_eq!(2, ser.decode("3hRD83hRD85V3h1P0g5Un9ZWnoqRDo7ZIxYMBIxYMB", None).len());
+    assert_eq!(0, ser.decode("WsHI3ik22E", None).len());
+    assert_eq!(0, ser.decode("WsHI3--", None).len());
+    assert_eq!(0, ser.decode("--ik22E", None).len());
+    assert_eq!(0, ser.decode("WsHI32EWDMBYxvITiILIrm2k9gEik22E", None).len());
+    assert_eq!(2, ser.decode("ik22EWsHI31EWDMBYxvITiILIrm2k9gEik22EWsHI3", None).len());
+    assert_eq!(2, ser.decode("WsHI3WsHI31EWDMBYxvITiILIrm2k9gEik22Eik22E", None).len());
 }
 
 
 #[test]
 fn encode_decode() {
     MockTimeSource::set_time(2000 * 3600);
-    let ser = BeaconSerializer::<MockTimeSource>::new(b"vpnc", b"mysecretkey");
+    let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
@@ -452,7 +449,7 @@ fn encode_decode() {
 #[test]
 fn encode_decode_file() {
     MockTimeSource::set_time(2000 * 3600);
-    let ser = BeaconSerializer::<MockTimeSource>::new(b"vpnc", b"mysecretkey");
+    let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
@@ -466,7 +463,7 @@ fn encode_decode_file() {
 #[test]
 fn encode_decode_cmd() {
     MockTimeSource::set_time(2000 * 3600);
-    let ser = BeaconSerializer::<MockTimeSource>::new(b"vpnc", b"mysecretkey");
+    let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let mut peers = Vec::new();
     peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
     peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());

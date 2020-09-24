@@ -7,7 +7,8 @@ from datetime import date
 
 # Note: this script will run for ~8 minutes and incur costs of about $ 0.02
 
-VERSION = "1.4.0"
+FILE = "../target/release/vpncloud"
+VERSION = "2.0-pre"
 REGION = "eu-central-1"
 
 env = EC2Environment(
@@ -16,14 +17,15 @@ env = EC2Environment(
     instance_type = "m5.large", 
     use_spot = True, 
     max_price = "0.08", # USD per hour per VM
-    vpncloud_version = VERSION, 
+    vpncloud_version = VERSION,
+    vpncloud_file = FILE,
     cluster_nodes = True,
     subnet = CREATE, 
     keyname = CREATE
 )
 
 
-CRYPTO = ["aes256", "aes128", "chacha20"] if VERSION >= "1.5.0" else ["aes256", "chacha20"]
+CRYPTO = ["plain", "aes256", "aes128", "chacha20"]
 
 
 class PerfTest:
@@ -40,7 +42,7 @@ class PerfTest:
             "region": env.region,
             "instance_type": env.instance_type,
             "ami": env.ami,
-            "version": env.version
+            "version": env.vpncloud_version
         }
         return cls(env.nodes[0], env.nodes[1], meta)
 
@@ -64,11 +66,11 @@ class PerfTest:
             "ping_1000": self.run_ping(dst, 1000),
         }
 
-    def start_vpncloud(self, mtu=8800, crypto=None):
+    def start_vpncloud(self, crypto=None):
         eprint("\tSetting up vpncloud on receiver")
-        self.receiver.start_vpncloud(crypto=crypto, ip="{}/24".format(self.receiver_ip_vpncloud), mtu=mtu)
+        self.receiver.start_vpncloud(crypto=crypto, ip="{}/24".format(self.receiver_ip_vpncloud))
         eprint("\tSetting up vpncloud on sender")
-        self.sender.start_vpncloud(crypto=crypto, peers=["{}:3210".format(self.receiver.private_ip)], ip="{}/24".format(self.sender_ip_vpncloud), mtu=mtu)
+        self.sender.start_vpncloud(crypto=crypto, peers=["{}:3210".format(self.receiver.private_ip)], ip="{}/24".format(self.sender_ip_vpncloud))
         time.sleep(1.0)
 
     def stop_vpncloud(self):
@@ -81,20 +83,20 @@ class PerfTest:
             "meta": self.meta,
             "native": self.run_suite(self.receiver.private_ip)
         }
-        for crypto in [None] + CRYPTO:
-            eprint("Running with crypto {}".format(crypto or "plain"))
+        for crypto in CRYPTO:
+            eprint("Running with crypto {}".format(crypto))
             self.start_vpncloud(crypto=crypto)
             res = self.run_suite(self.receiver_ip_vpncloud)
             self.stop_vpncloud()
-            results[str(crypto or "plain")] = res
+            results[str(crypto)] = res
         results['results'] = {
             "throughput_mbits": dict([
-                (k, results[k]["iperf"]["throughput"] / 1000000.0) for k in ["native", "plain"] + CRYPTO
+                (k, results[k]["iperf"]["throughput"] / 1000000.0) for k in ["native"] + CRYPTO
             ]),
             "latency_us": dict([
                 (k, dict([
                     (str(s), (results[k]["ping_%s" % s]["rtt_avg"] - results["native"]["ping_%s" % s]["rtt_avg"])*1000.0/2.0) for s in [100, 500, 1000]
-                ])) for k in ["plain"] + CRYPTO
+                ])) for k in CRYPTO
             ])
         }
         return results

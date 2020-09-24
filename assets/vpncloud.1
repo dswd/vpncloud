@@ -241,7 +241,7 @@ in 3 different modes:
 In this mode, the VPN will dynamically learn addresses
 as they are used as source addresses and use them to forward data to its
 destination. Addresses that have not been seen for some time
-(option \fBdst_timeout\fP) will be forgotten. Data for unknown addresses will be
+(option \fBswitch_timeout\fP) will be forgotten. Data for unknown addresses will be
 broadcast to all peers. This mode is the default mode for TAP devices that
 process Ethernet frames but it can also be used with TUN devices and IP
 packets.
@@ -492,7 +492,7 @@ Interval for loading and storing beacons in seconds. Same as \fB\-\-beacon\-inte
 The mode of the VPN. Same as \fB\-\-mode\fP
 .RE
 .sp
-\fBdst_timeout\fP
+\fBswitch_timeout\fP
 .RS 4
 Switch table entry timeout in seconds. Same as \fB\-\-dst\-timeout\fP
 .RE

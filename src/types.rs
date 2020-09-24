@@ -2,19 +2,22 @@
 // Copyright (C) 2015-2020  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
+use crate::{
+    error::Error,
+    util::{bytes_to_hex, Encoder}
+};
+use byteorder::{ReadBytesExt, WriteBytesExt};
+use smallvec::SmallVec;
 use std::{
     fmt,
     hash::{Hash, Hasher},
-    io::{self, Write},
-    net::{Ipv4Addr, Ipv6Addr, SocketAddr},
+    io::{Read, Write},
+    net::{Ipv4Addr, Ipv6Addr},
     str::FromStr
 };
 
-use super::util::{bytes_to_hex, Encoder};
-
 pub const NODE_ID_BYTES: usize = 16;
 
-pub type HeaderMagic = [u8; 4];
 pub type NodeId = [u8; NODE_ID_BYTES];
 
 
@@ -26,35 +29,31 @@ pub struct Address {
 
 impl Address {
     #[inline]
-    pub fn read_from(data: &[u8]) -> Result<(Address, usize), Error> {
-        if data.is_empty() {
-            return Err(Error::Parse("Address too short"))
-        }
-        let len = data[0] as usize;
-        let addr = Address::read_from_fixed(&data[1..], len)?;
-        Ok((addr, len + 1))
+    pub fn read_from<R: Read>(mut r: R) -> Result<Address, Error> {
+        let len = r.read_u8().map_err(|_| Error::Parse("Address too short"))?;
+        Address::read_from_fixed(r, len)
     }
 
     #[inline]
-    pub fn read_from_fixed(data: &[u8], len: usize) -> Result<Address, Error> {
+    pub fn read_from_fixed<R: Read>(mut r: R, len: u8) -> Result<Address, Error> {
         if len > 16 {
             return Err(Error::Parse("Invalid address, too long"))
         }
-        if data.len() < len {
-            return Err(Error::Parse("Address too short"))
-        }
-        let mut bytes = [0; 16];
-        bytes[0..len].copy_from_slice(&data[0..len]);
-        Ok(Address { data: bytes, len: len as u8 })
+        let mut data = [0; 16];
+        r.read_exact(&mut data[..len as usize]).map_err(|_| Error::Parse("Address too short"))?;
+        Ok(Address { data, len })
     }
 
     #[inline]
-    pub fn write_to(&self, data: &mut [u8]) -> usize {
-        assert!(data.len() > self.len as usize);
-        data[0] = self.len;
-        let len = self.len as usize;
-        data[1..=len].copy_from_slice(&self.data[0..len]);
-        self.len as usize + 1
+    pub fn write_to<W: Write>(&self, mut w: W) {
+        w.write_u8(self.len).expect("Buffer too small");
+        w.write_all(&self.data[..self.len as usize]).expect("Buffer too small");
+    }
+
+    pub fn from_ipv4(ip: Ipv4Addr) -> Self {
+        let mut data = [0; 16];
+        data[0..4].copy_from_slice(&ip.octets());
+        Self { data, len: 4 }
     }
 }
 
@@ -70,7 +69,7 @@ impl PartialEq for Address {
 impl Hash for Address {
     #[inline]
     fn hash<H: Hasher>(&self, hasher: &mut H) {
-        hasher.write(&self.data[0..self.len as usize])
+        hasher.write(&self.data[..self.len as usize])
     }
 }
 
@@ -89,7 +88,7 @@ impl fmt::Display for Address {
             },
             16 => write!(formatter, "{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}",
                 d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]),
-            _ => write!(formatter, "{}", bytes_to_hex(&d[0..self.len as usize]))
+            _ => write!(formatter, "{}", bytes_to_hex(&d[..self.len as usize]))
         }
     }
 }
@@ -138,23 +137,35 @@ pub struct Range {
     pub prefix_len: u8
 }
 
+pub type RangeList = SmallVec<[Range; 4]>;
+
 impl Range {
-    #[inline]
-    pub fn read_from(data: &[u8]) -> Result<(Range, usize), Error> {
-        let (address, read) = Address::read_from(data)?;
-        if data.len() < read + 1 {
-            return Err(Error::Parse("Range too short"))
+    pub fn matches(&self, addr: Address) -> bool {
+        if self.base.len != addr.len {
+            return false
         }
-        let prefix_len = data[read];
-        Ok((Range { base: address, prefix_len }, read + 1))
+        let mut match_len = 0;
+        for i in 0..addr.len as usize {
+            let m = addr.data[i] ^ self.base.data[i];
+            match_len += m.leading_zeros() as u8;
+            if m != 0 {
+                break
+            }
+        }
+        match_len >= self.prefix_len
     }
 
     #[inline]
-    pub fn write_to(&self, data: &mut [u8]) -> usize {
-        let pos = self.base.write_to(data);
-        assert!(data.len() > pos);
-        data[pos] = self.prefix_len;
-        pos + 1
+    pub fn read_from<R: Read>(mut r: R) -> Result<Range, Error> {
+        let base = Address::read_from(&mut r)?;
+        let prefix_len = r.read_u8().map_err(|_| Error::Parse("Address too short"))?;
+        Ok(Range { base, prefix_len })
+    }
+
+    #[inline]
+    pub fn write_to<W: Write>(&self, mut w: W) {
+        self.base.write_to(&mut w);
+        w.write_u8(self.prefix_len).expect("Buffer too small")
     }
 }
 
@@ -220,115 +231,81 @@ impl FromStr for Mode {
     }
 }
 
-pub trait Table {
-    fn learn(&mut self, _: Address, _: Option<u8>, _: NodeId, _: SocketAddr);
-    fn lookup(&mut self, _: &Address) -> Option<SocketAddr>;
-    fn housekeep(&mut self);
-    fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error>;
-    fn remove(&mut self, _: &Address) -> bool;
-    fn remove_all(&mut self, _: &SocketAddr);
-    fn len(&self) -> usize;
-    fn is_empty(&self) -> bool {
-        self.len() == 0
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    use std::io::Cursor;
+
+    #[test]
+    fn address_parse_fmt() {
+        assert_eq!(format!("{}", Address::from_str("120.45.22.5").unwrap()), "120.45.22.5");
+        assert_eq!(format!("{}", Address::from_str("78:2d:16:05:01:02").unwrap()), "78:2d:16:05:01:02");
+        assert_eq!(
+            format!("{}", Address { data: [3, 56, 120, 45, 22, 5, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0], len: 8 }),
+            "vlan824/78:2d:16:05:01:02"
+        );
+        assert_eq!(
+            format!("{}", Address::from_str("0001:0203:0405:0607:0809:0a0b:0c0d:0e0f").unwrap()),
+            "0001:0203:0405:0607:0809:0a0b:0c0d:0e0f"
+        );
+        assert_eq!(format!("{:?}", Address { data: [1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], len: 2 }), "0102");
+        assert!(Address::from_str("").is_err()); // Failed to parse address
     }
-}
 
-pub trait Protocol: Sized {
-    fn parse(_: &[u8]) -> Result<(Address, Address), Error>;
-}
-
-#[derive(Debug)]
-pub enum Error {
-    Parse(&'static str),
-    WrongHeaderMagic(HeaderMagic),
-    Socket(&'static str, io::Error),
-    Name(String),
-    TunTapDev(&'static str, io::Error),
-    Crypto(&'static str),
-    File(&'static str, io::Error),
-    Beacon(&'static str, io::Error)
-}
-impl fmt::Display for Error {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match *self {
-            Error::Parse(msg) => write!(formatter, "{}", msg),
-            Error::Socket(msg, ref err) => write!(formatter, "{}: {:?}", msg, err),
-            Error::TunTapDev(msg, ref err) => write!(formatter, "{}: {:?}", msg, err),
-            Error::Crypto(msg) => write!(formatter, "{}", msg),
-            Error::Name(ref name) => write!(formatter, "failed to resolve name '{}'", name),
-            Error::WrongHeaderMagic(net) => write!(formatter, "wrong header magic: {}", bytes_to_hex(&net)),
-            Error::File(msg, ref err) => write!(formatter, "{}: {:?}", msg, err),
-            Error::Beacon(msg, ref err) => write!(formatter, "{}: {:?}", msg, err)
-        }
+    #[test]
+    fn address_decode_encode() {
+        let mut buf = vec![];
+        let addr = Address::from_str("120.45.22.5").unwrap();
+        addr.write_to(Cursor::new(&mut buf));
+        assert_eq!(&buf[0..5], &[4, 120, 45, 22, 5]);
+        assert_eq!(addr, Address::read_from(Cursor::new(&buf)).unwrap());
+        assert_eq!(addr, Address::read_from_fixed(Cursor::new(&buf[1..]), 4).unwrap());
+        buf.clear();
+        let addr = Address::from_str("78:2d:16:05:01:02").unwrap();
+        addr.write_to(Cursor::new(&mut buf));
+        assert_eq!(&buf[0..7], &[6, 0x78, 0x2d, 0x16, 0x05, 0x01, 0x02]);
+        assert_eq!(addr, Address::read_from(Cursor::new(&buf)).unwrap());
+        assert_eq!(addr, Address::read_from_fixed(Cursor::new(&buf[1..]), 6).unwrap());
+        assert!(Address::read_from(Cursor::new(&buf[0..1])).is_err()); // Address too short
+        buf[0] = 100;
+        assert!(Address::read_from(Cursor::new(&buf)).is_err()); // Invalid address, too long
+        buf[0] = 5;
+        assert!(Address::read_from(Cursor::new(&buf[0..4])).is_err()); // Address too short
     }
-}
 
+    #[test]
+    fn address_eq() {
+        assert_eq!(
+            Address::read_from_fixed(Cursor::new(&[1, 2, 3, 4]), 4).unwrap(),
+            Address::read_from_fixed(Cursor::new(&[1, 2, 3, 4]), 4).unwrap()
+        );
+        assert_ne!(
+            Address::read_from_fixed(Cursor::new(&[1, 2, 3, 4]), 4).unwrap(),
+            Address::read_from_fixed(Cursor::new(&[1, 2, 3, 5]), 4).unwrap()
+        );
+        assert_eq!(
+            Address::read_from_fixed(Cursor::new(&[1, 2, 3, 4]), 3).unwrap(),
+            Address::read_from_fixed(Cursor::new(&[1, 2, 3, 5]), 3).unwrap()
+        );
+        assert_ne!(
+            Address::read_from_fixed(Cursor::new(&[1, 2, 3, 4]), 3).unwrap(),
+            Address::read_from_fixed(Cursor::new(&[1, 2, 3, 4]), 4).unwrap()
+        );
+    }
 
-#[test]
-fn address_parse_fmt() {
-    assert_eq!(format!("{}", Address::from_str("120.45.22.5").unwrap()), "120.45.22.5");
-    assert_eq!(format!("{}", Address::from_str("78:2d:16:05:01:02").unwrap()), "78:2d:16:05:01:02");
-    assert_eq!(
-        format!("{}", Address { data: [3, 56, 120, 45, 22, 5, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0], len: 8 }),
-        "vlan824/78:2d:16:05:01:02"
-    );
-    assert_eq!(
-        format!("{}", Address::from_str("0001:0203:0405:0607:0809:0a0b:0c0d:0e0f").unwrap()),
-        "0001:0203:0405:0607:0809:0a0b:0c0d:0e0f"
-    );
-    assert_eq!(format!("{:?}", Address { data: [1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], len: 2 }), "0102");
-    assert!(Address::from_str("").is_err()); // Failed to parse address
-}
-
-#[test]
-fn address_decode_encode() {
-    let mut buf = [0; 32];
-    let addr = Address::from_str("120.45.22.5").unwrap();
-    assert_eq!(addr.write_to(&mut buf), 5);
-    assert_eq!(&buf[0..5], &[4, 120, 45, 22, 5]);
-    assert_eq!((addr, 5), Address::read_from(&buf).unwrap());
-    assert_eq!(addr, Address::read_from_fixed(&buf[1..], 4).unwrap());
-    let addr = Address::from_str("78:2d:16:05:01:02").unwrap();
-    assert_eq!(addr.write_to(&mut buf), 7);
-    assert_eq!(&buf[0..7], &[6, 0x78, 0x2d, 0x16, 0x05, 0x01, 0x02]);
-    assert_eq!((addr, 7), Address::read_from(&buf).unwrap());
-    assert_eq!(addr, Address::read_from_fixed(&buf[1..], 6).unwrap());
-    assert!(Address::read_from(&buf[0..1]).is_err()); // Address too short
-    buf[0] = 100;
-    assert!(Address::read_from(&buf).is_err()); // Invalid address, too long
-    buf[0] = 5;
-    assert!(Address::read_from(&buf[0..4]).is_err()); // Address too short
-}
-
-#[test]
-fn address_eq() {
-    assert_eq!(
-        Address::read_from_fixed(&[1, 2, 3, 4], 4).unwrap(),
-        Address::read_from_fixed(&[1, 2, 3, 4], 4).unwrap()
-    );
-    assert_ne!(
-        Address::read_from_fixed(&[1, 2, 3, 4], 4).unwrap(),
-        Address::read_from_fixed(&[1, 2, 3, 5], 4).unwrap()
-    );
-    assert_eq!(
-        Address::read_from_fixed(&[1, 2, 3, 4], 3).unwrap(),
-        Address::read_from_fixed(&[1, 2, 3, 5], 3).unwrap()
-    );
-    assert_ne!(
-        Address::read_from_fixed(&[1, 2, 3, 4], 3).unwrap(),
-        Address::read_from_fixed(&[1, 2, 3, 4], 4).unwrap()
-    );
-}
-
-#[test]
-fn address_range_decode_encode() {
-    let mut buf = [0; 32];
-    let range =
-        Range { base: Address { data: [0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], len: 4 }, prefix_len: 24 };
-    assert_eq!(range.write_to(&mut buf), 6);
-    assert_eq!(&buf[0..6], &[4, 0, 1, 2, 3, 24]);
-    assert_eq!((range, 6), Range::read_from(&buf).unwrap());
-    assert!(Range::read_from(&buf[..5]).is_err()); // Missing prefix length
-    buf[0] = 17;
-    assert!(Range::read_from(&buf).is_err());
+    #[test]
+    fn address_range_decode_encode() {
+        let mut buf = vec![];
+        let range =
+            Range { base: Address { data: [0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], len: 4 }, prefix_len: 24 };
+        range.write_to(Cursor::new(&mut buf));
+        assert_eq!(&buf[0..6], &[4, 0, 1, 2, 3, 24]);
+        assert_eq!(range, Range::read_from(Cursor::new(&buf)).unwrap());
+        assert!(Range::read_from(Cursor::new(&buf[..5])).is_err()); // Missing prefix length
+        buf[0] = 17;
+        assert!(Range::read_from(Cursor::new(&buf)).is_err());
+    }
 }

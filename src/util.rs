@@ -8,7 +8,7 @@ use std::{
     sync::atomic::{AtomicIsize, Ordering}
 };
 
-use super::types::Error;
+use crate::error::Error;
 
 #[cfg(not(target_os = "linux"))] use time;
 
@@ -18,6 +18,84 @@ use std::time::Instant;
 
 pub type Duration = u32;
 pub type Time = i64;
+
+
+#[derive(Clone)]
+pub struct MsgBuffer {
+    space_before: usize,
+    buffer: [u8; 65535],
+    start: usize,
+    end: usize
+}
+
+impl MsgBuffer {
+    pub fn new(space_before: usize) -> Self {
+        Self { buffer: [0; 65535], space_before, start: space_before, end: space_before }
+    }
+
+    pub fn get_start(&self) -> usize {
+        self.start
+    }
+
+    pub fn set_start(&mut self, start: usize) {
+        self.start = start
+    }
+
+    pub fn prepend_byte(&mut self, byte: u8) {
+        self.start -= 1;
+        self.buffer[self.start] = byte
+    }
+
+    pub fn take_prefix(&mut self) -> u8 {
+        let byte = self.buffer[self.start];
+        self.start += 1;
+        byte
+    }
+
+    pub fn buffer(&mut self) -> &mut [u8] {
+        &mut self.buffer[self.start..]
+    }
+
+    pub fn message(&self) -> &[u8] {
+        &self.buffer[self.start..self.end]
+    }
+
+    pub fn take(&mut self) -> Option<&[u8]> {
+        if self.start != self.end {
+            let end = self.end;
+            self.end = self.start;
+            Some(&self.buffer[self.start..end])
+        } else {
+            None
+        }
+    }
+
+    pub fn message_mut(&mut self) -> &mut [u8] {
+        &mut self.buffer[self.start..self.end]
+    }
+
+    pub fn set_length(&mut self, length: usize) {
+        self.end = self.start + length
+    }
+
+    pub fn clone_from(&mut self, other: &[u8]) {
+        self.set_length(other.len());
+        self.message_mut().clone_from_slice(other);
+    }
+
+    pub fn len(&self) -> usize {
+        self.end - self.start
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.start == self.end
+    }
+
+    pub fn clear(&mut self) {
+        self.set_start(self.space_before);
+        self.set_length(0)
+    }
+}
 
 
 const HEX_CHARS: &[u8] = b"0123456789abcdef";
@@ -139,7 +217,7 @@ pub fn get_internal_ip() -> Ipv4Addr {
 
 #[allow(unknown_lints, clippy::needless_pass_by_value)]
 pub fn resolve<Addr: ToSocketAddrs + fmt::Debug>(addr: Addr) -> Result<Vec<SocketAddr>, Error> {
-    let addrs = addr.to_socket_addrs().map_err(|_| Error::Name(format!("{:?}", addr)))?;
+    let addrs = addr.to_socket_addrs().map_err(|_| Error::NameUnresolvable(format!("{:?}", addr)))?;
     // Remove duplicates in addrs (why are there duplicates???)
     let mut addrs = addrs.collect::<Vec<_>>();
     // Try IPv4 first as it usually is faster

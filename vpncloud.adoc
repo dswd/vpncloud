@@ -182,7 +182,7 @@ in 3 different modes:
 *Switch mode*:: In this mode, the VPN will dynamically learn addresses
 as they are used as source addresses and use them to forward data to its
 destination. Addresses that have not been seen for some time
-(option *dst_timeout*) will be forgotten. Data for unknown addresses will be
+(option *switch_timeout*) will be forgotten. Data for unknown addresses will be
 broadcast to all peers. This mode is the default mode for TAP devices that
 process Ethernet frames but it can also be used with TUN devices and IP
 packets.
@@ -295,7 +295,7 @@ detailed descriptions of the options.
 *beacon_load*:: Path or command to load beacons. Same as *--beacon-load*
 *beacon_interval*:: Interval for loading and storing beacons in seconds. Same as *--beacon-interval*
 *mode*:: The mode of the VPN. Same as *--mode*
-*dst_timeout*:: Switch table entry timeout in seconds. Same as *--dst-timeout*
+*switch_timeout*:: Switch table entry timeout in seconds. Same as *--dst-timeout*
 *subnets*:: A list of local subnets to use. See *--subnet*
 *port_forwarding*:: Whether to activate port forwardig. See *--no-port-forwarding*
 *user*:: The name of a user to run the background process under. Same as *--user*

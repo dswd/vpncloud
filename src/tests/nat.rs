@@ -6,82 +6,68 @@ use super::*;
 
 #[test]
 fn connect_nat_2_peers() {
-    init_debug_logger();
-    MockTimeSource::set_time(0);
-    let mut node1 = create_tap_node(true);
-    let node1_addr = addr!("1.2.3.4:5678");
-    let mut node2 = create_tap_node(false);
-    let node2_addr = addr!("2.3.4.5:6789");
+    let config = Config { port_forwarding: false, ..Default::default() };
+    let mut sim = TapSimulator::new();
+    let node1 = sim.add_node(true, &config);
+    let node2 = sim.add_node(true, &config);
 
-    node2.connect("1.2.3.4:5678").unwrap();
+    sim.connect(node1, node2);
+    sim.connect(node2, node1);
 
-    simulate!(node1 => node1_addr, node2 => node2_addr);
+    sim.simulate_time(60);
 
-    assert!(!node1.peers().contains_node(&node2.node_id()));
-    assert!(!node2.peers().contains_node(&node1.node_id()));
-
-
-    node1.connect("2.3.4.5:6789").unwrap();
-
-    simulate!(node1 => node1_addr, node2 => node2_addr);
-
-    assert_connected!(node1, node2);
+    assert!(sim.is_connected(node1, node2));
+    assert!(sim.is_connected(node2, node1));
 }
 
 #[test]
 fn connect_nat_3_peers() {
-    init_debug_logger();
-    MockTimeSource::set_time(0);
-    let mut node1 = create_tap_node(true);
-    let node1_addr = addr!("1.2.3.4:5678");
-    let mut node2 = create_tap_node(false);
-    let node2_addr = addr!("2.3.4.5:6789");
-    let mut node3 = create_tap_node(false);
-    let node3_addr = addr!("3.4.5.6:7890");
-    node2.connect("1.2.3.4:5678").unwrap();
-    node3.connect("1.2.3.4:5678").unwrap();
-    simulate!(node1 => node1_addr, node2 => node2_addr, node3 => node3_addr);
+    let config = Config::default();
+    let mut sim = TapSimulator::new();
+    let node1 = sim.add_node(true, &config);
+    let node2 = sim.add_node(true, &config);
+    let node3 = sim.add_node(true, &config);
 
-    assert!(!node1.peers().contains_node(&node2.node_id()));
-    assert!(!node2.peers().contains_node(&node1.node_id()));
-    assert!(!node3.peers().contains_node(&node1.node_id()));
-    assert!(!node3.peers().contains_node(&node2.node_id()));
-    assert!(!node1.peers().contains_node(&node3.node_id()));
-    assert!(!node2.peers().contains_node(&node3.node_id()));
+    sim.connect(node1, node2);
+    sim.connect(node2, node1);
+    sim.connect(node1, node3);
+    sim.connect(node3, node1);
 
-    node1.connect("3.4.5.6:7890").unwrap();
-    node2.connect("3.4.5.6:7890").unwrap();
-
-    simulate_time!(1000, node1 => node1_addr, node2 => node2_addr, node3 => node3_addr);
-
-    assert_connected!(node1, node3);
-    assert_connected!(node2, node3);
-    assert_connected!(node1, node2);
+    sim.simulate_time(300);
+    assert!(sim.is_connected(node1, node2));
+    assert!(sim.is_connected(node2, node1));
+    assert!(sim.is_connected(node1, node3));
+    assert!(sim.is_connected(node3, node1));
+    assert!(sim.is_connected(node2, node3));
+    assert!(sim.is_connected(node3, node2));
 }
 
 #[test]
-#[allow(clippy::cognitive_complexity)]
 fn nat_keepalive() {
-    init_debug_logger();
-    MockTimeSource::set_time(0);
-    let mut node1 = create_tap_node(true);
-    let node1_addr = addr!("1.2.3.4:5678");
-    let mut node2 = create_tap_node(false);
-    let node2_addr = addr!("2.3.4.5:6789");
-    let mut node3 = create_tap_node(false);
-    let node3_addr = addr!("3.4.5.6:7890");
-    node1.connect("3.4.5.6:7890").unwrap();
-    node2.connect("3.4.5.6:7890").unwrap();
+    let config = Config::default();
+    let mut sim = TapSimulator::new();
+    let node1 = sim.add_node(true, &config);
+    let node2 = sim.add_node(true, &config);
+    let node3 = sim.add_node(true, &config);
 
-    simulate_time!(1000, node1 => node1_addr, node2 => node2_addr, node3 => node3_addr);
+    sim.connect(node1, node2);
+    sim.connect(node2, node1);
+    sim.connect(node1, node3);
+    sim.connect(node3, node1);
 
-    assert_connected!(node1, node3);
-    assert_connected!(node2, node3);
-    assert_connected!(node1, node2);
+    sim.simulate_time(1000);
+    assert!(sim.is_connected(node1, node2));
+    assert!(sim.is_connected(node2, node1));
+    assert!(sim.is_connected(node1, node3));
+    assert!(sim.is_connected(node3, node1));
+    assert!(sim.is_connected(node2, node3));
+    assert!(sim.is_connected(node3, node2));
 
-    simulate_time!(10000, node1 => node1_addr, node2 => node2_addr, node3 => node3_addr);
-
-    assert_connected!(node1, node3);
-    assert_connected!(node2, node3);
-    assert_connected!(node1, node2);
+    sim.simulate_time(10000);
+    assert!(sim.is_connected(node1, node2));
+    assert!(sim.is_connected(node2, node1));
+    assert!(sim.is_connected(node1, node3));
+    assert!(sim.is_connected(node3, node1));
+    assert!(sim.is_connected(node2, node3));
+    assert!(sim.is_connected(node3, node2));
 }

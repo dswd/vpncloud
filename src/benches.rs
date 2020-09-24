@@ -11,22 +11,21 @@ use std::{
 
 use super::{
     cloud::GenericCloud,
-    config::Config,
-    crypto::{Crypto, CryptoMethod},
+    config::{Config, CryptoConfig},
     device::{TunTapDevice, Type},
     ethernet::{self, SwitchTable},
     ip::Packet,
     net::MockSocket,
+    old_crypto::{CryptoMethod, OldCrypto},
     poll::WaitImpl,
     types::{Address, Protocol, Table},
     udpmessage::{decode, encode, Message},
-    util::{MockTimeSource, SystemTimeSource, TimeSource},
-    MAGIC
+    util::{MockTimeSource, SystemTimeSource, TimeSource}
 };
 
 #[bench]
 fn crypto_chacha20(b: &mut Bencher) {
-    let mut crypto = Crypto::from_shared_key(CryptoMethod::ChaCha20, "test");
+    let mut crypto = OldCrypto::from_shared_key(CryptoMethod::ChaCha20, "test");
     let mut payload = [0; 1500];
     let header = [0; 8];
     let mut nonce_bytes = [0; 12];
@@ -39,7 +38,7 @@ fn crypto_chacha20(b: &mut Bencher) {
 
 #[bench]
 fn crypto_aes256(b: &mut Bencher) {
-    let mut crypto = Crypto::from_shared_key(CryptoMethod::AES256, "test");
+    let mut crypto = OldCrypto::from_shared_key(CryptoMethod::AES256, "test");
     let mut payload = [0; 1500];
     let header = [0; 8];
     let mut nonce_bytes = [0; 12];
@@ -52,7 +51,7 @@ fn crypto_aes256(b: &mut Bencher) {
 
 #[bench]
 fn crypto_aes128(b: &mut Bencher) {
-    let mut crypto = Crypto::from_shared_key(CryptoMethod::AES128, "test");
+    let mut crypto = OldCrypto::from_shared_key(CryptoMethod::AES128, "test");
     let mut payload = [0; 1500];
     let header = [0; 8];
     let mut nonce_bytes = [0; 12];
@@ -65,25 +64,25 @@ fn crypto_aes128(b: &mut Bencher) {
 
 #[bench]
 fn message_encode(b: &mut Bencher) {
-    let mut crypto = Crypto::None;
+    let mut crypto = OldCrypto::None;
     let mut payload = [0; 1600];
     let mut msg = Message::Data(&mut payload, 64, 1464);
     let mut buf = [0; 1600];
     b.iter(|| {
-        encode(&mut msg, &mut buf[..], MAGIC, &mut crypto);
+        encode(&mut msg, &mut buf[..], &mut crypto);
     });
     b.bytes = 1400;
 }
 
 #[bench]
 fn message_decode(b: &mut Bencher) {
-    let mut crypto = Crypto::None;
+    let mut crypto = OldCrypto::None;
     let mut payload = [0; 1600];
     let mut msg = Message::Data(&mut payload, 64, 1464);
     let mut buf = [0; 1600];
-    let mut res = encode(&mut msg, &mut buf[..], MAGIC, &mut crypto);
+    let mut res = encode(&mut msg, &mut buf[..], &mut crypto);
     b.iter(|| {
-        decode(&mut res, MAGIC, &mut crypto).unwrap();
+        decode(&mut res, &mut crypto).unwrap();
     });
     b.bytes = 1400;
 }
@@ -154,13 +153,16 @@ type TestNode = GenericCloud<TunTapDevice, ethernet::Frame, SwitchTable<MockTime
 
 fn create_test_node() -> TestNode {
     TestNode::new(
-        &Config::default(),
+        &Config {
+            crypto: CryptoConfig { password: Some("test".to_string()), ..CryptoConfig::default() },
+            ..Config::default()
+        },
         TunTapDevice::dummy("dummy", "/dev/null", Type::Tap).unwrap(),
         SwitchTable::new(1800, 10),
         true,
         true,
         vec![],
-        Crypto::None,
+        OldCrypto::None,
         None,
         None
     )

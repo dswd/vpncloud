@@ -8,6 +8,7 @@ import re
 import json
 import base64
 import sys
+import os
 from datetime import date
 
 MAX_WAIT = 300
@@ -26,6 +27,10 @@ def run_cmd(connection, cmd):
     else:
         return out, err
 
+def upload(connection, local, remote):
+    ftp_client=connection.open_sftp()
+    ftp_client.put(local, remote)
+    ftp_client.close()
 
 class SpotInstanceRequest:
     def __init__(self, id):
@@ -44,24 +49,23 @@ class Node:
     def run_cmd(self, cmd):
         return run_cmd(self.connection, cmd)
 
-    def start_vpncloud(self, ifup=None, mtu=1400, ip=None, crypto=None, shared_key="test", device_type="tap", listen="3210", mode="normal", peers=[], subnets=[]):
+    def start_vpncloud(self, ip=None, crypto=None, password="test", device_type="tun", listen="3210", mode="normal", peers=[], claims=[]):
         args = [
             "--daemon", 
             "--no-port-forwarding", 
             "-t {}".format(device_type),
             "-m {}".format(mode),
-            "-l {}".format(listen)
+            "-l {}".format(listen),
+            "--password '{}'".format(password)
         ]
-        if ifup:
-            args.append("--ifup {}".format(ifup))
-        else:
-            args.append("--ifup 'ifconfig $IFNAME {ip} mtu {mtu} up'".format(mtu=mtu, ip=ip))
+        if ip:
+            args.append("--ip {}".format(ip))
         if crypto:
-            args.append("--shared-key '{}' --crypto {}".format(shared_key, crypto))
+            args.append("--algo {}".format(crypto))
         for p in peers:
             args.append("-c {}".format(p))
-        for s in subnets:
-            args.append("-s {}".format(s))
+        for c in claims:
+            args.append("--claim {}".format(c))
         args = " ".join(args)
         self.run_cmd("sudo vpncloud {}".format(args))
 
@@ -116,7 +120,7 @@ def find_ami(region, owner, name_pattern, arch='x86_64'):
 
 
 class EC2Environment:
-    def __init__(self, vpncloud_version, region, node_count, instance_type, use_spot=True, max_price=0.1, ami=('amazon', 'amzn2-ami-hvm-*'), username="ec2-user", subnet=CREATE, keyname=CREATE, privatekey=CREATE, tag="vpncloud", cluster_nodes=False):
+    def __init__(self, vpncloud_version, region, node_count, instance_type, vpncloud_file=None, use_spot=True, max_price=0.1, ami=('amazon', 'amzn2-ami-hvm-*'), username="ec2-user", subnet=CREATE, keyname=CREATE, privatekey=CREATE, tag="vpncloud", cluster_nodes=False):
         self.region = region
         self.node_count = node_count
         self.instance_type = instance_type
@@ -130,6 +134,7 @@ class EC2Environment:
             self.ami = ami
         self.username = username
         self.vpncloud_version = vpncloud_version
+        self.vpncloud_file = vpncloud_file
         self.cluster_nodes = cluster_nodes
         self.resources = []
         self.instances = []
@@ -220,6 +225,9 @@ class EC2Environment:
 packages:
   - iperf3
   - socat
+"""
+        if not self.vpncloud_file:
+            userdata += """
 runcmd:
   - wget https://github.com/dswd/vpncloud/releases/download/v{version}/vpncloud_{version}.x86_64.rpm -O /tmp/vpncloud.rpm
   - yum install -y /tmp/vpncloud.rpm
@@ -334,6 +342,13 @@ runcmd:
             waited += 1
         if waited >= MAX_WAIT:
             raise Exception("Waited too long")
+        if self.vpncloud_file:
+            eprint("Uploading vpncloud binary")
+            for con in self.connections:
+                upload(con, self.vpncloud_file, 'vpncloud')
+                run_cmd(con, 'chmod +x vpncloud')
+                run_cmd(con, 'sudo mv vpncloud /usr/bin/vpncloud')
+
 
     def terminate(self):
         if not self.resources:

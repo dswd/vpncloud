@@ -26,7 +26,7 @@
 # Switch table entry timeout in seconds. This parameter is only used in switch
 # mode. Addresses that have not been seen for the given period of time  will
 # be forgot.
-#dst_timeout: 300
+#switch_timeout: 300
 
 # An optional token that identifies the network and helps to distinguish it
 # from other networks.

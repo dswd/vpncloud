@@ -5,17 +5,24 @@
 use std::{
     collections::{HashMap, VecDeque},
     io::{self, ErrorKind},
-    net::{SocketAddr, UdpSocket},
+    net::{IpAddr, SocketAddr, UdpSocket},
     os::unix::io::{AsRawFd, RawFd},
     sync::atomic::{AtomicBool, Ordering}
 };
 
-use super::util::{MockTimeSource, Time, TimeSource};
+use super::util::{MockTimeSource, MsgBuffer, Time, TimeSource};
+
+pub fn mapped_addr(addr: SocketAddr) -> SocketAddr {
+    match addr {
+        SocketAddr::V4(addr4) => SocketAddr::new(IpAddr::V6(addr4.ip().to_ipv6_mapped()), addr4.port()),
+        _ => addr
+    }
+}
 
 
 pub trait Socket: AsRawFd + Sized {
     fn listen(addr: SocketAddr) -> Result<Self, io::Error>;
-    fn receive(&mut self, buffer: &mut [u8]) -> Result<(usize, SocketAddr), io::Error>;
+    fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error>;
     fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error>;
     fn address(&self) -> Result<SocketAddr, io::Error>;
 }
@@ -24,12 +31,18 @@ impl Socket for UdpSocket {
     fn listen(addr: SocketAddr) -> Result<Self, io::Error> {
         UdpSocket::bind(addr)
     }
-    fn receive(&mut self, buffer: &mut [u8]) -> Result<(usize, SocketAddr), io::Error> {
-        self.recv_from(buffer)
+
+    fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
+        buffer.clear();
+        let (size, addr) = self.recv_from(buffer.buffer())?;
+        buffer.set_length(size);
+        Ok(addr)
     }
+
     fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error> {
         self.send_to(data, addr)
     }
+
     fn address(&self) -> Result<SocketAddr, io::Error> {
         self.local_addr()
     }
@@ -96,14 +109,18 @@ impl Socket for MockSocket {
     fn listen(addr: SocketAddr) -> Result<Self, io::Error> {
         Ok(Self::new(addr))
     }
-    fn receive(&mut self, buffer: &mut [u8]) -> Result<(usize, SocketAddr), io::Error> {
+
+    fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
         if let Some((addr, data)) = self.inbound.pop_front() {
-            buffer[0..data.len()].copy_from_slice(&data);
-            Ok((data.len(), addr))
+            buffer.clear();
+            buffer.set_length(data.len());
+            buffer.message_mut().copy_from_slice(&data);
+            Ok(addr)
         } else {
             Err(io::Error::new(ErrorKind::Other, "nothing in queue"))
         }
     }
+
     fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error> {
         self.outbound.push_back((addr, data.to_owned()));
         if self.nat {
@@ -111,6 +128,7 @@ impl Socket for MockSocket {
         }
         Ok(data.len())
     }
+
     fn address(&self) -> Result<SocketAddr, io::Error> {
         Ok(self.address)
     }
