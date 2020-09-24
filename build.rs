@@ -9,6 +9,7 @@ fn main() {
 
     // Process manpage using asciidoctor command
     println!("cargo:rerun-if-changed=vpncloud.adoc");
+    fs::create_dir_all(&out_dir).unwrap();
     fs::copy("vpncloud.adoc", Path::new(&out_dir).join("vpncloud.adoc")).unwrap();
     match Command::new("asciidoctor")
         .args(&["-b", "manpage", "vpncloud.adoc"])
