@@ -101,17 +101,19 @@ impl Default for Config {
 impl Config {
     #[allow(clippy::cognitive_complexity)]
     pub fn merge_file(&mut self, mut file: ConfigFile) {
-        if let Some(val) = file.device_type {
-            self.device_type = val;
-        }
-        if let Some(val) = file.device_name {
-            self.device_name = val;
-        }
-        if let Some(val) = file.device_path {
-            self.device_path = Some(val);
-        }
-        if let Some(val) = file.fix_rp_filter {
-            self.fix_rp_filter = val;
+        if let Some(device) = file.device {
+            if let Some(val) = device.type_ {
+                self.device_type = val;
+            }
+            if let Some(val) = device.name {
+                self.device_name = val;
+            }
+            if let Some(val) = device.path {
+                self.device_path = Some(val);
+            }
+            if let Some(val) = device.fix_rp_filter {
+                self.fix_rp_filter = val;
+            }
         }
         if let Some(val) = file.ip {
             self.ip = Some(val);
@@ -134,17 +136,19 @@ impl Config {
         if let Some(val) = file.keepalive {
             self.keepalive = Some(val);
         }
-        if let Some(val) = file.beacon_store {
-            self.beacon_store = Some(val);
-        }
-        if let Some(val) = file.beacon_load {
-            self.beacon_load = Some(val);
-        }
-        if let Some(val) = file.beacon_interval {
-            self.beacon_interval = val;
-        }
-        if let Some(val) = file.beacon_password {
-            self.beacon_password = Some(val);
+        if let Some(beacon) = file.beacon {
+            if let Some(val) = beacon.store {
+                self.beacon_store = Some(val);
+            }
+            if let Some(val) = beacon.load {
+                self.beacon_load = Some(val);
+            }
+            if let Some(val) = beacon.interval {
+                self.beacon_interval = val;
+            }
+            if let Some(val) = beacon.password {
+                self.beacon_password = Some(val);
+            }
         }
         if let Some(val) = file.mode {
             self.mode = val;
@@ -167,11 +171,13 @@ impl Config {
         if let Some(val) = file.stats_file {
             self.stats_file = Some(val);
         }
-        if let Some(val) = file.statsd_server {
-            self.statsd_server = Some(val);
-        }
-        if let Some(val) = file.statsd_prefix {
-            self.statsd_prefix = Some(val);
+        if let Some(statsd) = file.statsd {
+            if let Some(val) = statsd.server {
+                self.statsd_server = Some(val);
+            }
+            if let Some(val) = statsd.prefix {
+                self.statsd_prefix = Some(val);
+            }
         }
         if let Some(val) = file.user {
             self.user = Some(val);
@@ -319,7 +325,7 @@ pub struct Args {
     pub mode: Option<Mode>,
 
     /// The shared password to encrypt all traffic
-    #[structopt(short, long, required_unless = "private-key", env)]
+    #[structopt(short, long, required_unless_one = &["private-key", "config"], env)]
     pub password: Option<String>,
 
     /// The private key to use
@@ -331,15 +337,15 @@ pub struct Args {
     pub public_key: Option<String>,
 
     /// Other public keys to trust
-    #[structopt(long, name = "trusted-key", alias = "trust", use_delimiter = true)]
+    #[structopt(long = "trusted-key", alias = "trust", use_delimiter = true)]
     pub trusted_keys: Vec<String>,
 
     /// Algorithms to allow
-    #[structopt(long, name = "algorithm", alias = "algo", use_delimiter=true, case_insensitive = true, possible_values=&["plain", "aes128", "aes256", "chacha20"])]
+    #[structopt(long = "algorithm", alias = "algo", use_delimiter=true, case_insensitive = true, possible_values=&["plain", "aes128", "aes256", "chacha20"])]
     pub algorithms: Vec<String>,
 
     /// The local subnets to claim (IP or IP/prefix)
-    #[structopt(long, name = "claim", use_delimiter = true)]
+    #[structopt(long = "claim", use_delimiter = true)]
     pub claims: Vec<String>,
 
     /// Do not automatically claim the device ip
@@ -355,14 +361,14 @@ pub struct Args {
     pub listen: Option<String>,
 
     /// Address of a peer to connect to
-    #[structopt(short = "c", name = "peer", long, alias = "connect")]
+    #[structopt(short = "c", long = "peer", alias = "connect")]
     pub peers: Vec<String>,
 
     /// Peer timeout in seconds
     #[structopt(long)]
     pub peer_timeout: Option<Duration>,
-    /// Periodically send message to keep connections alive
 
+    /// Periodically send message to keep connections alive
     #[structopt(long)]
     pub keepalive: Option<Duration>,
 
@@ -451,14 +457,37 @@ pub struct Args {
     pub log_file: Option<String>
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields, default)]
+pub struct ConfigFileDevice {
+    #[serde(rename = "type")]
+    pub type_: Option<Type>,
+    pub name: Option<String>,
+    pub path: Option<String>,
+    pub fix_rp_filter: Option<bool>
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields, default)]
+pub struct ConfigFileBeacon {
+    pub store: Option<String>,
+    pub load: Option<String>,
+    pub interval: Option<Duration>,
+    pub password: Option<String>
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields, default)]
+pub struct ConfigFileStatsd {
+    pub server: Option<String>,
+    pub prefix: Option<String>
+}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields, default)]
 pub struct ConfigFile {
-    pub device_type: Option<Type>,
-    pub device_name: Option<String>,
-    pub device_path: Option<String>,
-    pub fix_rp_filter: Option<bool>,
+    pub device: Option<ConfigFileDevice>,
+
     pub ip: Option<String>,
     pub ifup: Option<String>,
     pub ifdown: Option<String>,
@@ -468,10 +497,8 @@ pub struct ConfigFile {
     pub peers: Option<Vec<String>>,
     pub peer_timeout: Option<Duration>,
     pub keepalive: Option<Duration>,
-    pub beacon_store: Option<String>,
-    pub beacon_load: Option<String>,
-    pub beacon_interval: Option<Duration>,
-    pub beacon_password: Option<String>,
+
+    pub beacon: Option<ConfigFileBeacon>,
     pub mode: Option<Mode>,
     pub switch_timeout: Option<Duration>,
     pub claims: Option<Vec<String>>,
@@ -479,8 +506,7 @@ pub struct ConfigFile {
     pub port_forwarding: Option<bool>,
     pub pid_file: Option<String>,
     pub stats_file: Option<String>,
-    pub statsd_server: Option<String>,
-    pub statsd_prefix: Option<String>,
+    pub statsd: Option<ConfigFileStatsd>,
     pub user: Option<String>,
     pub group: Option<String>
 }
@@ -517,10 +543,12 @@ statsd-server: example.com:1234
 statsd-prefix: prefix
     ";
     assert_eq!(serde_yaml::from_str::<ConfigFile>(config_file).unwrap(), ConfigFile {
-        device_type: Some(Type::Tun),
-        device_name: Some("vpncloud%d".to_string()),
-        device_path: Some("/dev/net/tun".to_string()),
-        fix_rp_filter: None,
+        device: Some(ConfigFileDevice {
+            type_: Some(Type::Tun),
+            name: Some("vpncloud%d".to_string()),
+            path: Some("/dev/net/tun".to_string()),
+            fix_rp_filter: None
+        }),
         ip: Some("10.0.1.1/16".to_string()),
         ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
         ifdown: Some("true".to_string()),
@@ -529,10 +557,12 @@ statsd-prefix: prefix
         peers: Some(vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()]),
         peer_timeout: Some(600),
         keepalive: Some(840),
-        beacon_store: Some("/run/vpncloud.beacon.out".to_string()),
-        beacon_load: Some("/run/vpncloud.beacon.in".to_string()),
-        beacon_interval: Some(3600),
-        beacon_password: Some("test123".to_string()),
+        beacon: Some(ConfigFileBeacon {
+            store: Some("/run/vpncloud.beacon.out".to_string()),
+            load: Some("/run/vpncloud.beacon.in".to_string()),
+            interval: Some(3600),
+            password: Some("test123".to_string())
+        }),
         mode: Some(Mode::Normal),
         switch_timeout: Some(300),
         claims: Some(vec!["10.0.1.0/24".to_string()]),
@@ -542,8 +572,10 @@ statsd-prefix: prefix
         group: Some("nogroup".to_string()),
         pid_file: Some("/run/vpncloud.run".to_string()),
         stats_file: Some("/var/log/vpncloud.stats".to_string()),
-        statsd_server: Some("example.com:1234".to_string()),
-        statsd_prefix: Some("prefix".to_string())
+        statsd: Some(ConfigFileStatsd {
+            server: Some("example.com:1234".to_string()),
+            prefix: Some("prefix".to_string())
+        })
     })
 }
 
@@ -551,10 +583,12 @@ statsd-prefix: prefix
 fn config_merge() {
     let mut config = Config::default();
     config.merge_file(ConfigFile {
-        device_type: Some(Type::Tun),
-        device_name: Some("vpncloud%d".to_string()),
-        device_path: None,
-        fix_rp_filter: None,
+        device: Some(ConfigFileDevice {
+            type_: Some(Type::Tun),
+            name: Some("vpncloud%d".to_string()),
+            path: None,
+            fix_rp_filter: None
+        }),
         ip: None,
         ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
         ifdown: Some("true".to_string()),
@@ -563,10 +597,12 @@ fn config_merge() {
         peers: Some(vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()]),
         peer_timeout: Some(600),
         keepalive: Some(840),
-        beacon_store: Some("/run/vpncloud.beacon.out".to_string()),
-        beacon_load: Some("/run/vpncloud.beacon.in".to_string()),
-        beacon_interval: Some(7200),
-        beacon_password: Some("test123".to_string()),
+        beacon: Some(ConfigFileBeacon {
+            store: Some("/run/vpncloud.beacon.out".to_string()),
+            load: Some("/run/vpncloud.beacon.in".to_string()),
+            interval: Some(7200),
+            password: Some("test123".to_string())
+        }),
         mode: Some(Mode::Normal),
         switch_timeout: Some(300),
         claims: Some(vec!["10.0.1.0/24".to_string()]),
@@ -576,8 +612,10 @@ fn config_merge() {
         group: Some("nogroup".to_string()),
         pid_file: Some("/run/vpncloud.run".to_string()),
         stats_file: Some("/var/log/vpncloud.stats".to_string()),
-        statsd_server: Some("example.com:1234".to_string()),
-        statsd_prefix: Some("prefix".to_string())
+        statsd: Some(ConfigFileStatsd {
+            server: Some("example.com:1234".to_string()),
+            prefix: Some("prefix".to_string())
+        })
     });
     assert_eq!(config, Config {
         device_type: Type::Tun,
