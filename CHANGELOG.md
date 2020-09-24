@@ -2,8 +2,25 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### UNRELEASED v2
 
-### UNRELEASED
+- [added] **Add strong crypto, complete rewrite of crypto system**
+- [added] Automatically claim addresses based on interface addresses (disable with --no-auto-claim)
+- [added] Allow to give --ip instead of ifup cmd
+- [added] Automatically set optimal MTU on interface
+- [added] Warning for disabled or loose rp_filter setting
+- [added] Add --fix-rp-filter to fix rp filter settings
+- [changed] **Complete change of network protocol**
+- [changed] Negotiate crypto method per peer, select best method
+- [changed] Make encryption the default, no encryption must be stated explicitly
+- [changed] Changed default device type to TUN
+- [changed] Rename subnet to claim
+- [changed] Set peer exchange interval to 5 minutes
+- [changed] Periodically send claims with peer list
+- [removed] Remove network-id parameter
+- [removed] Remove port config option in favor of --listen
+
+### UNRELEASED v1.x.y
 
 - [added] Added crypto option AES128
 - [added] Default port for peers
