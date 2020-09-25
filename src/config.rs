@@ -325,7 +325,7 @@ pub struct Args {
     pub mode: Option<Mode>,
 
     /// The shared password to encrypt all traffic
-    #[structopt(short, long, required_unless_one = &["private-key", "config"], env)]
+    #[structopt(short, long, required_unless_one = &["private-key", "config", "genkey", "version"], env)]
     pub password: Option<String>,
 
     /// The private key to use
@@ -515,9 +515,10 @@ pub struct ConfigFile {
 #[test]
 fn config_file() {
     let config_file = "
-device-type: tun
-device-name: vpncloud%d
-device-path: /dev/net/tun
+device:
+  type: tun
+  name: vpncloud%d
+  path: /dev/net/tun
 ip: 10.0.1.1/16
 ifup: ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up
 ifdown: 'true'
@@ -527,10 +528,11 @@ peers:
 peer-timeout: 600
 keepalive: 840
 switch-timeout: 300
-beacon-store: /run/vpncloud.beacon.out
-beacon-load: /run/vpncloud.beacon.in
-beacon-interval: 3600
-beacon-password: test123
+beacon:
+  store: /run/vpncloud.beacon.out
+  load: /run/vpncloud.beacon.in
+  interval: 3600
+  password: test123
 mode: normal
 claims:
   - 10.0.1.0/24
@@ -539,8 +541,9 @@ user: nobody
 group: nogroup
 pid-file: /run/vpncloud.run
 stats-file: /var/log/vpncloud.stats
-statsd-server: example.com:1234
-statsd-prefix: prefix
+statsd:
+  server: example.com:1234
+  prefix: prefix
     ";
     assert_eq!(serde_yaml::from_str::<ConfigFile>(config_file).unwrap(), ConfigFile {
         device: Some(ConfigFileDevice {
