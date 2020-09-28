@@ -417,7 +417,7 @@ pub struct Args {
     pub version: bool,
 
     /// Generate and print a key-pair and exit
-    #[structopt(long, conflicts_with_all=&["password", "private_key"])]
+    #[structopt(long, conflicts_with="private_key")]
     pub genkey: bool,
 
     /// Disable automatic port forwarding

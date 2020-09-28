@@ -33,12 +33,14 @@ pub struct PeerInfo {
 
 #[derive(Debug, PartialEq)]
 pub struct NodeInfo {
+    pub node_id: NodeId,
     pub peers: PeerList,
     pub claims: RangeList,
     pub peer_timeout: Option<u16>
 }
 
 impl NodeInfo {
+    const PART_NODEID: u8 = 4;
     const PART_CLAIMS: u8 = 2;
     const PART_END: u8 = 0;
     const PART_PEERS: u8 = 1;
@@ -89,6 +91,7 @@ impl NodeInfo {
         let mut peers = smallvec![];
         let mut claims = smallvec![];
         let mut peer_timeout = None;
+        let mut node_id = None;
         loop {
             let part = r.read_u8().map_err(|_| Error::Message("Truncated message"))?;
             if part == Self::PART_END {
@@ -105,6 +108,11 @@ impl NodeInfo {
                     peer_timeout =
                         Some(rp.read_u16::<NetworkEndian>().map_err(|_| Error::Message("Truncated message"))?)
                 }
+                Self::PART_NODEID => {
+                    let mut data = [0; NODE_ID_BYTES];
+                    rp.read_exact(&mut data).map_err(|_| Error::Message("Truncated message"))?;
+                    node_id = Some(data);
+                }
                 _ => {
                     let mut data = vec![0; part_len];
                     rp.read_exact(&mut data).map_err(|_| Error::Message("Truncated message"))?;
@@ -112,7 +120,11 @@ impl NodeInfo {
             }
             r = rp.into_inner();
         }
-        Ok(Self { peers, claims, peer_timeout })
+        let node_id = match node_id {
+            Some(node_id) => node_id,
+            None => return Err(Error::Message("Payload without node_id"))
+        };
+        Ok(Self { node_id, peers, claims, peer_timeout })
     }
 
     pub fn decode<R: Read>(r: R) -> Result<Self, Error> {
@@ -174,6 +186,9 @@ impl NodeInfo {
         let len;
         {
             let mut cursor = Cursor::new(buffer.buffer());
+            Self::encode_part(&mut cursor, Self::PART_NODEID, |cursor| {
+                cursor.write_all(&self.node_id)
+            })?;
             Self::encode_part(&mut cursor, Self::PART_PEERS, |cursor| self.encode_peer_list_part(cursor))?;
             Self::encode_part(&mut cursor, Self::PART_CLAIMS, |mut cursor| {
                 for c in &self.claims {

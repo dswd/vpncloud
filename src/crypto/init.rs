@@ -55,7 +55,7 @@ use super::{
     core::{CryptoCore, EXTRA_LEN},
     Algorithms, EcdhPrivateKey, EcdhPublicKey, Ed25519PublicKey, Error, MsgBuffer, Payload
 };
-use crate::types::{NodeId, NODE_ID_BYTES};
+use crate::types::NodeId;
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
 use ring::{
     aead::{Algorithm, LessSafeKey, UnboundKey, AES_128_GCM, AES_256_GCM, CHACHA20_POLY1305},
@@ -79,20 +79,35 @@ pub const STAGE_PENG: u8 = 3;
 pub const WAITING_TO_CLOSE: u8 = 4;
 pub const CLOSING: u8 = 5;
 
+pub const SALTED_NODE_ID_HASH_LEN: usize = 20;
+pub type SaltedNodeIdHash = [u8; SALTED_NODE_ID_HASH_LEN];
 
 #[allow(clippy::large_enum_variant)]
 pub enum InitMsg {
-    Ping { node_id: NodeId, ecdh_public_key: EcdhPublicKey, algorithms: Algorithms },
-    Pong { node_id: NodeId, ecdh_public_key: EcdhPublicKey, algorithms: Algorithms, encrypted_payload: MsgBuffer },
-    Peng { node_id: NodeId, encrypted_payload: MsgBuffer }
+    // TODO: include only salted hashes of node_id and use public_key for leader election
+    Ping {
+        salted_node_id_hash: SaltedNodeIdHash,
+        ecdh_public_key: EcdhPublicKey,
+        algorithms: Algorithms
+    },
+    Pong {
+        salted_node_id_hash: SaltedNodeIdHash,
+        ecdh_public_key: EcdhPublicKey,
+        algorithms: Algorithms,
+        encrypted_payload: MsgBuffer
+    },
+    Peng {
+        salted_node_id_hash: SaltedNodeIdHash,
+        encrypted_payload: MsgBuffer
+    }
 }
 
 impl InitMsg {
     const PART_ALGORITHMS: u8 = 4;
     const PART_ECDH_PUBLIC_KEY: u8 = 3;
     const PART_END: u8 = 0;
-    const PART_NODE_ID: u8 = 2;
     const PART_PAYLOAD: u8 = 5;
+    const PART_SALTED_NODE_ID_HASH: u8 = 2;
     const PART_STAGE: u8 = 1;
 
     fn stage(&self) -> u8 {
@@ -103,9 +118,11 @@ impl InitMsg {
         }
     }
 
-    fn node_id(&self) -> NodeId {
+    fn salted_node_id_hash(&self) -> &SaltedNodeIdHash {
         match self {
-            InitMsg::Ping { node_id, .. } | InitMsg::Pong { node_id, .. } | InitMsg::Peng { node_id, .. } => *node_id
+            InitMsg::Ping { salted_node_id_hash, .. }
+            | InitMsg::Pong { salted_node_id_hash, .. }
+            | InitMsg::Peng { salted_node_id_hash, .. } => salted_node_id_hash
         }
     }
 
@@ -140,7 +157,7 @@ impl InitMsg {
         }
 
         let mut stage = None;
-        let mut node_id = None;
+        let mut salted_node_id_hash = None;
         let mut ecdh_public_key = None;
         let mut encrypted_payload = None;
         let mut algorithms = None;
@@ -158,13 +175,13 @@ impl InitMsg {
                     }
                     stage = Some(r.read_u8().map_err(|_| Error::Parse("Init message too short"))?)
                 }
-                Self::PART_NODE_ID => {
-                    if field_len != NODE_ID_BYTES {
-                        return Err(Error::CryptoInit("Invalid size for node id field"))
+                Self::PART_SALTED_NODE_ID_HASH => {
+                    if field_len != SALTED_NODE_ID_HASH_LEN {
+                        return Err(Error::CryptoInit("Invalid size for salted node id hash field"))
                     }
-                    let mut id = [0; NODE_ID_BYTES];
+                    let mut id = [0; SALTED_NODE_ID_HASH_LEN];
                     r.read_exact(&mut id).map_err(|_| Error::Parse("Init message too short"))?;
-                    node_id = Some(id)
+                    salted_node_id_hash = Some(id)
                 }
                 Self::PART_ECDH_PUBLIC_KEY => {
                     let mut pub_key_data = smallvec![0; field_len];
@@ -223,7 +240,7 @@ impl InitMsg {
             Some(val) => val,
             None => return Err(Error::CryptoInit("Init message without stage"))
         };
-        let node_id = match node_id {
+        let salted_node_id_hash = match salted_node_id_hash {
             Some(val) => val,
             None => return Err(Error::CryptoInit("Init message without node id"))
         };
@@ -238,7 +255,7 @@ impl InitMsg {
                     Some(val) => val,
                     None => return Err(Error::CryptoInit("Init message without algorithms"))
                 };
-                Self::Ping { node_id, ecdh_public_key, algorithms }
+                Self::Ping { salted_node_id_hash, ecdh_public_key, algorithms }
             }
             STAGE_PONG => {
                 let ecdh_public_key = match ecdh_public_key {
@@ -253,14 +270,14 @@ impl InitMsg {
                     Some(val) => val,
                     None => return Err(Error::CryptoInit("Init message without payload"))
                 };
-                Self::Pong { node_id, ecdh_public_key, algorithms, encrypted_payload }
+                Self::Pong { salted_node_id_hash, ecdh_public_key, algorithms, encrypted_payload }
             }
             STAGE_PENG => {
                 let encrypted_payload = match encrypted_payload {
                     Some(val) => val,
                     None => return Err(Error::CryptoInit("Init message without payload"))
                 };
-                Self::Peng { node_id, encrypted_payload }
+                Self::Peng { salted_node_id_hash, encrypted_payload }
             }
             _ => return Err(Error::CryptoInit("Invalid stage"))
         };
@@ -285,10 +302,12 @@ impl InitMsg {
         w.write_u8(self.stage())?;
 
         match &self {
-            Self::Ping { node_id, .. } | Self::Pong { node_id, .. } | Self::Peng { node_id, .. } => {
-                w.write_u8(Self::PART_NODE_ID)?;
-                w.write_u16::<NetworkEndian>(NODE_ID_BYTES as u16)?;
-                w.write_all(node_id)?;
+            Self::Ping { salted_node_id_hash, .. }
+            | Self::Pong { salted_node_id_hash, .. }
+            | Self::Peng { salted_node_id_hash, .. } => {
+                w.write_u8(Self::PART_SALTED_NODE_ID_HASH)?;
+                w.write_u16::<NetworkEndian>(SALTED_NODE_ID_HASH_LEN as u16)?;
+                w.write_all(salted_node_id_hash)?;
             }
         }
 
@@ -354,12 +373,13 @@ impl InitMsg {
 #[derive(PartialEq, Debug)]
 pub enum InitResult<P: Payload> {
     Continue,
-    Success { peer_payload: P, node_id: NodeId, is_initiator: bool }
+    Success { peer_payload: P, is_initiator: bool }
 }
 
 
 pub struct InitState<P: Payload> {
     node_id: NodeId,
+    salted_node_id_hash: SaltedNodeIdHash,
     payload: P,
     key_pair: Arc<Ed25519KeyPair>,
     trusted_keys: Arc<Vec<Ed25519PublicKey>>,
@@ -378,8 +398,15 @@ impl<P: Payload> InitState<P> {
         algorithms: Algorithms
     ) -> Self
     {
+        let mut hash = [0; SALTED_NODE_ID_HASH_LEN];
+        let rng = SystemRandom::new();
+        rng.fill(&mut hash[0..4]).unwrap();
+        hash[4..].clone_from_slice(&node_id);
+        let d = digest::digest(&digest::SHA256, &hash);
+        hash[4..].clone_from_slice(&d.as_ref()[..16]);
         Self {
             node_id,
+            salted_node_id_hash: hash,
             payload,
             key_pair,
             trusted_keys,
@@ -462,6 +489,14 @@ impl<P: Payload> InitState<P> {
         Ok(P::read_from(Cursor::new(data.message()))?)
     }
 
+    fn check_salted_node_id_hash(&self, hash: &SaltedNodeIdHash, node_id: NodeId) -> bool {
+        let mut h2 = [0; SALTED_NODE_ID_HASH_LEN];
+        h2[0..4].clone_from_slice(&hash[0..4]);
+        h2[4..].clone_from_slice(&node_id);
+        let d = digest::digest(&digest::SHA256, &h2);
+        hash == d.as_ref()
+    }
+
     fn send_message(
         &mut self, stage: u8, ecdh_public_key: Option<EcdhPublicKey>, out: &mut MsgBuffer
     ) -> Result<(), Error> {
@@ -472,20 +507,25 @@ impl<P: Payload> InitState<P> {
         let msg = match stage {
             STAGE_PING => {
                 InitMsg::Ping {
-                    node_id: self.node_id,
+                    salted_node_id_hash: self.salted_node_id_hash,
                     ecdh_public_key: ecdh_public_key.unwrap(),
                     algorithms: self.algorithms.clone()
                 }
             }
             STAGE_PONG => {
                 InitMsg::Pong {
-                    node_id: self.node_id,
+                    salted_node_id_hash: self.salted_node_id_hash,
                     ecdh_public_key: ecdh_public_key.unwrap(),
                     algorithms: self.algorithms.clone(),
                     encrypted_payload: self.encrypt_payload()?
                 }
             }
-            STAGE_PENG => InitMsg::Peng { node_id: self.node_id, encrypted_payload: self.encrypt_payload()? },
+            STAGE_PENG => {
+                InitMsg::Peng {
+                    salted_node_id_hash: self.salted_node_id_hash,
+                    encrypted_payload: self.encrypt_payload()?
+                }
+            }
             _ => unreachable!()
         };
         let mut bytes = out.buffer();
@@ -535,16 +575,18 @@ impl<P: Payload> InitState<P> {
         let (msg, _peer_key) = InitMsg::read_from(out.buffer(), &self.trusted_keys)?;
         out.clear();
         let stage = msg.stage();
-        let node_id = msg.node_id();
+        let salted_node_id_hash = *msg.salted_node_id_hash();
         debug!("Received init with stage={}, expected stage={}", stage, self.next_stage);
-        if self.node_id == node_id {
+        if self.salted_node_id_hash == salted_node_id_hash
+            || self.check_salted_node_id_hash(&salted_node_id_hash, self.node_id)
+        {
             return Err(Error::CryptoInit("Connected to self"))
         }
         if stage != self.next_stage {
             if self.next_stage == STAGE_PONG && stage == STAGE_PING {
                 // special case for concurrent init messages in both directions
                 // the node with the higher node_id "wins" and gets to initialize the connection
-                if node_id > self.node_id {
+                if salted_node_id_hash > self.salted_node_id_hash {
                     // reset to initial state
                     self.next_stage = STAGE_PING;
                     self.last_message = None;
@@ -571,7 +613,7 @@ impl<P: Payload> InitState<P> {
                 let algorithm = self.select_algorithm(&algorithms)?;
                 if let Some((algorithm, _speed)) = algorithm {
                     let master_key = self.derive_master_key(algorithm, my_ecdh_private_key, &ecdh_public_key);
-                    self.crypto = Some(CryptoCore::new(master_key, self.node_id > node_id));
+                    self.crypto = Some(CryptoCore::new(master_key, self.salted_node_id_hash > salted_node_id_hash));
                 }
 
                 // create and send stage 2 reply
@@ -586,7 +628,7 @@ impl<P: Payload> InitState<P> {
                 let algorithm = self.select_algorithm(&algorithms)?;
                 if let Some((algorithm, _speed)) = algorithm {
                     let master_key = self.derive_master_key(algorithm, ecdh_private_key, &ecdh_public_key);
-                    self.crypto = Some(CryptoCore::new(master_key, self.node_id > node_id));
+                    self.crypto = Some(CryptoCore::new(master_key, self.salted_node_id_hash > salted_node_id_hash));
                 }
 
                 // decrypt the payload
@@ -598,7 +640,7 @@ impl<P: Payload> InitState<P> {
 
                 self.next_stage = WAITING_TO_CLOSE;
                 self.close_time = 60;
-                Ok(InitResult::Success { peer_payload, node_id, is_initiator: true })
+                Ok(InitResult::Success { peer_payload, is_initiator: true })
             }
             InitMsg::Peng { mut encrypted_payload, .. } => {
                 // decrypt the payload
@@ -606,7 +648,7 @@ impl<P: Payload> InitState<P> {
                     self.decrypt(&mut encrypted_payload).map_err(|_| Error::CryptoInit("Failed to decrypt payload"))?;
 
                 self.next_stage = CLOSING; // force resend when receiving any message
-                Ok(InitResult::Success { peer_payload, node_id, is_initiator: false })
+                Ok(InitResult::Success { peer_payload, is_initiator: false })
             }
         }
     }
@@ -620,6 +662,7 @@ impl<P: Payload> InitState<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::NODE_ID_BYTES;
 
     impl Payload for Vec<u8> {
         fn write_to(&self, buffer: &mut MsgBuffer) {

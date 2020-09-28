@@ -127,10 +127,23 @@ impl Crypto {
         Ok(Self { node_id, key_pair: Arc::new(key_pair), trusted_keys: Arc::new(trusted_keys), algorithms: algos })
     }
 
-    pub fn generate_keypair() -> (String, String) {
-        let rng = SystemRandom::new();
+    pub fn generate_keypair(password: Option<&str>) -> (String, String) {
         let mut bytes = [0; 32];
-        rng.fill(&mut bytes).unwrap();
+        match password {
+            None => {
+                let rng = SystemRandom::new();
+                rng.fill(&mut bytes).unwrap();
+            }
+            Some(password) => {
+                pbkdf2::derive(
+                    pbkdf2::PBKDF2_HMAC_SHA256,
+                    NonZeroU32::new(4096).unwrap(),
+                    SALT,
+                    password.as_bytes(),
+                    &mut bytes
+                );
+            }
+        }
         let keypair = Ed25519KeyPair::from_seed_unchecked(&bytes).unwrap();
         let privkey = to_base62(&bytes);
         let pubkey = to_base62(keypair.public_key().as_ref());
@@ -183,8 +196,8 @@ impl Crypto {
 #[derive(Debug, PartialEq)]
 pub enum MessageResult<P: Payload> {
     Message(u8),
-    Initialized(NodeId, P),
-    InitializedWithReply(NodeId, P),
+    Initialized(P),
+    InitializedWithReply(P),
     Reply,
     None
 }
@@ -262,7 +275,7 @@ impl<P: Payload> PeerCrypto<P> {
         }
         match result {
             InitResult::Continue => Ok(MessageResult::Reply),
-            InitResult::Success { peer_payload, node_id, is_initiator } => {
+            InitResult::Success { peer_payload, is_initiator } => {
                 self.core = self.get_init()?.take_core();
                 if self.core.is_none() {
                     self.unencrypted = true;
@@ -275,13 +288,13 @@ impl<P: Payload> PeerCrypto<P> {
                 }
                 if !is_initiator {
                     if self.unencrypted {
-                        return Ok(MessageResult::Initialized(node_id, peer_payload))
-                    }    
+                        return Ok(MessageResult::Initialized(peer_payload))
+                    }
                     assert!(!buffer.is_empty());
                     buffer.prepend_byte(MESSAGE_TYPE_ROTATION);
                     self.encrypt_message(buffer)?;
                 }
-                Ok(MessageResult::InitializedWithReply(node_id, peer_payload))
+                Ok(MessageResult::InitializedWithReply(peer_payload))
             }
         }
     }
@@ -415,12 +428,12 @@ mod tests {
 
         debug!("Node1 <- Node2");
         let res = node1.handle_message(&mut msg).unwrap();
-        assert_eq!(res, MessageResult::InitializedWithReply(node2.node_id, vec![]));
+        assert_eq!(res, MessageResult::InitializedWithReply(vec![]));
         assert!(!msg.is_empty());
 
         debug!("Node1 -> Node2");
         let res = node2.handle_message(&mut msg).unwrap();
-        assert_eq!(res, MessageResult::InitializedWithReply(node1.node_id, vec![]));
+        assert_eq!(res, MessageResult::InitializedWithReply(vec![]));
         assert!(!msg.is_empty());
 
         debug!("Node1 <- Node2");

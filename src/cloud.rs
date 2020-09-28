@@ -292,7 +292,12 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             peers.partial_shuffle(&mut rng, 20);
             peers.truncate(20);
         }
-        NodeInfo { peers, claims: self.claims.clone(), peer_timeout: Some(self.peer_timeout_publish) }
+        NodeInfo {
+            node_id: self.node_id,
+            peers,
+            claims: self.claims.clone(),
+            peer_timeout: Some(self.peer_timeout_publish)
+        }
     }
 
     fn connect_sock(&mut self, addr: SocketAddr) -> Result<(), Error> {
@@ -584,12 +589,12 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         Ok(())
     }
 
-    fn add_new_peer(&mut self, addr: SocketAddr, node_id: NodeId, info: NodeInfo) -> Result<(), Error> {
+    fn add_new_peer(&mut self, addr: SocketAddr, info: NodeInfo) -> Result<(), Error> {
         info!("Added peer {}", addr_nice(addr));
         if let Some(init) = self.pending_inits.remove(&addr) {
             self.peers.insert(addr, PeerData {
                 crypto: init,
-                node_id,
+                node_id: info.node_id,
                 peer_timeout: info.peer_timeout.unwrap_or(DEFAULT_PEER_TIMEOUT),
                 last_seen: TS::now(),
                 timeout: TS::now() + self.config.peer_timeout as Time
@@ -684,9 +689,9 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                     _ => return Err(Error::Message("Unknown message type"))
                 }
             }
-            MessageResult::Initialized(node_id, info) => self.add_new_peer(src, node_id, info)?,
-            MessageResult::InitializedWithReply(node_id, info) => {
-                self.add_new_peer(src, node_id, info)?;
+            MessageResult::Initialized(info) => self.add_new_peer(src, info)?,
+            MessageResult::InitializedWithReply(info) => {
+                self.add_new_peer(src, info)?;
                 self.send_to(src, data)?
             }
             MessageResult::Reply => self.send_to(src, data)?,

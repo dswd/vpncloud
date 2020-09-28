@@ -226,7 +226,7 @@ fn main() {
         return
     }
     if args.genkey {
-        let (privkey, pubkey) = Crypto::generate_keypair();
+        let (privkey, pubkey) = Crypto::generate_keypair(args.password.as_deref());
         println!("Private key: {}\nPublic key: {}\n", privkey, pubkey);
         println!(
             "Attention: Keep the private key secret and use only the public key on other nodes to establish trust."
