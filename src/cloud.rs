@@ -738,22 +738,15 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         self.traffic.count_in_traffic(src, buffer.len());
         if let Err(e) = self.handle_net_message(src, buffer) {
             error!("Error: {}", e);
-            match e {
-                Error::Crypto(_) => {
-                    info!("Closing connection to {} due to error", addr_nice(src));
-                    self.remove_peer(src);
-                }
-                Error::CryptoInit(_) => {
-                    info!("Closing pending connection to {} due to error", addr_nice(src));
-                    self.pending_inits.remove(&src);
-                }
-                _ => ()
+            if let Error::CryptoInit(_) = e {
+                info!("Closing pending connection to {} due to error", addr_nice(src));
+                self.pending_inits.remove(&src);
             }
         }
     }
 
     fn handle_device_event(&mut self, buffer: &mut MsgBuffer) {
-        try_fail!(self.device.read(buffer), "Failed to read from tap device: {}");
+        try_fail!(self.device.read(buffer), "Failed to read from device: {}");
         if let Err(e) = self.handle_interface_data(buffer) {
             error!("Error: {}", e);
         }

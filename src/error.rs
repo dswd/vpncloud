@@ -5,12 +5,11 @@ use std::io;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Unauthorized message: {0}")]
-    Unauthorized(&'static str),
-
+    /// Crypto init error, this is fatal and the init needs to be aborted
     #[error("Crypto initialization error: {0}")]
     CryptoInit(&'static str),
 
+    /// Crypto error with this one message, no permanent error
     #[error("Crypto error: {0}")]
     Crypto(&'static str),
 

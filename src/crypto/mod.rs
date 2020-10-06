@@ -258,7 +258,7 @@ impl<P: Payload> PeerCrypto<P> {
         if init.stage() != init::STAGE_PING {
             Err(Error::InvalidCryptoState("Initialization already ongoing"))
         } else {
-            init.send_ping(out)?;
+            init.send_ping(out);
             out.prepend_byte(INIT_MESSAGE_FIRST_BYTE);
             Ok(())
         }

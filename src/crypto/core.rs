@@ -176,13 +176,13 @@ impl CryptoCore {
 
     fn decrypt_with_key<'a>(key: &mut CryptoKey, nonce: Nonce, data_and_tag: &'a mut [u8]) -> Result<(), Error> {
         if nonce < key.min_nonce {
-            return Err(Error::Unauthorized("Old nonce rejected"))
+            return Err(Error::Crypto("Old nonce rejected"))
         }
         // decrypt
         let crypto_nonce = aead::Nonce::assume_unique_for_key(*nonce.as_bytes());
         key.key
             .open_in_place(crypto_nonce, aead::Aad::empty(), data_and_tag)
-            .map_err(|_| Error::Unauthorized("Failed to decrypt data"))?;
+            .map_err(|_| Error::Crypto("Failed to decrypt data"))?;
         // last seen nonce
         if key.seen_nonce < nonce {
             key.seen_nonce = nonce;
@@ -230,12 +230,17 @@ impl CryptoCore {
 }
 
 
+pub fn create_dummy_pair(algo: &'static aead::Algorithm) -> (CryptoCore, CryptoCore) {
+    let key_data = random_data(algo.key_len());
+    let sender = CryptoCore::new(LessSafeKey::new(UnboundKey::new(algo, &key_data).unwrap()), true);
+    let receiver = CryptoCore::new(LessSafeKey::new(UnboundKey::new(algo, &key_data).unwrap()), false);
+    (sender, receiver)
+}
+
 pub fn test_speed(algo: &'static aead::Algorithm, max_time: &Duration) -> f64 {
     let mut buffer = MsgBuffer::new(EXTRA_LEN);
     buffer.set_length(1000);
-    let key_data = random_data(algo.key_len());
-    let mut sender = CryptoCore::new(LessSafeKey::new(UnboundKey::new(algo, &key_data).unwrap()), true);
-    let mut receiver = CryptoCore::new(LessSafeKey::new(UnboundKey::new(algo, &key_data).unwrap()), false);
+    let (mut sender, mut receiver) = create_dummy_pair(algo);
     let mut iterations = 0;
     let start = Instant::now();
     while (Instant::now() - start).as_nanos() < max_time.as_nanos() {
@@ -256,14 +261,6 @@ mod tests {
     use super::*;
     use ring::aead::{self, LessSafeKey, UnboundKey};
 
-
-    fn setup_pair(algo: &'static aead::Algorithm) -> (CryptoCore, CryptoCore) {
-        let key = random_data(algo.key_len());
-        let crypto1 = CryptoCore::new(LessSafeKey::new(UnboundKey::new(algo, &key).unwrap()), false);
-        let crypto2 = CryptoCore::new(LessSafeKey::new(UnboundKey::new(algo, &key).unwrap()), true);
-        (crypto1, crypto2)
-    }
-
     #[test]
     fn test_nonce() {
         let mut nonce = Nonce::zero();
@@ -275,7 +272,7 @@ mod tests {
     }
 
     fn test_encrypt_decrypt(algo: &'static aead::Algorithm) {
-        let (mut sender, mut receiver) = setup_pair(algo);
+        let (mut sender, mut receiver) = create_dummy_pair(algo);
         let plain = random_data(1000);
         let mut buffer = MsgBuffer::new(EXTRA_LEN);
         buffer.clone_from(&plain);
@@ -303,7 +300,7 @@ mod tests {
 
 
     fn test_tampering(algo: &'static aead::Algorithm) {
-        let (mut sender, mut receiver) = setup_pair(algo);
+        let (mut sender, mut receiver) = create_dummy_pair(algo);
         let plain = random_data(1000);
         let mut buffer = MsgBuffer::new(EXTRA_LEN);
         buffer.clone_from(&plain);
@@ -343,7 +340,7 @@ mod tests {
     }
 
     fn test_nonce_pinning(algo: &'static aead::Algorithm) {
-        let (mut sender, mut receiver) = setup_pair(algo);
+        let (mut sender, mut receiver) = create_dummy_pair(algo);
         let plain = random_data(1000);
         let mut buffer = MsgBuffer::new(EXTRA_LEN);
         buffer.clone_from(&plain);
@@ -384,7 +381,7 @@ mod tests {
     }
 
     fn test_key_rotation(algo: &'static aead::Algorithm) {
-        let (mut sender, mut receiver) = setup_pair(algo);
+        let (mut sender, mut receiver) = create_dummy_pair(algo);
         let plain = random_data(1000);
         let mut buffer = MsgBuffer::new(EXTRA_LEN);
         buffer.clone_from(&plain);
@@ -466,9 +463,7 @@ mod benches {
     fn crypto_bench(b: &mut Bencher, algo: &'static aead::Algorithm) {
         let mut buffer = MsgBuffer::new(EXTRA_LEN);
         buffer.set_length(1400);
-        let key_data = random_data(algo.key_len());
-        let mut sender = CryptoCore::new(LessSafeKey::new(UnboundKey::new(algo, &key_data).unwrap()), true);
-        let mut receiver = CryptoCore::new(LessSafeKey::new(UnboundKey::new(algo, &key_data).unwrap()), false);
+        let (mut sender, mut receiver) = create_dummy_pair(algo);
         b.iter(|| {
             sender.encrypt(&mut buffer);
             receiver.decrypt(&mut buffer).unwrap();
