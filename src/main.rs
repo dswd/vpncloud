@@ -16,7 +16,6 @@ pub mod util;
 #[macro_use]
 mod tests;
 pub mod beacon;
-#[cfg(feature = "bench")] mod benches;
 pub mod cloud;
 pub mod config;
 pub mod crypto;
