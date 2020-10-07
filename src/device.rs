@@ -6,7 +6,7 @@ use libc::{c_short, c_ulong, ioctl, IFF_NO_PI, IFF_TAP, IFF_TUN, IF_NAMESIZE};
 use std::{
     collections::VecDeque,
     fmt, fs,
-    io::{self, Error as IoError, ErrorKind, Read, Write},
+    io::{self, Cursor, Error as IoError, ErrorKind, Read, Write},
     os::unix::io::{AsRawFd, RawFd},
     str,
     str::FromStr
@@ -26,7 +26,7 @@ union IfReqData {
 #[repr(C)]
 struct IfReq {
     ifr_name: [u8; IF_NAMESIZE],
-    data: IfReqData    
+    data: IfReqData
 }
 
 impl IfReq {
@@ -150,8 +150,10 @@ impl TunTapDevice {
         let res = unsafe { ioctl(fd.as_raw_fd(), TUNSETIFF, &mut ifreq) };
         match res {
             0 => {
-                let nul_range_end = ifreq.ifr_name.iter().position(|&c| c == b'\0').unwrap_or(ifreq.ifr_name.len());
-                let ifname = unsafe { str::from_utf8_unchecked(&ifreq.ifr_name[0..nul_range_end]) }.to_string();
+                let mut ifname = String::with_capacity(32);
+                let mut cursor = Cursor::new(ifreq.ifr_name);
+                cursor.read_to_string(&mut ifname)?;
+                ifname = ifname.trim_end_matches('\0').to_owned();
                 Ok(Self { fd, ifname, type_ })
             }
             _ => Err(IoError::last_os_error())
