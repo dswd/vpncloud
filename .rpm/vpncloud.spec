@@ -5,7 +5,7 @@
 Name: vpncloud
 Summary: Peer-to-peer VPN
 Version: @@VERSION@@
-Release: 1
+Release: @@RELEASE@@
 License: GPL-3.0
 Group: Applications/System
 Source0: %{name}-%{version}.tar.gz
