@@ -17,7 +17,7 @@ This project follows [semantic versioning](http://semver.org).
 - [changed] Rename subnet to claim
 - [changed] Set peer exchange interval to 5 minutes
 - [changed] Periodically send claims with peer list
-- [changed] Changed Rust version to 1.46.0
+- [changed] Changed Rust version to 1.47.0
 - [removed] Remove network-id parameter
 - [removed] Remove port config option in favor of --listen
 

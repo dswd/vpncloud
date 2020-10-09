@@ -19,7 +19,7 @@ RUN useradd -ms /bin/bash user
 USER user
 WORKDIR /home/user
 
-ENV RUST=1.46.0
+ENV RUST=1.47.0
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain ${RUST}
 
