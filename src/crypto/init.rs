@@ -449,6 +449,7 @@ impl<P: Payload> InitState<P> {
             self.repeat_last_message(out);
             Ok(())
         } else {
+            self.next_stage = CLOSING;
             Err(Error::CryptoInit("Initialization timeout"))
         }
     }
@@ -777,7 +778,20 @@ mod tests {
         }
     }
 
-    // TODO Test: timeout after 5 retries
+    #[test]
+    fn timeout() {
+        let (mut sender, _receiver) = create_pair();
+        let mut out = MsgBuffer::new(8);
+        sender.send_ping(&mut out);
+        assert_eq!(sender.stage(), STAGE_PONG);
+        for _ in 0..5 {
+            out.clear();
+            sender.every_second(&mut out).unwrap();
+        }
+        out.clear();
+        assert!(sender.every_second(&mut out).is_err());
+        assert_eq!(sender.stage(), CLOSING);
+    }
 
     // TODO Test: duplicated message or replay attacks
 
