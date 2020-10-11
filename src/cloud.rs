@@ -442,9 +442,9 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     fn store_beacon(&mut self) -> Result<(), Error> {
         if let Some(ref path) = self.config.beacon_store {
             let peers: Vec<_> = self.own_addresses.choose_multiple(&mut thread_rng(), 3).cloned().collect();
-            if path.starts_with('|') {
+            if let Some(path) = path.strip_prefix('|') {
                 self.beacon_serializer
-                    .write_to_cmd(&peers, &path[1..])
+                    .write_to_cmd(&peers, path)
                     .map_err(|e| Error::BeaconIo("Failed to call beacon command", e))?;
             } else {
                 self.beacon_serializer
@@ -459,9 +459,9 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     fn load_beacon(&mut self) -> Result<(), Error> {
         let peers;
         if let Some(ref path) = self.config.beacon_load {
-            if path.starts_with('|') {
+            if let Some(path) = path.strip_prefix('|') {
                 self.beacon_serializer
-                    .read_from_cmd(&path[1..], Some(50))
+                    .read_from_cmd(path, Some(50))
                     .map_err(|e| Error::BeaconIo("Failed to call beacon command", e))?;
                 return Ok(())
             } else {

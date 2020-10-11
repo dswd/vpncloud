@@ -70,7 +70,7 @@ pub struct Config {
 pub struct Crypto {
     node_id: NodeId,
     key_pair: Arc<Ed25519KeyPair>,
-    trusted_keys: Arc<Vec<Ed25519PublicKey>>,
+    trusted_keys: Arc<[Ed25519PublicKey]>,
     algorithms: Algorithms
 }
 
@@ -124,7 +124,7 @@ impl Crypto {
                 speeds.into_iter().map(|(a, s)| format!("{}: {:.1} MiB/s", a, s)).collect::<Vec<_>>().join(", ")
             );
         }
-        Ok(Self { node_id, key_pair: Arc::new(key_pair), trusted_keys: Arc::new(trusted_keys), algorithms: algos })
+        Ok(Self { node_id, key_pair: Arc::new(key_pair), trusted_keys: trusted_keys.into_boxed_slice().into(), algorithms: algos })
     }
 
     pub fn generate_keypair(password: Option<&str>) -> (String, String) {
@@ -215,7 +215,7 @@ pub struct PeerCrypto<P: Payload> {
 
 impl<P: Payload> PeerCrypto<P> {
     pub fn new(
-        node_id: NodeId, init_payload: P, key_pair: Arc<Ed25519KeyPair>, trusted_keys: Arc<Vec<Ed25519PublicKey>>,
+        node_id: NodeId, init_payload: P, key_pair: Arc<Ed25519KeyPair>, trusted_keys: Arc<[Ed25519PublicKey]>,
         algorithms: Algorithms
     ) -> Self
     {

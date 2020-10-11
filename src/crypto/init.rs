@@ -381,7 +381,7 @@ pub struct InitState<P: Payload> {
     salted_node_id_hash: SaltedNodeIdHash,
     payload: P,
     key_pair: Arc<Ed25519KeyPair>,
-    trusted_keys: Arc<Vec<Ed25519PublicKey>>,
+    trusted_keys: Arc<[Ed25519PublicKey]>,
     ecdh_private_key: Option<EcdhPrivateKey>,
     next_stage: u8,
     close_time: usize,
@@ -393,7 +393,7 @@ pub struct InitState<P: Payload> {
 
 impl<P: Payload> InitState<P> {
     pub fn new(
-        node_id: NodeId, payload: P, key_pair: Arc<Ed25519KeyPair>, trusted_keys: Arc<Vec<Ed25519PublicKey>>,
+        node_id: NodeId, payload: P, key_pair: Arc<Ed25519KeyPair>, trusted_keys: Arc<[Ed25519PublicKey]>,
         algorithms: Algorithms
     ) -> Self
     {
@@ -494,9 +494,7 @@ impl<P: Payload> InitState<P> {
         hash == d.as_ref()
     }
 
-    fn send_message(
-        &mut self, stage: u8, ecdh_public_key: Option<EcdhPublicKey>, out: &mut MsgBuffer
-    ) {
+    fn send_message(&mut self, stage: u8, ecdh_public_key: Option<EcdhPublicKey>, out: &mut MsgBuffer) {
         debug!("Sending init with stage={}", stage);
         assert!(out.is_empty());
         let mut public_key = [0; ED25519_PUBLIC_KEY_LEN];
@@ -678,7 +676,7 @@ mod tests {
         let key_pair = Arc::new(Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref()).unwrap());
         let mut public_key = [0; ED25519_PUBLIC_KEY_LEN];
         public_key.clone_from_slice(key_pair.public_key().as_ref());
-        let trusted_nodes = Arc::new(vec![public_key]);
+        let trusted_nodes = Arc::new([public_key]);
         let mut node1 = [0; NODE_ID_BYTES];
         rng.fill(&mut node1).unwrap();
         let mut node2 = [0; NODE_ID_BYTES];
@@ -714,7 +712,70 @@ mod tests {
         }
     }
 
-    // TODO Test: last message repeated when message is lost
+    #[test]
+    fn lost_init_sender_recovers() {
+        let (mut sender, mut receiver) = create_pair();
+        let mut out = MsgBuffer::new(8);
+        sender.send_ping(&mut out);
+        assert_eq!(sender.stage(), STAGE_PONG);
+        // lost ping, sender recovers
+        out.clear();
+        sender.every_second(&mut out).unwrap();
+        let result = receiver.handle_init(&mut out).unwrap();
+        assert_eq!(receiver.stage(), STAGE_PENG);
+        assert_eq!(result, InitResult::Continue);
+        // lost pong, sender recovers
+        out.clear();
+        receiver.every_second(&mut out).unwrap();
+        let result = sender.handle_init(&mut out).unwrap();
+        assert_eq!(sender.stage(), WAITING_TO_CLOSE);
+        match result {
+            InitResult::Success { .. } => {
+                // lost peng, sender recovers
+                out.clear();
+            }
+            InitResult::Continue => unreachable!()
+        };
+        sender.every_second(&mut out).unwrap();
+        let result = receiver.handle_init(&mut out).unwrap();
+        assert_eq!(receiver.stage(), CLOSING);
+        match result {
+            InitResult::Success { .. } => assert!(out.is_empty()),
+            InitResult::Continue => unreachable!()
+        }
+    }
+
+    #[test]
+    fn lost_init_receiver_recovers() {
+        let (mut sender, mut receiver) = create_pair();
+        let mut out = MsgBuffer::new(8);
+        sender.send_ping(&mut out);
+        assert_eq!(sender.stage(), STAGE_PONG);
+        let result = receiver.handle_init(&mut out).unwrap();
+        assert_eq!(receiver.stage(), STAGE_PENG);
+        assert_eq!(result, InitResult::Continue);
+        // lost pong, receiver recovers
+        out.clear();
+        sender.every_second(&mut out).unwrap();
+        receiver.handle_init(&mut out).unwrap();
+        let result = sender.handle_init(&mut out).unwrap();
+        assert_eq!(sender.stage(), WAITING_TO_CLOSE);
+        match result {
+            InitResult::Success { .. } => {
+                // lost peng, sender recovers
+                out.clear();
+            }
+            InitResult::Continue => unreachable!()
+        };
+        receiver.every_second(&mut out).unwrap();
+        sender.handle_init(&mut out).unwrap();
+        let result = receiver.handle_init(&mut out).unwrap();
+        assert_eq!(receiver.stage(), CLOSING);
+        match result {
+            InitResult::Success { .. } => assert!(out.is_empty()),
+            InitResult::Continue => unreachable!()
+        }
+    }
 
     // TODO Test: timeout after 5 retries
 

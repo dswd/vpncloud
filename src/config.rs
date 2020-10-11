@@ -17,8 +17,8 @@ pub const DEFAULT_PORT: u16 = 3210;
 
 
 fn parse_listen(addr: &str) -> SocketAddr {
-    if addr.starts_with("*:") {
-        let port = try_fail!(addr[2..].parse::<u16>(), "Invalid port: {}");
+    if let Some(addr) = addr.strip_prefix("*:") {
+        let port = try_fail!(addr.parse::<u16>(), "Invalid port: {}");
         SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
     } else if addr.contains(':') {
         try_fail!(addr.parse::<SocketAddr>(), "Invalid address: {}: {}", addr)
@@ -417,7 +417,7 @@ pub struct Args {
     pub version: bool,
 
     /// Generate and print a key-pair and exit
-    #[structopt(long, conflicts_with="private_key")]
+    #[structopt(long, conflicts_with = "private_key")]
     pub genkey: bool,
 
     /// Disable automatic port forwarding
