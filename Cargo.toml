@@ -26,7 +26,7 @@ yaml-rust = "0.4"
 igd = { version = "0.11", optional = true }
 daemonize = "0.4"
 ring = "0.16"
-privdrop = "0.3"
+privdrop = "0.5"
 byteorder = "1.3"
 thiserror = "1.0"
 smallvec = "1.4"
