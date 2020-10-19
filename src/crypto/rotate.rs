@@ -318,9 +318,91 @@ mod tests {
         assert_eq!(key.use_for_sending, true);
     }
 
-    // TODO: test duplication
+    #[test]
+    fn test_duplication() {
+        let mut out1 = MsgBuffer::new(8);
+        let mut out2 = MsgBuffer::new(8);
 
-    // TODO: test lost message
+        let mut node1 = RotationState::new(true, &mut out1).unwrap();
+        let mut node2 = RotationState::new(false, &mut out2).unwrap();
+        let msg1 = out1.clone().msg().unwrap();
+        let msg1_copy = out1.msg().unwrap();
+        node2.process_message(msg1);
+        assert!(node2.process_message(msg1_copy).is_none());
+        node1.cycle(&mut out1).unwrap();
+        node2.cycle(&mut out2).unwrap();
+        let msg2 = out2.clone().msg().unwrap();
+        let msg2_copy = out2.msg().unwrap();
+        // Message 2
+        assert!(node1.process_message(msg2).is_some());
+        assert!(node1.process_message(msg2_copy).is_none());
+        // Cycle 2
+        node1.cycle(&mut out1).unwrap();
+        node2.cycle(&mut out2).unwrap();
+        let msg1 = out1.clone().msg().unwrap();
+        let msg1_copy = out1.msg().unwrap();
+        // Message 3
+        assert!(node2.process_message(msg1).is_some());
+        assert!(node2.process_message(msg1_copy).is_none());
+        // Cycle 3
+        node1.cycle(&mut out1).unwrap();
+        node2.cycle(&mut out2).unwrap();
+        let msg2 = out2.clone().msg().unwrap();
+        let msg2_copy = out2.msg().unwrap();
+        // Message 4
+        assert!(node1.process_message(msg2).is_some());
+        assert!(node1.process_message(msg2_copy).is_none());
+    }
 
-    // TODO: test potential attack: reflect message back to sender
+    #[test]
+    fn test_lost_message() {
+        let mut out1 = MsgBuffer::new(8);
+        let mut out2 = MsgBuffer::new(8);
+
+        let mut node1 = RotationState::new(true, &mut out1).unwrap();
+        let mut node2 = RotationState::new(false, &mut out2).unwrap();
+        let _msg1 = out1.msg().unwrap();
+        // drop msg1
+        node1.cycle(&mut out1).unwrap();
+        node2.cycle(&mut out2).unwrap();
+        assert!(out2.msg().is_none());
+        // Cycle 2
+        node1.cycle(&mut out1).unwrap();
+        node2.cycle(&mut out2).unwrap();
+        let msg1 = out1.msg().unwrap();
+        // Message 3
+        assert!(node2.process_message(msg1).is_none());
+        // Cycle 3
+        node1.cycle(&mut out1).unwrap();
+        node2.cycle(&mut out2).unwrap();
+        let msg2 = out2.msg().unwrap();
+        // Message 4
+        assert!(node1.process_message(msg2).is_some());
+    }
+
+    #[test]
+    fn test_reflect_back() {
+        let mut out1 = MsgBuffer::new(8);
+        let mut out2 = MsgBuffer::new(8);
+
+        let mut node1 = RotationState::new(true, &mut out1).unwrap();
+        let mut node2 = RotationState::new(false, &mut out2).unwrap();
+        let msg1 = out1.msg().unwrap();
+        assert!(node1.process_message(msg1).is_none());
+        node1.cycle(&mut out1).unwrap();
+        node2.cycle(&mut out2).unwrap();
+        assert!(out2.msg().is_none());
+        // Cycle 2
+        node1.cycle(&mut out1).unwrap();
+        node2.cycle(&mut out2).unwrap();
+        let msg1 = out1.msg().unwrap();
+        // Message 3
+        assert!(node2.process_message(msg1).is_none());
+        // Cycle 3
+        node1.cycle(&mut out1).unwrap();
+        node2.cycle(&mut out2).unwrap();
+        let msg2 = out2.msg().unwrap();
+        // Message 4
+        assert!(node1.process_message(msg2).is_some());
+    }
 }
