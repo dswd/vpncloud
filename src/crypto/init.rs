@@ -388,6 +388,7 @@ pub struct InitState<P: Payload> {
     last_message: Option<Vec<u8>>,
     crypto: Option<CryptoCore>,
     algorithms: Algorithms,
+    selected_algorithm: Option<&'static Algorithm>,
     failed_retries: usize
 }
 
@@ -413,6 +414,7 @@ impl<P: Payload> InitState<P> {
             last_message: None,
             crypto: None,
             ecdh_private_key: None,
+            selected_algorithm: None,
             algorithms,
             failed_retries: 0,
             close_time: 60
@@ -605,6 +607,7 @@ impl<P: Payload> InitState<P> {
 
                 // do ecdh agreement and derive master key
                 let algorithm = self.select_algorithm(&algorithms)?;
+                self.selected_algorithm = algorithm.map(|a| a.0);
                 if let Some((algorithm, _speed)) = algorithm {
                     let master_key = self.derive_master_key(algorithm, my_ecdh_private_key, &ecdh_public_key);
                     self.crypto = Some(CryptoCore::new(master_key, self.salted_node_id_hash > salted_node_id_hash));
@@ -620,6 +623,7 @@ impl<P: Payload> InitState<P> {
                 // do ecdh agreement and derive master key
                 let ecdh_private_key = self.ecdh_private_key.take().unwrap();
                 let algorithm = self.select_algorithm(&algorithms)?;
+                self.selected_algorithm = algorithm.map(|a| a.0);
                 if let Some((algorithm, _speed)) = algorithm {
                     let master_key = self.derive_master_key(algorithm, ecdh_private_key, &ecdh_public_key);
                     self.crypto = Some(CryptoCore::new(master_key, self.salted_node_id_hash > salted_node_id_hash));
@@ -793,11 +797,138 @@ mod tests {
         assert_eq!(sender.stage(), CLOSING);
     }
 
-    // TODO Test: duplicated message or replay attacks
+    #[test]
+    fn untrusted_peer() {
+        let (mut sender, _) = create_pair();
+        let (_, mut receiver) = create_pair();
+        let mut out = MsgBuffer::new(8);
+        sender.send_ping(&mut out);
+        assert_eq!(sender.stage(), STAGE_PONG);
+        assert!(receiver.handle_init(&mut out).is_err());
+    }
 
-    // TODO Test: untrusted peers
+    #[test]
+    fn manipulated_message() {
+        let (mut sender, mut receiver) = create_pair();
+        let mut out = MsgBuffer::new(8);
+        sender.send_ping(&mut out);
+        assert_eq!(sender.stage(), STAGE_PONG);
+        out.message_mut()[10] ^= 0x01;
+        assert!(receiver.handle_init(&mut out).is_err());
+    }
 
-    // TODO Test: manipulated message
+    #[test]
+    fn connect_to_self() {
+        let (mut sender, _) = create_pair();
+        let mut out = MsgBuffer::new(8);
+        sender.send_ping(&mut out);
+        assert_eq!(sender.stage(), STAGE_PONG);
+        assert!(sender.handle_init(&mut out).is_err());
+    }
 
-    // TODO Test: algorithm negotiation
+    fn test_algorithm_negotiation(
+        algos1: Algorithms, algos2: Algorithms, success: bool, selected: Option<&'static Algorithm>
+    ) {
+        let (mut sender, mut receiver) = create_pair();
+        sender.algorithms = algos1;
+        receiver.algorithms = algos2;
+        let mut out = MsgBuffer::new(8);
+        sender.send_ping(&mut out);
+        let res = receiver.handle_init(&mut out);
+        assert_eq!(res.is_ok(), success);
+        if !success {
+            return
+        }
+        sender.handle_init(&mut out).unwrap();
+        receiver.handle_init(&mut out).unwrap();
+        assert_eq!(sender.selected_algorithm, selected);
+        assert_eq!(sender.selected_algorithm, receiver.selected_algorithm);
+    }
+
+    #[test]
+    fn algorithm_negotiation() {
+        // Equal algorithms
+        test_algorithm_negotiation(
+            Algorithms {
+                algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
+                allow_unencrypted: false
+            },
+            Algorithms {
+                algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
+                allow_unencrypted: false
+            },
+            true,
+            Some(&AES_128_GCM)
+        );
+
+        // Overlapping but different
+        test_algorithm_negotiation(
+            Algorithms {
+                algorithm_speeds: smallvec![(&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
+                allow_unencrypted: false
+            },
+            Algorithms {
+                algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0)],
+                allow_unencrypted: false
+            },
+            true,
+            Some(&AES_256_GCM)
+        );
+
+        // Select fastest pair
+        test_algorithm_negotiation(
+            Algorithms {
+                algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
+                allow_unencrypted: false
+            },
+            Algorithms {
+                algorithm_speeds: smallvec![(&AES_128_GCM, 40.0), (&AES_256_GCM, 50.0), (&CHACHA20_POLY1305, 60.0)],
+                allow_unencrypted: false
+            },
+            true,
+            Some(&CHACHA20_POLY1305)
+        );
+
+        // Select unencrypted if supported by both
+        test_algorithm_negotiation(
+            Algorithms {
+                algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
+                allow_unencrypted: true
+            },
+            Algorithms {
+                algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
+                allow_unencrypted: true
+            },
+            true,
+            None
+        );
+
+        // Do not select unencrypted if only supported by one
+        test_algorithm_negotiation(
+            Algorithms {
+                algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
+                allow_unencrypted: true
+            },
+            Algorithms {
+                algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
+                allow_unencrypted: false
+            },
+            true,
+            Some(&AES_128_GCM)
+        );
+
+        // Fail if no match
+        test_algorithm_negotiation(
+            Algorithms {
+                algorithm_speeds: smallvec![(&AES_128_GCM, 600.0)],
+                allow_unencrypted: true
+            },
+            Algorithms {
+                algorithm_speeds: smallvec![(&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
+                allow_unencrypted: false
+            },
+            false,
+            Some(&AES_128_GCM)
+        );
+    }
 }
