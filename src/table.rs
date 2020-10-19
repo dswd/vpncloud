@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     types::{Address, Range, RangeList},
-    util::{Duration, Time, TimeSource, addr_nice}
+    util::{addr_nice, Duration, Time, TimeSource}
 };
 
 
@@ -132,3 +132,5 @@ impl<TS: TimeSource> ClaimTable<TS> {
         Ok(())
     }
 }
+
+// TODO: test

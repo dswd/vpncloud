@@ -144,26 +144,36 @@ fn lost_init_peng() {
 }
 
 #[test]
+#[ignore]
 fn peer_exchange() {
     // TODO Test
+    unimplemented!()
 }
 
 #[test]
+#[ignore]
 fn lost_peer_exchange() {
     // TODO Test
+    unimplemented!()
 }
 
 #[test]
+#[ignore]
 fn remove_dead_peers() {
     // TODO Test
+    unimplemented!()
 }
 
 #[test]
+#[ignore]
 fn update_primary_address() {
     // TODO Test
+    unimplemented!()
 }
 
 #[test]
+#[ignore]
 fn automatic_peer_timeout() {
     // TODO Test
+    unimplemented!()
 }
