@@ -5,11 +5,11 @@ VpnCloud - Peer-to-Peer VPN
 
 **VpnCloud** is a simple VPN over UDP. It creates a virtual network interface on
 the host and forwards all received data via UDP to the destination. VpnCloud
-establishes a fully-meshed VPN network in a peer-to-peer manner. It can work
-on TUN devices (IP based) and TAP devices (Ethernet based). Tunneling traffic
-between two nodes can be as easy as:
+establishes an encrypted fully-meshed VPN network in a peer-to-peer manner. 
+It can work on TUN devices (IP based) and TAP devices (Ethernet based). 
+Tunneling traffic between two nodes can be as easy as:
 
-       $> vpncloud -c REMOTE_HOST:PORT --ifup 'ifconfig $IFNAME 10.0.0.1/24 mtu 1400 up'
+       $> vpncloud -c REMOTE_HOST:PORT -p 'mypassword' --ip 10.0.0.1/24
 
 For more information, please see the [Website](https://vpncloud.ddswd.de) or the [Forum](https://groups.google.com/forum/#!forum/vpncloud).
 
@@ -21,7 +21,7 @@ somewhat stable state. VpnCloud features the following functionality:
 * Setting up tunnels between two networks via Ethernet (TAP) and IP (TUN)
 * Connecting multiple networks with multiple forwarding behaviors (Hub, Switch,
   Router)
-* Encrypted connections
+* Strong encryption using Curve25519 key pairs and AES methods
 * Automatic peer-to-peer meshing, no central servers
 * NAT and (limited) firewall traversal using hole punching
 * Automatic reconnecting when connections are lost
@@ -29,7 +29,6 @@ somewhat stable state. VpnCloud features the following functionality:
   Ethernet networks.
 * High throughput and low additional latency (see [performance page](https://vpncloud.ddswd.de/features/performance))
 * Support for tunneled VLans (TAP device)
-* Option to hide protocol header
 * Automatic port forwarding via UPnP
 * Support for publishing [beacons](https://vpncloud.ddswd.de/docs/beacons) to help nodes find each others
 * Support for statsd monitoring
