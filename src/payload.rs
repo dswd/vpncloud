@@ -3,6 +3,7 @@
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 use crate::{error::Error, types::Address};
+use std::io::{Cursor, Read};
 
 pub trait Protocol: Sized {
     fn parse(_: &[u8]) -> Result<(Address, Address), Error>;
@@ -22,32 +23,23 @@ impl Protocol for Frame {
     /// # Errors
     /// This method will fail when the given data is not a valid ethernet frame.
     fn parse(data: &[u8]) -> Result<(Address, Address), Error> {
-        if data.len() < 14 {
-            return Err(Error::Parse("Frame is too short"))
-        }
-        let mut pos = 0;
-        let dst_data = &data[pos..pos + 6];
-        pos += 6;
-        let src_data = &data[pos..pos + 6];
-        pos += 6;
-        if data[pos] == 0x81 && data[pos + 1] == 0x00 {
-            pos += 2;
-            if data.len() < pos + 2 {
-                return Err(Error::Parse("Vlan frame is too short"))
-            }
-            let mut src = [0; 16];
-            let mut dst = [0; 16];
-            src[0] = data[pos];
-            src[1] = data[pos + 1];
-            dst[0] = data[pos];
-            dst[1] = data[pos + 1];
-            src[2..8].copy_from_slice(src_data);
-            dst[2..8].copy_from_slice(dst_data);
+        let mut cursor = Cursor::new(data);
+        let mut src = [0; 16];
+        let mut dst = [0; 16];
+        let mut proto = [0; 2];
+        cursor
+            .read_exact(&mut dst[..6])
+            .and_then(|_| cursor.read_exact(&mut src[..6]))
+            .and_then(|_| cursor.read_exact(&mut proto))
+            .map_err(|_| Error::Parse("Frame is too short"))?;
+        if proto == [0x81, 0x00] {
+            src.copy_within(..6, 2);
+            dst.copy_within(..6, 2);
+            cursor.read_exact(&mut src[..2]).map_err(|_| Error::Parse("Vlan frame is too short"))?;
+            dst[..2].copy_from_slice(&src[..2]);
             Ok((Address { data: src, len: 8 }, Address { data: dst, len: 8 }))
         } else {
-            let src = Address::read_from_fixed(src_data, 6)?;
-            let dst = Address::read_from_fixed(dst_data, 6)?;
-            Ok((src, dst))
+            Ok((Address { data: src, len: 6 }, Address { data: dst, len: 6 }))
         }
     }
 }
@@ -78,6 +70,25 @@ fn decode_invalid_frame() {
     assert!(Frame::parse(&[6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 0x81, 0x00]).is_err());
 }
 
+#[cfg(feature = "bench")]
+mod bench_ethernet {
+    use super::*;
+    use test::Bencher;
+
+    #[bench]
+    fn decode_ethernet(b: &mut Bencher) {
+        let data = [6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 7, 8];
+        b.iter(|| Frame::parse(&data).unwrap());
+        b.bytes = 1400;
+    }
+
+    #[bench]
+    fn decode_ethernet_with_vlan(b: &mut Bencher) {
+        let data = [6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 0x81, 0, 4, 210, 1, 2, 3, 4, 5, 6, 7, 8];
+        b.iter(|| Frame::parse(&data).unwrap());
+        b.bytes = 1400;
+    }
+}
 
 /// An IP packet dissector
 ///
@@ -158,4 +169,28 @@ fn decode_invalid_packet() {
         4, 3, 2
     ])
     .is_err());
+}
+
+
+#[cfg(feature = "bench")]
+mod bench_ip {
+    use super::*;
+    use test::Bencher;
+
+    #[bench]
+    fn decode_ipv4(b: &mut Bencher) {
+        let data = [0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 192, 168, 1, 1, 192, 168, 1, 2];
+        b.iter(|| Packet::parse(&data).unwrap());
+        b.bytes = 1400;
+    }
+
+    #[bench]
+    fn decode_ipv6(b: &mut Bencher) {
+        let data = [
+            0x60, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 6,
+            5, 4, 3, 2, 1
+        ];
+        b.iter(|| Packet::parse(&data).unwrap());
+        b.bytes = 1400;
+    }
 }

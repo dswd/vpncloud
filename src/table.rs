@@ -134,3 +134,36 @@ impl<TS: TimeSource> ClaimTable<TS> {
 }
 
 // TODO: test
+
+#[cfg(feature = "bench")]
+mod bench {
+    use super::*;
+    use crate::util::MockTimeSource;
+
+    use test::Bencher;
+    use std::str::FromStr;
+    use smallvec::smallvec;
+
+    #[bench]
+    fn lookup_warm(b: &mut Bencher) {
+        let mut table = ClaimTable::<MockTimeSource>::new(60, 60);
+        let addr = Address::from_str("1.2.3.4").unwrap();
+        table.cache(addr, SocketAddr::from_str("1.2.3.4:3210").unwrap());
+        b.iter(|| table.lookup(addr));
+        b.bytes = 1400;
+    }
+
+    #[bench]
+    fn lookup_cold(b: &mut Bencher) {
+        let mut table = ClaimTable::<MockTimeSource>::new(60, 60);
+        let addr = Address::from_str("1.2.3.4").unwrap();
+        table.set_claims(SocketAddr::from_str("1.2.3.4:3210").unwrap(), smallvec![
+            Range::from_str("1.2.3.4/32").unwrap()
+        ]);
+        b.iter(|| {
+            table.cache.clear();
+            table.lookup(addr)
+        });
+        b.bytes = 1400;
+    }
+}
