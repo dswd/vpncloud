@@ -36,8 +36,14 @@ impl Protocol for Frame {
             src.copy_within(..6, 2);
             dst.copy_within(..6, 2);
             cursor.read_exact(&mut src[..2]).map_err(|_| Error::Parse("Vlan frame is too short"))?;
-            src[0] &= 0x0f;
+            src[0] &= 0x0f; // restrict vlan id to 12 bits
             dst[..2].copy_from_slice(&src[..2]);
+            if src[0..1] == [0, 0] {
+                // treat vlan id 0x000 as untagged
+                src.copy_within(2..8, 0);
+                dst.copy_within(2..8, 0);
+                return Ok((Address { data: src, len: 6 }, Address { data: dst, len: 6 }))
+            }
             Ok((Address { data: src, len: 8 }, Address { data: dst, len: 8 }))
         } else {
             Ok((Address { data: src, len: 6 }, Address { data: dst, len: 6 }))
