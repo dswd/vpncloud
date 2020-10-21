@@ -36,6 +36,7 @@ impl Protocol for Frame {
             src.copy_within(..6, 2);
             dst.copy_within(..6, 2);
             cursor.read_exact(&mut src[..2]).map_err(|_| Error::Parse("Vlan frame is too short"))?;
+            src[0] &= 0x0f;
             dst[..2].copy_from_slice(&src[..2]);
             Ok((Address { data: src, len: 8 }, Address { data: dst, len: 8 }))
         } else {
