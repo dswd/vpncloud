@@ -718,7 +718,8 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                     Ok(res)
                 }
                 Err(err) => {
-                    warn!("Error in init message from peer {}: {}", addr_nice(src), err);
+                    debug!("Init error from {}: {}", src, err);
+                    info!("Ignoring invalid init message from peer {}", addr_nice(src));
                     return Ok(())
                 }
             }
