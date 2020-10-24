@@ -353,7 +353,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             }
         }
         for addr in del {
-            info!("Forgot peer: {}", addr_nice(addr));
+            info!("Forgot peer {} due to timeout", addr_nice(addr));
             self.peers.remove(&addr);
             self.table.remove_claims(addr);
             self.connect_sock(addr)?; // Try to reconnect
@@ -707,14 +707,20 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         } else if is_init_message(data.message()) {
             let mut init = self.crypto.peer_instance(self.create_node_info());
             let msg_result = init.handle_message(data);
-            if msg_result.is_ok() {
-                self.pending_inits.insert(src, init);
+            match msg_result {
+                Ok(res) => {
+                    self.pending_inits.insert(src, init);
+                    Ok(res)
+                }
+                Err(err) => {
+                    warn!("Error in init message from peer {}: {}", addr_nice(src), err);
+                    return Ok(())
+                }
             }
-            msg_result
         } else if let Some(peer) = self.peers.get_mut(&src) {
             peer.crypto.handle_message(data)
         } else {
-            error!("Received non-init message from unknown peer {}", addr_nice(src));
+            info!("Ignoring non-init message from unknown peer {}", addr_nice(src));
             return Ok(())
         };
         match msg_result {
@@ -737,10 +743,12 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         let src = try_fail!(self.socket.receive(buffer), "Failed to read from network socket: {}");
         self.traffic.count_in_traffic(src, buffer.len());
         if let Err(e) = self.handle_net_message(src, buffer) {
-            error!("Error: {}", e);
             if let Error::CryptoInit(_) = e {
-                info!("Closing pending connection to {} due to error", addr_nice(src));
+                debug!("Crypto init error: {}", e);
+                info!("Closing pending connection to {} due to error in crypto init", addr_nice(src));
                 self.pending_inits.remove(&src);
+            } else {
+                error!("Error: {}", e);
             }
         }
     }

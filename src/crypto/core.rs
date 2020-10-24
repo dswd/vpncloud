@@ -174,7 +174,7 @@ impl CryptoCore {
         tag_space.clone_from_slice(tag.as_ref());
     }
 
-    fn decrypt_with_key<'a>(key: &mut CryptoKey, nonce: Nonce, data_and_tag: &'a mut [u8]) -> Result<(), Error> {
+    fn decrypt_with_key(key: &mut CryptoKey, nonce: Nonce, data_and_tag: &mut [u8]) -> Result<(), Error> {
         if nonce < key.min_nonce {
             return Err(Error::Crypto("Old nonce rejected"))
         }
