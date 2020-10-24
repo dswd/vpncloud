@@ -270,7 +270,10 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     pub fn connect<Addr: ToSocketAddrs + fmt::Debug + Clone>(&mut self, addr: Addr) -> Result<(), Error> {
         let addrs = resolve(&addr)?.into_iter().map(mapped_addr).collect::<Vec<_>>();
         for addr in &addrs {
-            if self.own_addresses.contains(addr) || self.peers.contains_key(addr) {
+            if self.own_addresses.contains(addr)
+                || self.peers.contains_key(addr)
+                || self.pending_inits.contains_key(addr)
+            {
                 return Ok(())
             }
         }
@@ -608,6 +611,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
 
     fn remove_peer(&mut self, addr: SocketAddr) {
         if let Some(_peer) = self.peers.remove(&addr) {
+            info!("Closing connection to {}", addr_nice(addr));
             self.table.remove_claims(addr);
         }
     }
@@ -701,6 +705,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     }
 
     pub fn handle_net_message(&mut self, src: SocketAddr, data: &mut MsgBuffer) -> Result<(), Error> {
+        let src = mapped_addr(src);
         debug!("Received {} bytes from {}", data.len(), src);
         let msg_result = if let Some(init) = self.pending_inits.get_mut(&src) {
             init.handle_message(data)

@@ -82,6 +82,7 @@ pub const CLOSING: u8 = 5;
 pub const SALTED_NODE_ID_HASH_LEN: usize = 20;
 pub type SaltedNodeIdHash = [u8; SALTED_NODE_ID_HASH_LEN];
 
+
 #[allow(clippy::large_enum_variant)]
 pub enum InitMsg {
     Ping {
@@ -561,6 +562,7 @@ impl<P: Payload> InitState<P> {
             })
             .max_by(|(_, s1), (_, s2)| if s1 < s2 { cmp::Ordering::Less } else { cmp::Ordering::Greater });
         if let Some(algo) = algo {
+            debug!("Init: best algorithm is {:?} with speed {}", algo.0, algo.1);
             Ok(Some(algo))
         } else {
             Err(Error::CryptoInit("No common algorithms"))
