@@ -56,7 +56,7 @@ use crate::{
 
 
 struct DualLogger {
-    file: Mutex<Option<File>>
+    file: Option<Mutex<File>>
 }
 
 impl DualLogger {
@@ -67,9 +67,9 @@ impl DualLogger {
                 fs::remove_file(path)?
             }
             let file = File::create(path)?;
-            Ok(DualLogger { file: Mutex::new(Some(file)) })
+            Ok(DualLogger { file: Some(Mutex::new(file)) })
         } else {
-            Ok(DualLogger { file: Mutex::new(None) })
+            Ok(DualLogger { file: None })
         }
     }
 }
@@ -84,8 +84,8 @@ impl log::Log for DualLogger {
     fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
             println!("{} - {}", record.level(), record.args());
-            let mut file = self.file.lock().expect("Lock poisoned");
-            if let Some(ref mut file) = *file {
+            if let Some(ref file) = self.file {
+                let mut file = file.lock().expect("Lock poisoned");
                 let time = time::OffsetDateTime::now_local().format("%F %T");
                 writeln!(file, "{} - {} - {}", time, record.level(), record.args())
                     .expect("Failed to write to logfile");
@@ -95,8 +95,8 @@ impl log::Log for DualLogger {
 
     #[inline]
     fn flush(&self) {
-        let mut file = self.file.lock().expect("Lock poisoned");
-        if let Some(ref mut file) = *file {
+        if let Some(ref file) = self.file {
+            let mut file = file.lock().expect("Lock poisoned");
             try_fail!(file.flush(), "Logging error: {}");
         }
     }
