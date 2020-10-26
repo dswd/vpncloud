@@ -7,46 +7,64 @@
 # `service vpncloud@NAME start/stop` on systemd systems.
 
 
-# The port number on which to listen for data.
+# The port number or ip:port on which to listen for data.
 # Note: Every VPN needs a different port number.
-#port: 3210
+listen: 3210
 
 # Address of a peer to connect to. The address should be in the form
 # `addr:port`. If the node is not started, the connection will be retried
 # periodically. This parameter can be repeated to connect to multiple peers.
 # Note: Several entries can be separated by spaces.
-#peers:
+peers:
 #  - node2.example.com:3210
 #  - node3.example.com:3210
 
 # Peer timeout in seconds. The peers will exchange information periodically
 # and drop peers that are silent for this period of time.
-#peer_timeout: 600
+peer-timeout: 300
 
 # Switch table entry timeout in seconds. This parameter is only used in switch
 # mode. Addresses that have not been seen for the given period of time  will
 # be forgot.
-#switch_timeout: 300
+switch-timeout: 300
 
-# An optional token that identifies the network and helps to distinguish it
-# from other networks.
-#magic: "76706e01"
 
-# An optional shared key to encrypt the VPN data. If this option is not set,
-# the traffic will be sent unencrypted.
-#shared_key: ""
+# Crypto settings
+#crypto:
 
-# The encryption method to use ("aes256", or "chacha20"). Most current CPUs
-# have special support for AES256 so this should be faster. For older
-# computers lacking this support, only CHACHA20 is supported.
-#crypto: chacha20
+  # An optional password to encrypt the VPN data.
+  #password: ""
 
-# Name of the virtual device. Any `%d` will be filled with a free number.
-#device_name: "vpncloud%d"
+  # Private key
+  #private-key: ""
 
-# Set the type of network. There are two options: **tap** devices process
-# Ethernet frames **tun** devices process IP packets. [default: `tap`]
-#device_type: tap
+  # Public key
+  #public-key: ""
+
+  # Trusted keys
+  #trusted-keys:
+
+  # Supported algorithms. Subset of "aes128", "aes256", "chacha20", and 
+  # "plain" where "plain" means unencrypted.
+  #algorithms:
+
+
+# Device settings
+device:
+
+  # Name of the virtual device. Any `%d` will be filled with a free number.
+  name: "vpncloud%d"
+
+  # Set the type of network. There are two options: **tap** devices process
+  # Ethernet frames **tun** devices process IP packets. [default: `tun`]
+  type: tun
+
+  # The path of the /dev/net/tun device. Only change if you need to.
+  #path: /dev/net/tun
+
+  # Whether to fix detected rp-filter problems
+  fix-rp-filter: false
+
 
 # The mode of the VPN. The VPN can like a router, a switch or a hub. A **hub**
 # will send all data always to all peers. A **switch** will learn addresses
@@ -54,15 +72,23 @@
 # unknown. A **router** will send data according to known subnets of the
 # peers and ignore them otherwise. The **normal** mode is switch for tap
 # devices and router for tun devices. [default: `normal`]
-#mode: normal
+mode: normal
+
 
 # The local subnets to use. This parameter should be in the form
 # `address/prefixlen` where address is an IPv4 address, an IPv6 address, or a
 # MAC address. The prefix length is the number of significant front bits that
 # distinguish the subnet from other subnets. Example: `10.1.1.0/24`.
 # Note: Several entries can be separated by spaces.
-#subnets:
+#claims
 #  - 10.1.1.0/24
+
+# Whether to automatically claim the configured IP on tun devices
+auto-claim: true
+
+
+# An IP address to set on the device
+#ip: "" 
 
 # A command to setup the network interface. The command will be run (as
 # parameter to `sh -c`) when the device has been created to configure it.
@@ -86,3 +112,29 @@
 # when running in background.
 #user: ""
 #group: ""
+
+
+# Beacon settings
+beacon:
+
+  # File or command (prefix: "|") to use for storing beacons
+  #store: ""
+
+  # File or command (prefix: "|") to use for loading beacons
+  #load: ""
+
+  # How often to load and store beacons (in seconds)
+  interval: 3600
+
+  # Password to encrypt beacon data with
+  #password: ""
+
+
+# Statsd settings
+#statsd:
+
+  # Statsd server name:port
+  #server: ""
+
+  # Prefix to use for stats keys
+  #prefix: "" 

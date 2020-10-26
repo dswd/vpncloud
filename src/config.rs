@@ -583,6 +583,43 @@ statsd:
 }
 
 #[test]
+fn default_config_as_default() {
+    let mut default_config = Config {
+        device_type: Type::Dummy,
+        device_name: "".to_string(),
+        device_path: None,
+        fix_rp_filter: false,
+        ip: None,
+        ifup: None,
+        ifdown: None,
+        crypto: CryptoConfig::default(),
+        listen: "[::]:3210".parse::<SocketAddr>().unwrap(),
+        peers: vec![],
+        peer_timeout: 0,
+        keepalive: None,
+        beacon_store: None,
+        beacon_load: None,
+        beacon_interval: 0,
+        beacon_password: None,
+        mode: Mode::Hub,
+        switch_timeout: 0,
+        claims: vec![],
+        auto_claim: true,
+        port_forwarding: true,
+        daemonize: false,
+        pid_file: None,
+        stats_file: None,
+        statsd_server: None,
+        statsd_prefix: None,
+        user: None,
+        group: None
+    };
+    let default_config_file = serde_yaml::from_str::<ConfigFile>(include_str!("../assets/example.net.disabled")).unwrap();
+    default_config.merge_file(default_config_file);
+    assert_eq!(default_config, Config::default());
+}
+
+#[test]
 fn config_merge() {
     let mut config = Config::default();
     config.merge_file(ConfigFile {
