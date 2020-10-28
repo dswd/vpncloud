@@ -62,11 +62,21 @@ impl<TS: TimeSource> ClaimTable<TS> {
         for claim in claims {
             self.claims.push(ClaimEntry { peer, claim, timeout: TS::now() + self.claim_timeout as Time })
         }
+        for entry in self.cache.values_mut() {
+            if entry.peer == peer {
+                entry.timeout = 0
+            }
+        }
         self.housekeep()
     }
 
     pub fn remove_claims(&mut self, peer: SocketAddr) {
         for entry in &mut self.claims {
+            if entry.peer == peer {
+                entry.timeout = 0
+            }
+        }
+        for entry in self.cache.values_mut() {
             if entry.peer == peer {
                 entry.timeout = 0
             }
@@ -92,7 +102,6 @@ impl<TS: TimeSource> ClaimTable<TS> {
 
     pub fn housekeep(&mut self) {
         let now = TS::now();
-        // TODO: also remove cache when removing claims
         self.cache.retain(|_, v| v.timeout >= now);
         self.claims.retain(|e| e.timeout >= now);
     }

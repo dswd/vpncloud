@@ -97,18 +97,19 @@ pub struct RotatedKey {
 
 impl RotationState {
     #[allow(dead_code)]
-    pub fn new(initiator: bool, out: &mut MsgBuffer) -> Result<Self, Error> {
+    pub fn new(initiator: bool, out: &mut MsgBuffer) -> Self {
         if initiator {
             let (private_key, public_key) = Self::create_key();
-            Self::send(&RotationMessage { message_id: 1, confirm: None, propose: public_key }, out)?;
-            Ok(Self { confirmed: None, pending: None, proposed: Some(private_key), message_id: 1, timeout: false })
+            Self::send(&RotationMessage { message_id: 1, confirm: None, propose: public_key }, out);
+            Self { confirmed: None, pending: None, proposed: Some(private_key), message_id: 1, timeout: false }
         } else {
-            Ok(Self { confirmed: None, pending: None, proposed: None, message_id: 0, timeout: false })
+            Self { confirmed: None, pending: None, proposed: None, message_id: 0, timeout: false }
         }
     }
 
-    fn send(msg: &RotationMessage, out: &mut MsgBuffer) -> Result<(), Error> {
+    fn send(msg: &RotationMessage, out: &mut MsgBuffer) {
         assert!(out.is_empty());
+        debug!("Rotation sending message with id {}", msg.message_id);
         let len;
         {
             let mut cursor = Cursor::new(out.buffer());
@@ -116,7 +117,6 @@ impl RotationState {
             len = cursor.position() as usize;
         }
         out.set_length(len);
-        Ok(())
     }
 
     fn create_key() -> (EcdhPrivateKey, EcdhPublicKey) {
@@ -152,6 +152,7 @@ impl RotationState {
         if msg.message_id <= self.message_id {
             return None
         }
+        debug!("Received rotation message with id {}", msg.message_id);
         self.timeout = false;
         // Create key from proposal and store reply as pending
         let (private_key, public_key) = Self::create_key();
@@ -168,7 +169,7 @@ impl RotationState {
     }
 
     #[allow(dead_code)]
-    pub fn cycle(&mut self, out: &mut MsgBuffer) -> Result<Option<RotatedKey>, Error> {
+    pub fn cycle(&mut self, out: &mut MsgBuffer) -> Option<RotatedKey> {
         if let Some(ref private_key) = self.proposed {
             // Still a proposed key that has not been confirmed, proposal must have been lost
             if self.timeout {
@@ -178,10 +179,10 @@ impl RotationState {
                     Self::send(
                         &RotationMessage { confirm: Some(confirmed_key.clone()), propose: proposed_key, message_id },
                         out
-                    )?;
+                    );
                 } else {
                     // First message has been lost
-                    Self::send(&RotationMessage { confirm: None, propose: proposed_key, message_id: 1 }, out)?;
+                    Self::send(&RotationMessage { confirm: None, propose: proposed_key, message_id: 1 }, out);
                 }
             } else {
                 self.timeout = true;
@@ -195,14 +196,14 @@ impl RotationState {
                 let (private_key, propose_key) = Self::create_key();
                 self.proposed = Some(private_key);
                 self.confirmed = Some((confirm_key.clone(), message_id));
-                Self::send(&RotationMessage { confirm: Some(confirm_key), propose: propose_key, message_id }, out)?;
-                return Ok(Some(RotatedKey { key, id: message_id, use_for_sending: false }))
+                Self::send(&RotationMessage { confirm: Some(confirm_key), propose: propose_key, message_id }, out);
+                return Some(RotatedKey { key, id: message_id, use_for_sending: false })
             } else {
                 // Nothing pending nor proposed, still waiting to receive message 1
                 // Do nothing, peer will retry
             }
         }
-        Ok(None)
+        None
     }
 }
 
@@ -250,8 +251,8 @@ mod tests {
         let mut out2 = MsgBuffer::new(8);
 
         // Initialization
-        let mut node1 = RotationState::new(true, &mut out1).unwrap();
-        let mut node2 = RotationState::new(false, &mut out2).unwrap();
+        let mut node1 = RotationState::new(true, &mut out1);
+        let mut node2 = RotationState::new(false, &mut out2);
         assert!(!out1.is_empty());
         let msg1 = out1.msg().unwrap();
         assert_eq!(msg1.message_id, 1);
@@ -260,8 +261,8 @@ mod tests {
         let key = node2.process_message(msg1);
         assert!(key.is_none());
         // Cycle 1
-        let key1 = node1.cycle(&mut out1).unwrap();
-        let key2 = node2.cycle(&mut out2).unwrap();
+        let key1 = node1.cycle(&mut out1);
+        let key2 = node2.cycle(&mut out2);
         assert!(key1.is_none());
         assert!(out1.is_empty());
         assert!(key2.is_some());
@@ -279,8 +280,8 @@ mod tests {
         assert_eq!(key.id, 2);
         assert_eq!(key.use_for_sending, true);
         // Cycle 2
-        let key1 = node1.cycle(&mut out1).unwrap();
-        let key2 = node2.cycle(&mut out2).unwrap();
+        let key1 = node1.cycle(&mut out1);
+        let key2 = node2.cycle(&mut out2);
         assert!(key1.is_some());
         let key1 = key1.unwrap();
         assert_eq!(key1.id, 3);
@@ -298,8 +299,8 @@ mod tests {
         assert_eq!(key.id, 3);
         assert_eq!(key.use_for_sending, true);
         // Cycle 3
-        let key1 = node1.cycle(&mut out1).unwrap();
-        let key2 = node2.cycle(&mut out2).unwrap();
+        let key1 = node1.cycle(&mut out1);
+        let key2 = node2.cycle(&mut out2);
         assert!(key1.is_none());
         assert!(out1.is_empty());
         assert!(key2.is_some());
@@ -323,30 +324,30 @@ mod tests {
         let mut out1 = MsgBuffer::new(8);
         let mut out2 = MsgBuffer::new(8);
 
-        let mut node1 = RotationState::new(true, &mut out1).unwrap();
-        let mut node2 = RotationState::new(false, &mut out2).unwrap();
+        let mut node1 = RotationState::new(true, &mut out1);
+        let mut node2 = RotationState::new(false, &mut out2);
         let msg1 = out1.clone().msg().unwrap();
         let msg1_copy = out1.msg().unwrap();
         node2.process_message(msg1);
         assert!(node2.process_message(msg1_copy).is_none());
-        node1.cycle(&mut out1).unwrap();
-        node2.cycle(&mut out2).unwrap();
+        node1.cycle(&mut out1);
+        node2.cycle(&mut out2);
         let msg2 = out2.clone().msg().unwrap();
         let msg2_copy = out2.msg().unwrap();
         // Message 2
         assert!(node1.process_message(msg2).is_some());
         assert!(node1.process_message(msg2_copy).is_none());
         // Cycle 2
-        node1.cycle(&mut out1).unwrap();
-        node2.cycle(&mut out2).unwrap();
+        node1.cycle(&mut out1);
+        node2.cycle(&mut out2);
         let msg1 = out1.clone().msg().unwrap();
         let msg1_copy = out1.msg().unwrap();
         // Message 3
         assert!(node2.process_message(msg1).is_some());
         assert!(node2.process_message(msg1_copy).is_none());
         // Cycle 3
-        node1.cycle(&mut out1).unwrap();
-        node2.cycle(&mut out2).unwrap();
+        node1.cycle(&mut out1);
+        node2.cycle(&mut out2);
         let msg2 = out2.clone().msg().unwrap();
         let msg2_copy = out2.msg().unwrap();
         // Message 4
@@ -359,22 +360,22 @@ mod tests {
         let mut out1 = MsgBuffer::new(8);
         let mut out2 = MsgBuffer::new(8);
 
-        let mut node1 = RotationState::new(true, &mut out1).unwrap();
-        let mut node2 = RotationState::new(false, &mut out2).unwrap();
+        let mut node1 = RotationState::new(true, &mut out1);
+        let mut node2 = RotationState::new(false, &mut out2);
         let _msg1 = out1.msg().unwrap();
         // drop msg1
-        node1.cycle(&mut out1).unwrap();
-        node2.cycle(&mut out2).unwrap();
+        node1.cycle(&mut out1);
+        node2.cycle(&mut out2);
         assert!(out2.msg().is_none());
         // Cycle 2
-        node1.cycle(&mut out1).unwrap();
-        node2.cycle(&mut out2).unwrap();
+        node1.cycle(&mut out1);
+        node2.cycle(&mut out2);
         let msg1 = out1.msg().unwrap();
         // Message 3
         assert!(node2.process_message(msg1).is_none());
         // Cycle 3
-        node1.cycle(&mut out1).unwrap();
-        node2.cycle(&mut out2).unwrap();
+        node1.cycle(&mut out1);
+        node2.cycle(&mut out2);
         let msg2 = out2.msg().unwrap();
         // Message 4
         assert!(node1.process_message(msg2).is_some());
@@ -385,22 +386,22 @@ mod tests {
         let mut out1 = MsgBuffer::new(8);
         let mut out2 = MsgBuffer::new(8);
 
-        let mut node1 = RotationState::new(true, &mut out1).unwrap();
-        let mut node2 = RotationState::new(false, &mut out2).unwrap();
+        let mut node1 = RotationState::new(true, &mut out1);
+        let mut node2 = RotationState::new(false, &mut out2);
         let msg1 = out1.msg().unwrap();
         assert!(node1.process_message(msg1).is_none());
-        node1.cycle(&mut out1).unwrap();
-        node2.cycle(&mut out2).unwrap();
+        node1.cycle(&mut out1);
+        node2.cycle(&mut out2);
         assert!(out2.msg().is_none());
         // Cycle 2
-        node1.cycle(&mut out1).unwrap();
-        node2.cycle(&mut out2).unwrap();
+        node1.cycle(&mut out1);
+        node2.cycle(&mut out2);
         let msg1 = out1.msg().unwrap();
         // Message 3
         assert!(node2.process_message(msg1).is_none());
         // Cycle 3
-        node1.cycle(&mut out1).unwrap();
-        node2.cycle(&mut out2).unwrap();
+        node1.cycle(&mut out1);
+        node2.cycle(&mut out2);
         let msg2 = out2.msg().unwrap();
         // Message 4
         assert!(node1.process_message(msg2).is_some());

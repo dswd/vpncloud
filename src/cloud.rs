@@ -761,7 +761,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                 info!("Ignoring invalid init message from peer {}", addr_nice(src));
             }
             Err(e) => {
-                error!("Error: {}", e);
+                error!("{}", e);
             }
             Ok(_) => {}
         }
@@ -770,7 +770,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     fn handle_device_event(&mut self, buffer: &mut MsgBuffer) {
         try_fail!(self.device.read(buffer), "Failed to read from device: {}");
         if let Err(e) = self.handle_interface_data(buffer) {
-            error!("Error: {}", e);
+            error!("{}", e);
         }
     }
 
@@ -805,7 +805,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                     break
                 }
                 if let Err(e) = self.housekeep() {
-                    error!("Error: {}", e)
+                    error!("{}", e)
                 }
                 self.next_housekeep = TS::now() + 1
             }

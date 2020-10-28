@@ -306,7 +306,7 @@ impl<P: Payload> PeerCrypto<P> {
                     self.init = None
                 }
                 if self.core.is_some() {
-                    self.rotation = Some(RotationState::new(!is_initiator, buffer)?);
+                    self.rotation = Some(RotationState::new(!is_initiator, buffer));
                 }
                 if !is_initiator {
                     if self.unencrypted {
@@ -397,7 +397,7 @@ impl<P: Payload> PeerCrypto<P> {
             self.rotate_counter += 1;
             if self.rotate_counter >= ROTATE_INTERVAL {
                 self.rotate_counter = 0;
-                if let Some(rot) = rotate.cycle(out)? {
+                if let Some(rot) = rotate.cycle(out) {
                     let core = self.get_core()?;
                     let algo = core.algorithm();
                     let key = LessSafeKey::new(UnboundKey::new(algo, &rot.key[..algo.key_len()]).unwrap());

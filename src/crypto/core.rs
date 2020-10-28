@@ -210,6 +210,7 @@ impl CryptoCore {
     }
 
     pub fn rotate_key(&mut self, key: LessSafeKey, id: u64, use_for_sending: bool) {
+        debug!("Rotated key {} (use for sending: {})", id, use_for_sending);
         let id = (id % 4) as usize;
         self.keys[id] = CryptoKey::new(&self.rand, key, self.nonce_half);
         if use_for_sending {
