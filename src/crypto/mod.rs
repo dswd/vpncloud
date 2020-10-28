@@ -124,7 +124,12 @@ impl Crypto {
                 speeds.into_iter().map(|(a, s)| format!("{}: {:.1} MiB/s", a, s)).collect::<Vec<_>>().join(", ")
             );
         }
-        Ok(Self { node_id, key_pair: Arc::new(key_pair), trusted_keys: trusted_keys.into_boxed_slice().into(), algorithms: algos })
+        Ok(Self {
+            node_id,
+            key_pair: Arc::new(key_pair),
+            trusted_keys: trusted_keys.into_boxed_slice().into(),
+            algorithms: algos
+        })
     }
 
     pub fn generate_keypair(password: Option<&str>) -> (String, String) {
@@ -266,6 +271,23 @@ impl<P: Payload> PeerCrypto<P> {
 
     pub fn is_ready(&self) -> bool {
         self.core.is_some()
+    }
+
+    pub fn algorithm_name(&self) -> &'static str {
+        if let Some(ref core) = self.core {
+            let algo = core.algorithm();
+            if algo == &aead::CHACHA20_POLY1305 {
+                "chacha20"
+            } else if algo == &aead::AES_128_GCM {
+                "aes128"
+            } else if algo == &aead::AES_256_GCM {
+                "aes256"
+            } else {
+                unreachable!()
+            }
+        } else {
+            "plain"
+        }
     }
 
     fn handle_init_message(&mut self, buffer: &mut MsgBuffer) -> Result<MessageResult<P>, Error> {

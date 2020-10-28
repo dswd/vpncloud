@@ -492,7 +492,13 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             writeln!(f, "peers:")?;
             let now = TS::now();
             for (addr, data) in &self.peers {
-                writeln!(f, "  - \"{}\": {{ ttl_secs: {} }}", addr_nice(*addr), data.timeout - now)?;
+                writeln!(
+                    f,
+                    "  - \"{}\": {{ ttl_secs: {}, crypto: {} }}",
+                    addr_nice(*addr),
+                    data.timeout - now,
+                    data.crypto.algorithm_name()
+                )?;
             }
             writeln!(f)?;
             self.table.write_out(f)?;
@@ -717,11 +723,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                     self.pending_inits.insert(src, init);
                     Ok(res)
                 }
-                Err(err) => {
-                    debug!("Init error from {}: {}", src, err);
-                    info!("Ignoring invalid init message from peer {}", addr_nice(src));
-                    return Ok(())
-                }
+                Err(err) => return Err(err)
             }
         } else if let Some(peer) = self.peers.get_mut(&src) {
             peer.crypto.handle_message(data)
@@ -748,14 +750,20 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     fn handle_socket_event(&mut self, buffer: &mut MsgBuffer) {
         let src = try_fail!(self.socket.receive(buffer), "Failed to read from network socket: {}");
         self.traffic.count_in_traffic(src, buffer.len());
-        if let Err(e) = self.handle_net_message(src, buffer) {
-            if let Error::CryptoInit(_) = e {
-                debug!("Crypto init error: {}", e);
+        match self.handle_net_message(src, buffer) {
+            Err(e @ Error::CryptoInitFatal(_)) => {
+                debug!("Fatal crypto init error from {}: {}", src, e);
                 info!("Closing pending connection to {} due to error in crypto init", addr_nice(src));
                 self.pending_inits.remove(&src);
-            } else {
+            }
+            Err(e @ Error::CryptoInit(_)) => {
+                debug!("Recoverable init error from {}: {}", src, e);
+                info!("Ignoring invalid init message from peer {}", addr_nice(src));
+            }
+            Err(e) => {
                 error!("Error: {}", e);
             }
+            Ok(_) => {}
         }
     }
 

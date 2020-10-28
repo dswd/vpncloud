@@ -5,9 +5,13 @@ use std::io;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    /// Crypto init error, this is fatal and the init needs to be aborted
+    /// Crypto init error, this is recoverable
     #[error("Crypto initialization error: {0}")]
     CryptoInit(&'static str),
+
+    /// Crypto init error, this is fatal and the init needs to be aborted
+    #[error("Fatal crypto initialization error: {0}")]
+    CryptoInitFatal(&'static str),
 
     /// Crypto error with this one message, no permanent error
     #[error("Crypto error: {0}")]

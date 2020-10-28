@@ -453,7 +453,7 @@ impl<P: Payload> InitState<P> {
             Ok(())
         } else {
             self.next_stage = CLOSING;
-            Err(Error::CryptoInit("Initialization timeout"))
+            Err(Error::CryptoInitFatal("Initialization timeout"))
         }
     }
 
@@ -565,7 +565,7 @@ impl<P: Payload> InitState<P> {
             debug!("Init: best algorithm is {:?} with speed {}", algo.0, algo.1);
             Ok(Some(algo))
         } else {
-            Err(Error::CryptoInit("No common algorithms"))
+            Err(Error::CryptoInitFatal("No common algorithms"))
         }
     }
 
@@ -578,7 +578,7 @@ impl<P: Payload> InitState<P> {
         if self.salted_node_id_hash == salted_node_id_hash
             || self.check_salted_node_id_hash(&salted_node_id_hash, self.node_id)
         {
-            return Err(Error::CryptoInit("Connected to self"))
+            return Err(Error::CryptoInitFatal("Connected to self"))
         }
         if stage != self.next_stage {
             if self.next_stage == STAGE_PONG && stage == STAGE_PING {
@@ -598,7 +598,7 @@ impl<P: Payload> InitState<P> {
                 self.repeat_last_message(out);
                 return Ok(InitResult::Continue)
             } else {
-                return Err(Error::CryptoInit("Received invalid stage as first message"))
+                return Err(Error::CryptoInitFatal("Received invalid stage as first message"))
             }
         }
         self.failed_retries = 0;
@@ -633,7 +633,7 @@ impl<P: Payload> InitState<P> {
 
                 // decrypt the payload
                 let peer_payload =
-                    self.decrypt(&mut encrypted_payload).map_err(|_| Error::CryptoInit("Failed to decrypt payload"))?;
+                    self.decrypt(&mut encrypted_payload).map_err(|_| Error::CryptoInitFatal("Failed to decrypt payload"))?;
 
                 // create and send stage 3 reply
                 self.send_message(STAGE_PENG, None, out);
@@ -645,7 +645,7 @@ impl<P: Payload> InitState<P> {
             InitMsg::Peng { mut encrypted_payload, .. } => {
                 // decrypt the payload
                 let peer_payload =
-                    self.decrypt(&mut encrypted_payload).map_err(|_| Error::CryptoInit("Failed to decrypt payload"))?;
+                    self.decrypt(&mut encrypted_payload).map_err(|_| Error::CryptoInitFatal("Failed to decrypt payload"))?;
 
                 self.next_stage = CLOSING; // force resend when receiving any message
                 Ok(InitResult::Success { peer_payload, is_initiator: false })
