@@ -277,16 +277,16 @@ impl<P: Payload> PeerCrypto<P> {
         if let Some(ref core) = self.core {
             let algo = core.algorithm();
             if algo == &aead::CHACHA20_POLY1305 {
-                "chacha20"
+                "CHACHA20"
             } else if algo == &aead::AES_128_GCM {
-                "aes128"
+                "AES128"
             } else if algo == &aead::AES_256_GCM {
-                "aes256"
+                "AES256"
             } else {
                 unreachable!()
             }
         } else {
-            "plain"
+            "PLAIN"
         }
     }
 

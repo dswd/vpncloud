@@ -23,6 +23,7 @@ pub mod device;
 pub mod error;
 pub mod messages;
 pub mod net;
+pub mod oldconfig;
 pub mod payload;
 pub mod poll;
 pub mod port_forwarding;
@@ -49,8 +50,9 @@ use crate::{
     config::{Args, Config},
     crypto::Crypto,
     device::{Device, TunTapDevice, Type},
-    port_forwarding::PortForwarding,
+    oldconfig::OldConfigFile,
     payload::Protocol,
+    port_forwarding::PortForwarding,
     util::SystemTimeSource
 };
 
@@ -242,11 +244,39 @@ fn main() {
     } else {
         log::LevelFilter::Info
     });
+    if args.migrate_config {
+        let file = args.config.unwrap();
+        info!("Trying to convert from old config format");
+        let f = try_fail!(File::open(&file), "Failed to open config file: {:?}");
+        let config_file_old: OldConfigFile =
+            try_fail!(serde_yaml::from_reader(f), "Config file not valid for version 1: {:?}");
+        let new_config = config_file_old.convert();
+        info!("Successfully converted from old format");
+        info!("Renaming original file to {}.orig", file);
+        try_fail!(fs::rename(&file, format!("{}.orig", file)), "Failed to rename original file: {:?}");
+        info!("Writing new config back into {}", file);
+        let f = try_fail!(File::create(&file), "Failed to open config file: {:?}");
+        try_fail!(fs::set_permissions(&file, fs::Permissions::from_mode(0o600)), "Failed to set permissions on file: {:?}");
+        try_fail!(serde_yaml::to_writer(f, &new_config), "Failed to write converted config: {:?}");
+        return
+    }
     let mut config = Config::default();
     if let Some(ref file) = args.config {
         info!("Reading config file '{}'", file);
         let f = try_fail!(File::open(file), "Failed to open config file: {:?}");
-        let config_file = try_fail!(serde_yaml::from_reader(f), "Failed to load config file: {:?}");
+        let config_file = match serde_yaml::from_reader(f) {
+            Ok(config) => config,
+            Err(err) => {
+                error!("Failed to read config file: {}", err);
+                info!("Trying to convert from old config format");
+                let f = try_fail!(File::open(file), "Failed to open config file: {:?}");
+                let config_file_old: OldConfigFile =
+                    try_fail!(serde_yaml::from_reader(f), "Config file is neither version 2 nor version 1: {:?}");
+                let new_config = config_file_old.convert();
+                info!("Successfully converted from old format, please migrate your config using migrate-config");
+                new_config
+            }
+        };
         config.merge_file(config_file)
     }
     config.merge_args(args);

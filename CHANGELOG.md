@@ -10,6 +10,7 @@ This project follows [semantic versioning](http://semver.org).
 - [added] Automatically set optimal MTU on interface
 - [added] Warning for disabled or loose rp_filter setting
 - [added] Add --fix-rp-filter to fix rp filter settings
+- [added] Offer to migrate old configs
 - [changed] **Complete change of network protocol**
 - [changed] Negotiate crypto method per peer, select best method
 - [changed] Make encryption the default, no encryption must be stated explicitly

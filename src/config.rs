@@ -454,7 +454,11 @@ pub struct Args {
 
     /// Print logs also to this file
     #[structopt(long)]
-    pub log_file: Option<String>
+    pub log_file: Option<String>,
+
+    /// Migrate an old config file
+    #[structopt(long, alias = "migrate", requires = "config")]
+    pub migrate_config: bool
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
