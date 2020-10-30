@@ -1,3 +1,25 @@
+vpncloud (2.0.0) stable; urgency=medium
+
+  * [added] **Add strong crypto, complete rewrite of crypto system**
+  * [added] Automatically claim addresses based on interface addresses (disable with --no-auto-claim)
+  * [added] Allow to give --ip instead of ifup cmd
+  * [added] Automatically set optimal MTU on interface
+  * [added] Warning for disabled or loose rp_filter setting
+  * [added] Add --fix-rp-filter to fix rp filter settings
+  * [added] Offer to migrate old configs
+  * [changed] **Complete change of network protocol**
+  * [changed] Negotiate crypto method per peer, select best method
+  * [changed] Make encryption the default, no encryption must be stated explicitly
+  * [changed] Changed default device type to TUN
+  * [changed] Rename subnet to claim
+  * [changed] Set peer exchange interval to 5 minutes
+  * [changed] Periodically send claims with peer list
+  * [changed] Changed Rust version to 1.47.0
+  * [removed] Remove network-id parameter
+  * [removed] Remove port config option in favor of --listen
+
+ -- Dennis Schwerdel <schwerdel@googlemail.com>  Fri, 30 Oct 2020 22:07:00 +0100
+
 vpncloud (1.4.0) stable; urgency=medium
 
   * [added] Added option to listen on specified IP

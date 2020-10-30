@@ -2,7 +2,7 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### UNRELEASED v2
+### v2.0.0 (2020-10-30)
 
 - [added] **Add strong crypto, complete rewrite of crypto system**
 - [added] Automatically claim addresses based on interface addresses (disable with --no-auto-claim)
