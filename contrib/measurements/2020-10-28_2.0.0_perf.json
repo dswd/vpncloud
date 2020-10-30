@@ -3,7 +3,7 @@
     "region": "eu-central-1",
     "instance_type": "m5.large",
     "ami": "ami-00a205cb8e06c3c4e",
-    "version": "2.0.0-alpha1",
+    "version": "2.0.0",
     "duration": 621.3780446052551
   },
   "native": {
