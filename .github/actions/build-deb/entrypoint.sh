@@ -29,4 +29,4 @@ cp target/armv7-unknown-linux-gnueabihf/debian/vpncloud_${DEB_VERSION}_armhf.deb
 
 # aarch64 deb
 cargo deb --target aarch64-unknown-linux-gnu
-cp target/aarch64-unknown-linux-gnu/debian/vpncloud_${DEB_VERSION}_arm64.deb dist/vpncloud_${DEB_VERSION}_arm64.debllll
+cp target/aarch64-unknown-linux-gnu/debian/vpncloud_${DEB_VERSION}_arm64.deb dist/vpncloud_${DEB_VERSION}_arm64.deb
