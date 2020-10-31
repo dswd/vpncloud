@@ -9,15 +9,15 @@ establishes an encrypted fully-meshed VPN network in a peer-to-peer manner.
 It can work on TUN devices (IP based) and TAP devices (Ethernet based). 
 Tunneling traffic between two nodes can be as easy as:
 
-       $> vpncloud -c REMOTE_HOST:PORT -p 'mypassword' --ip 10.0.0.1/24
+    $> vpncloud -c REMOTE_HOST:PORT -p 'mypassword' --ip 10.0.0.1/24
 
 or as config file:
 
-       crypto:
-         password: mysecret
-       ip: 10.0.0.1
-       peers:
-         - REMOTE_HOST:PORT
+    crypto:
+      password: mysecret
+    ip: 10.0.0.1
+    peers:
+      - REMOTE_HOST:PORT
 
 For more information, please see the [Website](https://vpncloud.ddswd.de) or the [Forum](https://groups.google.com/forum/#!forum/vpncloud).
 
