@@ -2,6 +2,10 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### UNRELEASED
+
+- [changed] Changed documentation
+
 ### v2.0.0 (2020-10-30)
 
 - [added] **Add strong crypto, complete rewrite of crypto system**

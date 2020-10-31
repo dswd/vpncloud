@@ -80,7 +80,7 @@ mode: normal
 # MAC address. The prefix length is the number of significant front bits that
 # distinguish the subnet from other subnets. Example: `10.1.1.0/24`.
 # Note: Several entries can be separated by spaces.
-#claims
+#claims:
 #  - 10.1.1.0/24
 
 # Whether to automatically claim the configured IP on tun devices

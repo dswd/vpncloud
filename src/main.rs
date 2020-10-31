@@ -156,7 +156,7 @@ fn setup_device(config: &Config) -> TunTapDevice {
     }
     if let Ok(val) = device.get_rp_filter() {
         if val != 1 {
-            warn!("Your networking configuration might be affected by a vulnerability (https://seclists.org/oss-sec/2019/q4/122), please change your rp_filter setting to 1 (currently {}).", val);
+            warn!("Your networking configuration might be affected by a vulnerability (https://vpncloud.ddswd.de/docs/security/cve-2019-14899/), please change your rp_filter setting to 1 (currently {}).", val);
         }
     }
     device
@@ -256,7 +256,10 @@ fn main() {
         try_fail!(fs::rename(&file, format!("{}.orig", file)), "Failed to rename original file: {:?}");
         info!("Writing new config back into {}", file);
         let f = try_fail!(File::create(&file), "Failed to open config file: {:?}");
-        try_fail!(fs::set_permissions(&file, fs::Permissions::from_mode(0o600)), "Failed to set permissions on file: {:?}");
+        try_fail!(
+            fs::set_permissions(&file, fs::Permissions::from_mode(0o600)),
+            "Failed to set permissions on file: {:?}"
+        );
         try_fail!(serde_yaml::to_writer(f, &new_config), "Failed to write converted config: {:?}");
         return
     }
