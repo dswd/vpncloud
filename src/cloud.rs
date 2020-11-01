@@ -339,9 +339,10 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             }
         }
         for addr in del {
-            self.peers.remove(&addr);
             self.pending_inits.remove(&addr);
-            self.connect_sock(addr)?;
+            if self.peers.remove(&addr).is_some() {
+                self.connect_sock(addr)?;
+            }
         }
         Ok(())
     }
