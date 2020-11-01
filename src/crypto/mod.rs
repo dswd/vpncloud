@@ -269,6 +269,10 @@ impl<P: Payload> PeerCrypto<P> {
         }
     }
 
+    pub fn has_init(&self) -> bool {
+        self.init.is_some()
+    }
+
     pub fn is_ready(&self) -> bool {
         self.core.is_some()
     }

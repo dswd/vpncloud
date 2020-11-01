@@ -717,14 +717,24 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         let msg_result = if let Some(init) = self.pending_inits.get_mut(&src) {
             init.handle_message(data)
         } else if is_init_message(data.message()) {
-            let mut init = self.crypto.peer_instance(self.create_node_info());
-            let msg_result = init.handle_message(data);
-            match msg_result {
-                Ok(res) => {
-                    self.pending_inits.insert(src, init);
-                    Ok(res)
+            let mut result = None;
+            if let Some(peer) = self.peers.get_mut(&src) {
+                if peer.crypto.has_init() {
+                    result = Some(peer.crypto.handle_message(data))
                 }
-                Err(err) => return Err(err)
+            }
+            if let Some(result) = result {
+                result
+            } else {
+                let mut init = self.crypto.peer_instance(self.create_node_info());
+                let msg_result = init.handle_message(data);
+                match msg_result {
+                    Ok(res) => {
+                        self.pending_inits.insert(src, init);
+                        Ok(res)
+                    }
+                    Err(err) => return Err(err)
+                }
             }
         } else if let Some(peer) = self.peers.get_mut(&src) {
             peer.crypto.handle_message(data)
