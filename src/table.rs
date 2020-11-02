@@ -88,14 +88,20 @@ impl<TS: TimeSource> ClaimTable<TS> {
         if let Some(entry) = self.cache.get(&addr) {
             return Some(entry.peer)
         }
+        let mut found = None;
+        let mut prefix_len = -1;
         for entry in &self.claims {
-            if entry.claim.matches(addr) {
-                self.cache.insert(addr, CacheValue {
-                    peer: entry.peer,
-                    timeout: min(TS::now() + self.cache_timeout as Time, entry.timeout)
-                });
-                return Some(entry.peer)
+            if entry.claim.prefix_len as isize > prefix_len && entry.claim.matches(addr) {
+                found = Some(entry);
+                prefix_len = entry.claim.prefix_len as isize;
             }
+        }
+        if let Some(entry) = found {
+            self.cache.insert(addr, CacheValue {
+                peer: entry.peer,
+                timeout: min(TS::now() + self.cache_timeout as Time, entry.timeout)
+            });
+            return Some(entry.peer)
         }
         None
     }
@@ -149,9 +155,9 @@ mod bench {
     use super::*;
     use crate::util::MockTimeSource;
 
-    use test::Bencher;
-    use std::str::FromStr;
     use smallvec::smallvec;
+    use std::str::FromStr;
+    use test::Bencher;
 
     #[bench]
     fn lookup_warm(b: &mut Bencher) {

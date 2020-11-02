@@ -5,6 +5,12 @@ This project follows [semantic versioning](http://semver.org).
 ### UNRELEASED
 
 - [changed] Changed documentation
+- [changed] Updated dependencies
+- [changed] Retrying connections for 120 secs
+- [fixed] Fixed corner case with lost init message
+- [fixed] Do not reconnect to timed out pending connections
+- [fixed] Most specific claims beat less specific claims
+- [fixed] Count all invalid protocol traffic
 
 ### v2.0.0 (2020-10-30)
 

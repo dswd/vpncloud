@@ -79,6 +79,8 @@ pub const STAGE_PENG: u8 = 3;
 pub const WAITING_TO_CLOSE: u8 = 4;
 pub const CLOSING: u8 = 5;
 
+pub const MAX_FAILED_RETRIES: usize = 120;
+
 pub const SALTED_NODE_ID_HASH_LEN: usize = 20;
 pub type SaltedNodeIdHash = [u8; SALTED_NODE_ID_HASH_LEN];
 
@@ -447,7 +449,7 @@ impl<P: Payload> InitState<P> {
             Ok(())
         } else if self.next_stage == CLOSING {
             Ok(())
-        } else if self.failed_retries < 5 {
+        } else if self.failed_retries < MAX_FAILED_RETRIES {
             self.failed_retries += 1;
             self.repeat_last_message(out);
             Ok(())
@@ -632,8 +634,9 @@ impl<P: Payload> InitState<P> {
                 }
 
                 // decrypt the payload
-                let peer_payload =
-                    self.decrypt(&mut encrypted_payload).map_err(|_| Error::CryptoInitFatal("Failed to decrypt payload"))?;
+                let peer_payload = self
+                    .decrypt(&mut encrypted_payload)
+                    .map_err(|_| Error::CryptoInitFatal("Failed to decrypt payload"))?;
 
                 // create and send stage 3 reply
                 self.send_message(STAGE_PENG, None, out);
@@ -644,8 +647,9 @@ impl<P: Payload> InitState<P> {
             }
             InitMsg::Peng { mut encrypted_payload, .. } => {
                 // decrypt the payload
-                let peer_payload =
-                    self.decrypt(&mut encrypted_payload).map_err(|_| Error::CryptoInitFatal("Failed to decrypt payload"))?;
+                let peer_payload = self
+                    .decrypt(&mut encrypted_payload)
+                    .map_err(|_| Error::CryptoInitFatal("Failed to decrypt payload"))?;
 
                 self.next_stage = CLOSING; // force resend when receiving any message
                 Ok(InitResult::Success { peer_payload, is_initiator: false })
@@ -921,10 +925,7 @@ mod tests {
 
         // Fail if no match
         test_algorithm_negotiation(
-            Algorithms {
-                algorithm_speeds: smallvec![(&AES_128_GCM, 600.0)],
-                allow_unencrypted: true
-            },
+            Algorithms { algorithm_speeds: smallvec![(&AES_128_GCM, 600.0)], allow_unencrypted: true },
             Algorithms {
                 algorithm_speeds: smallvec![(&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
                 allow_unencrypted: false

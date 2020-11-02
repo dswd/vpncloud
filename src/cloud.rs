@@ -55,12 +55,12 @@ struct PeerData {
 
 #[derive(Clone)]
 pub struct ReconnectEntry {
-    address: String,
+    address: Option<(String, Time)>,
     resolved: Vec<SocketAddr>,
-    next_resolve: Time,
     tries: u16,
     timeout: u16,
-    next: Time
+    next: Time,
+    final_timeout: Option<Time>
 }
 
 
@@ -250,12 +250,12 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             }
         };
         self.reconnect_peers.push(ReconnectEntry {
-            address: add,
+            address: Some((add, now)),
             tries: 0,
             timeout: 1,
             resolved,
-            next_resolve: now,
-            next: now
+            next: now,
+            final_timeout: None
         })
     }
 
@@ -398,11 +398,13 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                 }
             }
             // Resolve entries anew
-            if entry.next_resolve <= now {
-                if let Ok(addrs) = resolve(&entry.address as &str) {
-                    entry.resolved = addrs;
+            if let Some((ref address, ref mut next_resolve)) = entry.address {
+                if *next_resolve <= now {
+                    if let Ok(addrs) = resolve(address as &str) {
+                        entry.resolved = addrs;
+                    }
+                    *next_resolve = now + RESOLVE_INTERVAL;
                 }
-                entry.next_resolve = now + RESOLVE_INTERVAL;
             }
             // Ignore if next attempt is already in the future
             if entry.next > now {
@@ -421,6 +423,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             // Schedule next connection attempt
             entry.next = now + Time::from(entry.timeout);
         }
+        self.reconnect_peers.retain(|e| e.final_timeout.unwrap_or(now) >= now);
         if self.next_stats_out < now {
             // Write out the statistics
             self.write_out_stats().map_err(|err| Error::FileIo("Failed to write stats file", err))?;
@@ -697,7 +700,10 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                     }
                     MESSAGE_TYPE_KEEPALIVE => self.update_peer_info(src, None)?,
                     MESSAGE_TYPE_CLOSE => self.remove_peer(src),
-                    _ => return Err(Error::Message("Unknown message type"))
+                    _ => {
+                        self.traffic.count_invalid_protocol(data.len());
+                        return Err(Error::Message("Unknown message type"))
+                    }
                 }
             }
             MessageResult::Initialized(info) => self.add_new_peer(src, info)?,
@@ -733,13 +739,17 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                         self.pending_inits.insert(src, init);
                         Ok(res)
                     }
-                    Err(err) => return Err(err)
+                    Err(err) => {
+                        self.traffic.count_invalid_protocol(data.len());
+                        return Err(err)
+                    }
                 }
             }
         } else if let Some(peer) = self.peers.get_mut(&src) {
             peer.crypto.handle_message(data)
         } else {
             info!("Ignoring non-init message from unknown peer {}", addr_nice(src));
+            self.traffic.count_invalid_protocol(data.len());
             return Ok(())
         };
         match msg_result {
