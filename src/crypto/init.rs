@@ -794,7 +794,7 @@ mod tests {
         let mut out = MsgBuffer::new(8);
         sender.send_ping(&mut out);
         assert_eq!(sender.stage(), STAGE_PONG);
-        for _ in 0..5 {
+        for _ in 0..120 {
             out.clear();
             sender.every_second(&mut out).unwrap();
         }
