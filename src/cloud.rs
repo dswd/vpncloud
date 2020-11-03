@@ -43,6 +43,7 @@ pub type Hash = BuildHasherDefault<FnvHasher>;
 const MAX_RECONNECT_INTERVAL: u16 = 3600;
 const RESOLVE_INTERVAL: Time = 300;
 pub const STATS_INTERVAL: Time = 60;
+const OWN_ADDRESS_RESET_INTERVAL: Time = 300;
 const SPACE_BEFORE: usize = 100;
 
 struct PeerData {
@@ -56,7 +57,7 @@ struct PeerData {
 #[derive(Clone)]
 pub struct ReconnectEntry {
     address: Option<(String, Time)>,
-    resolved: Vec<SocketAddr>,
+    resolved: SmallVec<[SocketAddr; 3]>,
     tries: u16,
     timeout: u16,
     next: Time,
@@ -70,8 +71,8 @@ pub struct GenericCloud<D: Device, P: Protocol, S: Socket, TS: TimeSource> {
     learning: bool,
     broadcast: bool,
     peers: HashMap<SocketAddr, PeerData, Hash>,
-    reconnect_peers: Vec<ReconnectEntry>,
-    own_addresses: Vec<SocketAddr>,
+    reconnect_peers: SmallVec<[ReconnectEntry; 3]>,
+    own_addresses: SmallVec<[SocketAddr; 3]>,
     pending_inits: HashMap<SocketAddr, PeerCrypto<NodeInfo>, Hash>,
     table: ClaimTable<TS>,
     socket: S,
@@ -86,6 +87,7 @@ pub struct GenericCloud<D: Device, P: Protocol, S: Socket, TS: TimeSource> {
     next_housekeep: Time,
     next_stats_out: Time,
     next_beacon: Time,
+    next_own_address_reset: Time,
     port_forwarding: Option<PortForwarding>,
     traffic: TrafficStats,
     beacon_serializer: BeaconSerializer<TS>,
@@ -137,8 +139,8 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             learning,
             broadcast,
             pending_inits: HashMap::default(),
-            reconnect_peers: Vec::new(),
-            own_addresses: Vec::new(),
+            reconnect_peers: SmallVec::new(),
+            own_addresses: SmallVec::new(),
             peer_timeout_publish: config.peer_timeout as u16,
             table: ClaimTable::new(config.switch_timeout as Duration, config.peer_timeout as Duration),
             socket,
@@ -150,6 +152,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             next_housekeep: now,
             next_stats_out: now + STATS_INTERVAL,
             next_beacon: now,
+            next_own_address_reset: now + OWN_ADDRESS_RESET_INTERVAL,
             port_forwarding,
             traffic: TrafficStats::default(),
             beacon_serializer: BeaconSerializer::new(beacon_key),
@@ -214,16 +217,14 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         self.send_to(addr, msg)
     }
 
-    /// Returns the self-perceived addresses (IPv4 and IPv6) of this node
-    ///
-    /// Note that those addresses could be private addresses that are not reachable by other nodes,
-    /// or only some other nodes inside the same network.
-    ///
-    /// # Errors
-    /// Returns an IOError if the underlying system call fails
-    #[allow(dead_code)]
-    pub fn address(&self) -> io::Result<SocketAddr> {
-        Ok(self.socket.address().map(mapped_addr)?)
+    pub fn reset_own_addresses(&mut self) -> io::Result<()> {
+        self.own_addresses.clear();
+        self.own_addresses.push(self.socket.address().map(mapped_addr)?);
+        if let Some(ref pfw) = self.port_forwarding {
+            self.own_addresses.push(pfw.get_internal_ip().into());
+            self.own_addresses.push(pfw.get_external_ip().into());
+        }
+        Ok(())
     }
 
     /// Returns the number of peers
@@ -246,7 +247,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             Ok(addrs) => addrs,
             Err(err) => {
                 warn!("Failed to resolve {}: {:?}", add, err);
-                vec![]
+                smallvec![]
             }
         };
         self.reconnect_peers.push(ReconnectEntry {
@@ -268,7 +269,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     /// # Errors
     /// This method returns `Error::NameError` if the address is a name that fails to resolve.
     pub fn connect<Addr: ToSocketAddrs + fmt::Debug + Clone>(&mut self, addr: Addr) -> Result<(), Error> {
-        let addrs = resolve(&addr)?.into_iter().map(mapped_addr).collect::<Vec<_>>();
+        let addrs = resolve(&addr)?.into_iter().map(mapped_addr).collect::<SmallVec<[SocketAddr; 3]>>();
         for addr in &addrs {
             if self.own_addresses.contains(addr)
                 || self.peers.contains_key(addr)
@@ -305,7 +306,10 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
 
     fn connect_sock(&mut self, addr: SocketAddr) -> Result<(), Error> {
         let addr = mapped_addr(addr);
-        if self.peers.contains_key(&addr) || self.own_addresses.contains(&addr) {
+        if self.peers.contains_key(&addr)
+            || self.own_addresses.contains(&addr)
+            || self.pending_inits.contains_key(&addr)
+        {
             return Ok(())
         }
         debug!("Connecting to {:?}", addr);
@@ -320,7 +324,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     fn crypto_housekeep(&mut self) -> Result<(), Error> {
         let mut msg = MsgBuffer::new(SPACE_BEFORE);
         let mut del: SmallVec<[SocketAddr; 4]> = smallvec![];
-        for addr in self.pending_inits.keys().copied().collect::<Vec<_>>() {
+        for addr in self.pending_inits.keys().copied().collect::<SmallVec<[SocketAddr; 4]>>() {
             msg.clear();
             match self.pending_inits.get_mut(&addr).unwrap().every_second(&mut msg) {
                 Err(_) => del.push(addr),
@@ -329,7 +333,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                 Ok(_) => unreachable!()
             }
         }
-        for addr in self.peers.keys().copied().collect::<Vec<_>>() {
+        for addr in self.peers.keys().copied().collect::<SmallVec<[SocketAddr; 16]>>() {
             msg.clear();
             match self.peers.get_mut(&addr).unwrap().crypto.every_second(&mut msg) {
                 Err(_) => del.push(addr),
@@ -347,39 +351,8 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         Ok(())
     }
 
-    fn housekeep(&mut self) -> Result<(), Error> {
+    fn reconnect_to_peers(&mut self) -> Result<(), Error> {
         let now = TS::now();
-        let mut buffer = MsgBuffer::new(SPACE_BEFORE);
-        let mut del: Vec<SocketAddr> = Vec::new();
-        for (&addr, ref data) in &self.peers {
-            if data.timeout < now {
-                del.push(addr);
-            }
-        }
-        for addr in del {
-            info!("Forgot peer {} due to timeout", addr_nice(addr));
-            self.peers.remove(&addr);
-            self.table.remove_claims(addr);
-            self.connect_sock(addr)?; // Try to reconnect
-        }
-        self.table.housekeep();
-        self.crypto_housekeep()?;
-        // Periodically extend the port-forwarding
-        if let Some(ref mut pfw) = self.port_forwarding {
-            pfw.check_extend();
-        }
-        // Periodically send peer list to peers
-        let now = TS::now();
-        if self.next_peers <= now {
-            debug!("Send peer list to all peers");
-            let info = self.create_node_info();
-            info.encode(&mut buffer);
-            self.broadcast_msg(MESSAGE_TYPE_NODE_INFO, &mut buffer)?;
-            // Reschedule for next update
-            let min_peer_timeout = self.peers.iter().map(|p| p.1.peer_timeout).min().unwrap_or(DEFAULT_PEER_TIMEOUT);
-            let interval = min(self.update_freq as u16, max(min_peer_timeout / 2 - 60, 1));
-            self.next_peers = now + Time::from(interval);
-        }
         // Connect to those reconnect_peers that are due
         for entry in self.reconnect_peers.clone() {
             if entry.next > now {
@@ -424,6 +397,48 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             entry.next = now + Time::from(entry.timeout);
         }
         self.reconnect_peers.retain(|e| e.final_timeout.unwrap_or(now) >= now);
+        Ok(())
+    }
+
+    fn housekeep(&mut self) -> Result<(), Error> {
+        let now = TS::now();
+        let mut buffer = MsgBuffer::new(SPACE_BEFORE);
+        let mut del: SmallVec<[SocketAddr; 3]> = SmallVec::new();
+        for (&addr, ref data) in &self.peers {
+            if data.timeout < now {
+                del.push(addr);
+            }
+        }
+        for addr in del {
+            info!("Forgot peer {} due to timeout", addr_nice(addr));
+            self.peers.remove(&addr);
+            self.table.remove_claims(addr);
+            self.connect_sock(addr)?; // Try to reconnect
+        }
+        self.table.housekeep();
+        self.crypto_housekeep()?;
+        // Periodically extend the port-forwarding
+        if let Some(ref mut pfw) = self.port_forwarding {
+            pfw.check_extend();
+        }
+        let now = TS::now();
+        // Periodically reset own peers
+        if self.next_own_address_reset <= now {
+            self.reset_own_addresses().map_err(|err| Error::SocketIo("Failed to get own addresses", err))?;
+            self.next_own_address_reset = now + OWN_ADDRESS_RESET_INTERVAL;
+        }
+        // Periodically send peer list to peers
+        if self.next_peers <= now {
+            debug!("Send peer list to all peers");
+            let info = self.create_node_info();
+            info.encode(&mut buffer);
+            self.broadcast_msg(MESSAGE_TYPE_NODE_INFO, &mut buffer)?;
+            // Reschedule for next update
+            let min_peer_timeout = self.peers.iter().map(|p| p.1.peer_timeout).min().unwrap_or(DEFAULT_PEER_TIMEOUT);
+            let interval = min(self.update_freq as u16, max(min_peer_timeout / 2 - 60, 1));
+            self.next_peers = now + Time::from(interval);
+        }
+        self.reconnect_to_peers()?;
         if self.next_stats_out < now {
             // Write out the statistics
             self.write_out_stats().map_err(|err| Error::FileIo("Failed to write stats file", err))?;
@@ -448,7 +463,8 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     /// Stores the beacon
     fn store_beacon(&mut self) -> Result<(), Error> {
         if let Some(ref path) = self.config.beacon_store {
-            let peers: Vec<_> = self.own_addresses.choose_multiple(&mut thread_rng(), 3).cloned().collect();
+            let peers: SmallVec<[SocketAddr; 3]> =
+                self.own_addresses.choose_multiple(&mut thread_rng(), 3).cloned().collect();
             if let Some(path) = path.strip_prefix('|') {
                 self.beacon_serializer
                     .write_to_cmd(&peers, path)
@@ -762,9 +778,8 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     }
 
     fn initialize(&mut self) {
-        match self.address() {
-            Err(err) => error!("Failed to obtain local addresses: {}", err),
-            Ok(addr) => self.own_addresses.push(addr)
+        if let Err(err) = self.reset_own_addresses() {
+            error!("Failed to obtain local addresses: {}", err)
         }
     }
 

@@ -118,7 +118,7 @@ impl FromStr for Address {
             }
             return Ok(Address { data: res, len: 16 })
         }
-        let parts: Vec<&str> = text.split(':').collect();
+        let parts: SmallVec<[&str; 10]> = text.split(':').collect();
         if parts.len() == 6 {
             let mut bytes = [0; 16];
             for i in 0..6 {

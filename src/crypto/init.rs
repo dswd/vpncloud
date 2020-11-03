@@ -229,7 +229,7 @@ impl InitMsg {
         let pos = r.position() as usize;
 
         let signature_len = r.read_u8().map_err(|_| Error::Parse("Init message too short"))? as usize;
-        let mut signature = vec![0; signature_len];
+        let mut signature: SmallVec<[u8; 32]> = smallvec![0; signature_len];
         r.read_exact(&mut signature).map_err(|_| Error::Parse("Init message too short"))?;
 
         let signed_data = &r.into_inner()[0..pos];

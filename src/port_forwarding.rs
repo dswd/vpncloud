@@ -103,7 +103,6 @@ mod internal {
                     }
                 }
             } else {
-                gateway.remove_port(PortMappingProtocol::UDP, port).ok();
                 match gateway.add_port(PortMappingProtocol::UDP, port, addr, LEASE_TIME, DESCRIPTION) {
                     Ok(()) => Ok((port, LEASE_TIME)),
                     Err(AddPortError::OnlyPermanentLeasesSupported) => {
@@ -149,6 +148,14 @@ mod internal {
                 Ok(()) => info!("Port-forwarding: successfully deactivated port forwarding"),
                 Err(err) => debug!("Port-forwarding: failed to deactivate port forwarding: {}", err)
             }
+        }
+
+        pub fn get_internal_ip(&self) -> SocketAddrV4 {
+            self.internal_addr
+        }
+
+        pub fn get_external_ip(&self) -> SocketAddrV4 {
+            self.external_addr
         }
     }
 

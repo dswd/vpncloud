@@ -21,6 +21,7 @@ use std::{
 };
 
 use super::util::{from_base62, to_base62, Encoder, TimeSource};
+use smallvec::SmallVec;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 
 
@@ -33,8 +34,8 @@ fn base_62_sanitize(data: &str) -> String {
     data.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
 }
 
-fn sha512(data: &[u8]) -> Vec<u8> {
-    digest::digest(&digest::SHA512, data).as_ref().to_vec()
+fn sha512(data: &[u8]) -> SmallVec<[u8; 64]> {
+    digest::digest(&digest::SHA512, data).as_ref().into()
 }
 
 struct FutureResult<T> {
@@ -62,8 +63,8 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
         ((TS::now() / 3600) & 0xffff) as u16
     }
 
-    fn get_keystream(&self, type_: u8, seed: u8, iter: u8) -> Vec<u8> {
-        let mut data = Vec::new();
+    fn get_keystream(&self, type_: u8, seed: u8, iter: u8) -> SmallVec<[u8; 64]> {
+        let mut data = SmallVec::<[u8; 128]>::new();
         data.extend_from_slice(&[type_, seed, iter]);
         data.extend_from_slice(&self.shared_key);
         sha512(&data)
@@ -92,6 +93,7 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
     fn end(&self) -> String {
         to_base62(&self.get_keystream(TYPE_END, 0, 0))[0..5].to_string()
     }
+
     fn encrypt_data(&self, data: &mut Vec<u8>) {
         // Note: the 1 byte seed is only meant to protect from random changes,
         // not malicious ones. For full protection, at least 8 bytes (~12
@@ -115,8 +117,8 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
         // Add timestamp
         data.extend_from_slice(&Self::now_hour_16().to_be_bytes());
         // Split addresses into v4 and v6
-        let mut v4addrs = Vec::new();
-        let mut v6addrs = Vec::new();
+        let mut v4addrs = SmallVec::<[SocketAddrV4; 256]>::new();
+        let mut v6addrs = SmallVec::<[SocketAddrV6; 256]>::new();
         for p in peers {
             match *p {
                 SocketAddr::V4(addr) => v4addrs.push(addr),

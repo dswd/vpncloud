@@ -40,9 +40,9 @@ pub struct NodeInfo {
 }
 
 impl NodeInfo {
-    const PART_NODEID: u8 = 4;
     const PART_CLAIMS: u8 = 2;
     const PART_END: u8 = 0;
+    const PART_NODEID: u8 = 4;
     const PART_PEERS: u8 = 1;
     const PART_PEER_TIMEOUT: u8 = 3;
 
@@ -133,8 +133,8 @@ impl NodeInfo {
 
     fn encode_peer_list_part<W: Write>(&self, mut out: W) -> Result<(), io::Error> {
         for p in &self.peers {
-            let mut addr_ipv4 = vec![];
-            let mut addr_ipv6 = vec![];
+            let mut addr_ipv4: SmallVec<[SocketAddrV4; 16]> = smallvec![];
+            let mut addr_ipv6: SmallVec<[SocketAddrV6; 16]> = smallvec![];
             for a in &p.addrs {
                 match a {
                     SocketAddr::V4(addr) => addr_ipv4.push(*addr),
@@ -186,9 +186,7 @@ impl NodeInfo {
         let len;
         {
             let mut cursor = Cursor::new(buffer.buffer());
-            Self::encode_part(&mut cursor, Self::PART_NODEID, |cursor| {
-                cursor.write_all(&self.node_id)
-            })?;
+            Self::encode_part(&mut cursor, Self::PART_NODEID, |cursor| cursor.write_all(&self.node_id))?;
             Self::encode_part(&mut cursor, Self::PART_PEERS, |cursor| self.encode_peer_list_part(cursor))?;
             Self::encode_part(&mut cursor, Self::PART_CLAIMS, |mut cursor| {
                 for c in &self.claims {

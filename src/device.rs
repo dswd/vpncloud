@@ -254,7 +254,7 @@ impl TunTapDevice {
         + crypto::EXTRA_LEN + crypto::TAG_LEN /* crypto overhead */
         + 1 /* message type header */
         + match self.type_ {
-            Type::Tap => 12, /* inner ethernet header */
+            Type::Tap => 14, /* inner ethernet header */
             Type::Tun | Type::Dummy => 0
         }
     }

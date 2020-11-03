@@ -14,6 +14,7 @@ use crate::error::Error;
 
 use signal::{trap::Trap, Signal};
 use std::time::Instant;
+use smallvec::SmallVec;
 
 
 pub type Duration = u32;
@@ -216,10 +217,10 @@ pub fn get_internal_ip() -> Ipv4Addr {
 
 
 #[allow(unknown_lints, clippy::needless_pass_by_value)]
-pub fn resolve<Addr: ToSocketAddrs + fmt::Debug>(addr: Addr) -> Result<Vec<SocketAddr>, Error> {
+pub fn resolve<Addr: ToSocketAddrs + fmt::Debug>(addr: Addr) -> Result<SmallVec<[SocketAddr; 3]>, Error> {
     let addrs = addr.to_socket_addrs().map_err(|_| Error::NameUnresolvable(format!("{:?}", addr)))?;
     // Remove duplicates in addrs (why are there duplicates???)
-    let mut addrs = addrs.collect::<Vec<_>>();
+    let mut addrs = addrs.collect::<SmallVec<_>>();
     // Try IPv4 first as it usually is faster
     addrs.sort_by_key(|addr| {
         match *addr {
