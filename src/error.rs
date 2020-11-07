@@ -26,13 +26,13 @@ pub enum Error {
     #[error("Socker error: {0}")]
     Socket(&'static str),
 
-    #[error("Socker error: {0}")]
+    #[error("Socker error: {0} ({1})")]
     SocketIo(&'static str, #[source] io::Error),
 
     #[error("Device error: {0}")]
     Device(&'static str),
 
-    #[error("Device error: {0}")]
+    #[error("Device error: {0} ({1})")]
     DeviceIo(&'static str, #[source] io::Error),
 
     #[error("File error: {0}")]
@@ -41,7 +41,7 @@ pub enum Error {
     #[error("Message error: {0}")]
     Message(&'static str),
 
-    #[error("Beacon error: {0}")]
+    #[error("Beacon error: {0} ({1})")]
     BeaconIo(&'static str, #[source] io::Error),
 
     #[error("Parse error: {0}")]

@@ -5,7 +5,7 @@ import atexit, argparse, os
 
 REGION = "eu-central-1"
 
-VERSION = "1.4.0"
+VERSION = "2.0.0"
 
 
 parser = argparse.ArgumentParser(description='Create a test setup')

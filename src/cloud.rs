@@ -828,7 +828,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                     if poll_error {
                         fail!("Poll wait failed again: {}", err);
                     }
-                    error!("Poll wait failed: {}, retrying...", err);
+                    debug!("Poll wait failed: {}, retrying...", err);
                     poll_error = true;
                 }
                 WaitResult::Timeout => {}
