@@ -373,8 +373,14 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             // Resolve entries anew
             if let Some((ref address, ref mut next_resolve)) = entry.address {
                 if *next_resolve <= now {
-                    if let Ok(addrs) = resolve(address as &str) {
-                        entry.resolved = addrs;
+                    match resolve(address as &str) {
+                        Ok(addrs) => entry.resolved = addrs,
+                        Err(_) => {
+                            match resolve(&format!("{}:{}", address, DEFAULT_PORT)) {
+                                Ok(addrs) => entry.resolved = addrs,
+                                Err(err) => warn!("Failed to resolve {}: {}", address, err)
+                            }
+                        }
                     }
                     *next_resolve = now + RESOLVE_INTERVAL;
                 }
