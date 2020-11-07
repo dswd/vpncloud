@@ -2,18 +2,20 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### UNRELEASED
+### v2.0.1 (2020-11-07)
 
 - [changed] Changed documentation
 - [changed] Updated dependencies
 - [changed] Retrying connections for 120 secs
 - [changed] Resetting own addresses periodically
 - [changed] Using smallvec everywhere
+- [changed] Assume default port for peers without port
 - [fixed] Fixed corner case with lost init message
 - [fixed] Do not reconnect to timed out pending connections
 - [fixed] Most specific claims beat less specific claims
 - [fixed] Count all invalid protocol traffic
 - [fixed] Fixed compile with musl
+- [fixed] Fixed time format in logs
 
 ### v2.0.0 (2020-10-30)
 
