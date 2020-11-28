@@ -2,6 +2,10 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### UNRELEASED
+
+- [removed] Removed dummy device type
+
 ### v2.0.1 (2020-11-07)
 
 - [changed] Changed documentation

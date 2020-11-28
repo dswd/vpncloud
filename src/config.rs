@@ -589,7 +589,7 @@ statsd:
 #[test]
 fn default_config_as_default() {
     let mut default_config = Config {
-        device_type: Type::Dummy,
+        device_type: Type::Tun,
         device_name: "".to_string(),
         device_path: None,
         fix_rp_filter: false,

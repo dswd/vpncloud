@@ -106,7 +106,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             Mode::Normal => {
                 match config.device_type {
                     Type::Tap => (true, true),
-                    Type::Tun | Type::Dummy => (false, false)
+                    Type::Tun => (false, false)
                 }
             }
             Mode::Router => (false, false),

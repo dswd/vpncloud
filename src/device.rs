@@ -51,18 +51,14 @@ pub enum Type {
     Tun,
     /// Tap interface: This interface transports Ethernet frames.
     #[serde(rename = "tap")]
-    Tap,
-    /// Dummy interface: This interface does nothing.
-    #[serde(rename = "dummy")]
-    Dummy
+    Tap
 }
 
 impl fmt::Display for Type {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
             Type::Tun => write!(formatter, "tun"),
-            Type::Tap => write!(formatter, "tap"),
-            Type::Dummy => write!(formatter, "dummy")
+            Type::Tap => write!(formatter, "tap")
         }
     }
 }
@@ -74,7 +70,6 @@ impl FromStr for Type {
         Ok(match &text.to_lowercase() as &str {
             "tun" => Self::Tun,
             "tap" => Self::Tap,
-            "dummy" => Self::Dummy,
             _ => return Err("Unknown device type")
         })
     }
@@ -144,14 +139,10 @@ impl TunTapDevice {
     #[allow(clippy::useless_conversion)]
     pub fn new(ifname: &str, type_: Type, path: Option<&str>) -> io::Result<Self> {
         let path = path.unwrap_or_else(|| Self::default_path(type_));
-        if type_ == Type::Dummy {
-            return Self::dummy(ifname, path, type_)
-        }
         let fd = fs::OpenOptions::new().read(true).write(true).open(path)?;
         let flags = match type_ {
             Type::Tun => libc::IFF_TUN | libc::IFF_NO_PI,
-            Type::Tap => libc::IFF_TAP | libc::IFF_NO_PI,
-            Type::Dummy => unreachable!()
+            Type::Tap => libc::IFF_TAP | libc::IFF_NO_PI
         };
         let mut ifreq = IfReq::new(ifname);
         ifreq.data.flags = flags as libc::c_short;
@@ -172,31 +163,8 @@ impl TunTapDevice {
     #[inline]
     pub fn default_path(type_: Type) -> &'static str {
         match type_ {
-            Type::Tun | Type::Tap => "/dev/net/tun",
-            Type::Dummy => "/dev/null"
+            Type::Tun | Type::Tap => "/dev/net/tun"
         }
-    }
-
-    /// Creates a dummy device based on an existing file
-    ///
-    /// This method opens a regular or special file and reads from it to receive packets and
-    /// writes to it to send packets. This method does not use a networking device and therefore
-    /// can be used for testing.
-    ///
-    /// The parameter `path` is the file that should be used. Special files like `/dev/null`,
-    /// named pipes and unix sockets can be used with this method.
-    ///
-    /// Both `ifname` and `type_` parameters have no effect.
-    ///
-    /// # Errors
-    /// This method will return an error if the file can not be opened for reading and writing.
-    #[allow(dead_code)]
-    pub fn dummy(ifname: &str, path: &str, type_: Type) -> io::Result<Self> {
-        Ok(TunTapDevice {
-            fd: fs::OpenOptions::new().create(true).read(true).write(true).open(path)?,
-            ifname: ifname.to_string(),
-            type_
-        })
     }
 
     #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -255,7 +223,7 @@ impl TunTapDevice {
         + 1 /* message type header */
         + match self.type_ {
             Type::Tap => 14, /* inner ethernet header */
-            Type::Tun | Type::Dummy => 0
+            Type::Tun => 0
         }
     }
 
@@ -357,7 +325,7 @@ impl MockDevice {
 
 impl Device for MockDevice {
     fn get_type(&self) -> Type {
-        Type::Dummy
+        Type::Tun
     }
 
     fn ifname(&self) -> &str {

@@ -286,7 +286,6 @@ fn main() {
     debug!("Config: {:?}", config);
     match config.device_type {
         Type::Tap => run::<payload::Frame>(config),
-        Type::Tun => run::<payload::Packet>(config),
-        Type::Dummy => run::<payload::Frame>(config)
+        Type::Tun => run::<payload::Packet>(config)
     }
 }

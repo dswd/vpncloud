@@ -6,7 +6,7 @@ use crate::device::Device;
 use std::{io, os::unix::io::RawFd};
 
 use super::WaitResult;
-use crate::{device::Type, net::Socket};
+use crate::net::Socket;
 
 pub struct EpollWait {
     poll_fd: RawFd,
@@ -31,15 +31,10 @@ impl EpollWait {
         if poll_fd == -1 {
             return Err(io::Error::last_os_error())
         }
-        let raw_fds = if device.get_type() != Type::Dummy {
-            vec![socket.as_raw_fd(), device.as_raw_fd()]
-        } else {
-            vec![socket.as_raw_fd()]
-        };
-        for fd in raw_fds {
-            event.u64 = fd as u64;
+        for fd in &[socket.as_raw_fd(), device.as_raw_fd()] {
+            event.u64 = *fd as u64;
             event.events = flags;
-            let res = unsafe { libc::epoll_ctl(poll_fd, libc::EPOLL_CTL_ADD, fd, &mut event) };
+            let res = unsafe { libc::epoll_ctl(poll_fd, libc::EPOLL_CTL_ADD, *fd, &mut event) };
             if res == -1 {
                 return Err(io::Error::last_os_error())
             }
