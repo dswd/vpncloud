@@ -6,6 +6,7 @@ This project follows [semantic versioning](http://semver.org).
 
 - [removed] Removed dummy device type
 - [changed] Updated depdendencies
+- [changed] Changed Rust version to 1.48.0
 - [fixed] Added missing peer address propagation
 
 ### v2.0.1 (2020-11-07)
