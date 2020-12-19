@@ -26,7 +26,7 @@ use crate::{
     device::{Device, Type},
     error::Error,
     messages::{
-        NodeInfo, PeerInfo, MESSAGE_TYPE_CLOSE, MESSAGE_TYPE_DATA, MESSAGE_TYPE_KEEPALIVE, MESSAGE_TYPE_NODE_INFO
+        AddrList, NodeInfo, PeerInfo, MESSAGE_TYPE_CLOSE, MESSAGE_TYPE_DATA, MESSAGE_TYPE_KEEPALIVE, MESSAGE_TYPE_NODE_INFO
     },
     net::{mapped_addr, Socket},
     payload::Protocol,
@@ -47,6 +47,7 @@ const OWN_ADDRESS_RESET_INTERVAL: Time = 300;
 const SPACE_BEFORE: usize = 100;
 
 struct PeerData {
+    addrs: AddrList,
     last_seen: Time,
     timeout: Time,
     peer_timeout: u16,
@@ -57,7 +58,7 @@ struct PeerData {
 #[derive(Clone)]
 pub struct ReconnectEntry {
     address: Option<(String, Time)>,
-    resolved: SmallVec<[SocketAddr; 3]>,
+    resolved: AddrList,
     tries: u16,
     timeout: u16,
     next: Time,
@@ -72,7 +73,7 @@ pub struct GenericCloud<D: Device, P: Protocol, S: Socket, TS: TimeSource> {
     broadcast: bool,
     peers: HashMap<SocketAddr, PeerData, Hash>,
     reconnect_peers: SmallVec<[ReconnectEntry; 3]>,
-    own_addresses: SmallVec<[SocketAddr; 3]>,
+    own_addresses: AddrList,
     pending_inits: HashMap<SocketAddr, PeerCrypto<NodeInfo>, Hash>,
     table: ClaimTable<TS>,
     socket: S,
@@ -288,8 +289,8 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
 
     fn create_node_info(&self) -> NodeInfo {
         let mut peers = smallvec![];
-        for (addr, peer) in &self.peers {
-            peers.push(PeerInfo { node_id: Some(peer.node_id), addrs: smallvec![*addr] })
+        for peer in self.peers.values() {
+            peers.push(PeerInfo { node_id: Some(peer.node_id), addrs: peer.addrs.clone() })
         }
         if peers.len() > 20 {
             let mut rng = rand::thread_rng();
@@ -300,7 +301,8 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             node_id: self.node_id,
             peers,
             claims: self.claims.clone(),
-            peer_timeout: Some(self.peer_timeout_publish)
+            peer_timeout: Some(self.peer_timeout_publish),
+            addrs: self.own_addresses.clone()
         }
     }
 
@@ -628,6 +630,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         info!("Added peer {}", addr_nice(addr));
         if let Some(init) = self.pending_inits.remove(&addr) {
             self.peers.insert(addr, PeerData {
+                addrs: info.addrs.clone(),
                 crypto: init,
                 node_id: info.node_id,
                 peer_timeout: info.peer_timeout.unwrap_or(DEFAULT_PEER_TIMEOUT),

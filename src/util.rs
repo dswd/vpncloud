@@ -217,7 +217,7 @@ pub fn get_internal_ip() -> Ipv4Addr {
 
 
 #[allow(unknown_lints, clippy::needless_pass_by_value)]
-pub fn resolve<Addr: ToSocketAddrs + fmt::Debug>(addr: Addr) -> Result<SmallVec<[SocketAddr; 3]>, Error> {
+pub fn resolve<Addr: ToSocketAddrs + fmt::Debug>(addr: Addr) -> Result<SmallVec<[SocketAddr; 4]>, Error> {
     let mut addrs =
         addr.to_socket_addrs().map_err(|_| Error::NameUnresolvable(format!("{:?}", addr)))?.collect::<SmallVec<_>>();
     // Try IPv4 first as it usually is faster
