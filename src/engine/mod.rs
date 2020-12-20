@@ -2,6 +2,10 @@
 // Copyright (C) 2015-2020  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
+mod device_thread;
+mod socket_thread;
+mod shared;
+
 use std::{
     cmp::{max, min},
     collections::HashMap,
