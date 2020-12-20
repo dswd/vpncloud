@@ -2,9 +2,13 @@
 
 ## Toolchain
 
+**Setup toolchain:**
 rustup target add x86_64-pc-windows-gnu
 rustup toolchain install stable-x86_64-pc-windows-gnu
 apt-get install mingw64
+
+**Cross-compile with:**
+cargo build --target x86_64-pc-windows-gnu
 
 ## Problems
 
