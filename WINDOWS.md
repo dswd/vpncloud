@@ -28,7 +28,8 @@ cargo build --target x86_64-pc-windows-gnu
 
 - Wrap VpnCloud as Windows service
   - https://github.com/mullvad/windows-service-rs
-- Do not support dropping privileges under Windows
+- Do not support dropping privileges or daemonizing under Windows
+- Only use Ctrl-C handling under Linux
 
 ### Polling solution
 
@@ -48,6 +49,7 @@ Problems to solve:
 
 - Synchronization is slow
   - Do not use locking in hot code, cache shared data locally and synchronize periodically
+- Find out if this is faster/slower than current solution
 
 ### Tun/Tap devices
 
