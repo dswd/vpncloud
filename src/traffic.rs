@@ -10,7 +10,7 @@ use std::{
 };
 
 use super::{
-    cloud::{Hash, STATS_INTERVAL},
+    engine::{Hash, STATS_INTERVAL},
     types::Address,
     util::{addr_nice, Bytes}
 };

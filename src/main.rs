@@ -16,7 +16,7 @@ pub mod util;
 #[macro_use]
 mod tests;
 pub mod beacon;
-pub mod cloud;
+pub mod engine;
 pub mod config;
 pub mod crypto;
 pub mod device;
@@ -46,7 +46,7 @@ use std::{
 };
 
 use crate::{
-    cloud::GenericCloud,
+    engine::GenericCloud,
     config::{Args, Config},
     crypto::Crypto,
     device::{Device, TunTapDevice, Type},

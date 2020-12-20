@@ -17,7 +17,7 @@ use std::{
 };
 
 pub use super::{
-    cloud::GenericCloud,
+    engine::GenericCloud,
     config::{Config, CryptoConfig},
     device::{MockDevice, Type},
     net::MockSocket,
