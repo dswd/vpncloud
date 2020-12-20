@@ -303,7 +303,7 @@ fn main() {
         error!("Either password or private key must be set in config or given as parameter");
         return;
     }
-    if config.listen.starts_with("ws") {
+    if config.listen.starts_with("ws://") {
         let socket = try_fail!(ProxyConnection::listen(&config.listen), "Failed to open socket {}: {}", config.listen);
         match config.device_type {
             Type::Tap => run::<payload::Frame, _>(config, socket),

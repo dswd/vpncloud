@@ -824,7 +824,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     /// Also, this method will call `housekeep` every second.
     pub fn run(&mut self) {
         let ctrlc = CtrlC::new();
-        let waiter = try_fail!(WaitImpl::new(&self.socket, &self.device, 1000), "Failed to setup poll: {}");
+        let waiter = try_fail!(WaitImpl::new(self.socket.as_raw_fd(), self.device.as_raw_fd(), 1000), "Failed to setup poll: {}");
         let mut buffer = MsgBuffer::new(SPACE_BEFORE);
         let mut poll_error = false;
         for evt in waiter {
