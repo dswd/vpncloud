@@ -12,7 +12,6 @@ use crate::error::Error;
 
 #[cfg(not(target_os = "linux"))] use time;
 
-use signal::{trap::Trap, Signal};
 use smallvec::SmallVec;
 use std::time::Instant;
 
@@ -272,7 +271,6 @@ impl fmt::Display for Bytes {
 
 pub struct CtrlC {
     dummy_time: Instant,
-    trap: Trap
 }
 
 impl CtrlC {
@@ -281,15 +279,14 @@ impl CtrlC {
     }
 
     pub fn was_pressed(&self) -> bool {
-        self.trap.wait(self.dummy_time).is_some()
+        false
     }
 }
 
 impl Default for CtrlC {
     fn default() -> Self {
         let dummy_time = Instant::now();
-        let trap = Trap::trap(&[Signal::SIGINT, Signal::SIGTERM, Signal::SIGQUIT]);
-        Self { dummy_time, trap }
+        Self { dummy_time }
     }
 }
 

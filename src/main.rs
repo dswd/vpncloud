@@ -189,30 +189,9 @@ fn run<P: Protocol>(config: Config) {
         cloud.add_reconnect_peer(addr);
     }
     if config.daemonize {
-        info!("Running process as daemon");
-        let mut daemonize = daemonize::Daemonize::new();
-        if let Some(user) = config.user {
-            daemonize = daemonize.user(&user as &str);
-        }
-        if let Some(group) = config.group {
-            daemonize = daemonize.group(&group as &str);
-        }
-        if let Some(pid_file) = config.pid_file {
-            daemonize = daemonize.pid_file(pid_file).chown_pid_file(true);
-            // Give child process some time to write PID file
-            daemonize = daemonize.exit_action(|| thread::sleep(std::time::Duration::from_millis(10)));
-        }
-        try_fail!(daemonize.start(), "Failed to daemonize: {}");
+        error!("Daemonize not supported under windows");
     } else if config.user.is_some() || config.group.is_some() {
-        info!("Dropping privileges");
-        let mut pd = privdrop::PrivDrop::default();
-        if let Some(user) = config.user {
-            pd = pd.user(user);
-        }
-        if let Some(group) = config.group {
-            pd = pd.group(group);
-        }
-        try_fail!(pd.apply(), "Failed to drop privileges: {}");
+        error!("Privdrop not supported under windows");
     }
     cloud.run();
     if let Some(script) = config.ifdown {
