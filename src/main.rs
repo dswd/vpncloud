@@ -4,11 +4,15 @@
 
 #![cfg_attr(feature = "bench", feature(test))]
 
-#[macro_use] extern crate log;
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate log;
+#[macro_use]
+extern crate serde_derive;
 
-#[cfg(test)] extern crate tempfile;
-#[cfg(feature = "bench")] extern crate test;
+#[cfg(test)]
+extern crate tempfile;
+#[cfg(feature = "bench")]
+extern crate test;
 
 #[macro_use]
 pub mod util;
@@ -30,6 +34,7 @@ pub mod port_forwarding;
 pub mod table;
 pub mod traffic;
 pub mod types;
+pub mod wsproxy;
 
 use structopt::StructOpt;
 
@@ -39,26 +44,26 @@ use std::{
     net::{Ipv4Addr, UdpSocket},
     os::unix::fs::PermissionsExt,
     path::Path,
-    process::Command,
+    process,
     str::FromStr,
     sync::Mutex,
-    thread
+    thread,
 };
 
 use crate::{
     cloud::GenericCloud,
-    config::{Args, Config},
+    config::{Args, Command, Config},
     crypto::Crypto,
     device::{Device, TunTapDevice, Type},
+    net::Socket,
     oldconfig::OldConfigFile,
     payload::Protocol,
-    port_forwarding::PortForwarding,
-    util::SystemTimeSource
+    util::SystemTimeSource,
+    wsproxy::ProxyConnection,
 };
 
-
 struct DualLogger {
-    file: Option<Mutex<File>>
+    file: Option<Mutex<File>>,
 }
 
 impl DualLogger {
@@ -105,7 +110,7 @@ impl log::Log for DualLogger {
 }
 
 fn run_script(script: &str, ifname: &str) {
-    let mut cmd = Command::new("sh");
+    let mut cmd = process::Command::new("sh");
     cmd.arg("-c").arg(&script).env("IFNAME", ifname);
     debug!("Running script: {:?}", cmd);
     match cmd.status() {
@@ -114,18 +119,18 @@ fn run_script(script: &str, ifname: &str) {
                 error!("Script returned with error: {:?}", status.code())
             }
         }
-        Err(e) => error!("Failed to execute script {:?}: {}", script, e)
+        Err(e) => error!("Failed to execute script {:?}: {}", script, e),
     }
 }
 
 fn parse_ip_netmask(addr: &str) -> Result<(Ipv4Addr, Ipv4Addr), String> {
     let (ip_str, len_str) = match addr.find('/') {
         Some(pos) => (&addr[..pos], &addr[pos + 1..]),
-        None => (addr, "24")
+        None => (addr, "24"),
     };
     let prefix_len = u8::from_str(len_str).map_err(|_| format!("Invalid prefix length: {}", len_str))?;
     if prefix_len > 32 {
-        return Err(format!("Invalid prefix length: {}", prefix_len))
+        return Err(format!("Invalid prefix length: {}", prefix_len));
     }
     let ip = Ipv4Addr::from_str(ip_str).map_err(|_| format!("Invalid ip address: {}", ip_str))?;
     let netmask = Ipv4Addr::from(u32::max_value().checked_shl(32 - prefix_len as u32).unwrap());
@@ -162,11 +167,10 @@ fn setup_device(config: &Config) -> TunTapDevice {
     device
 }
 
-
 #[allow(clippy::cognitive_complexity)]
-fn run<P: Protocol>(config: Config) {
+fn run<P: Protocol, S: Socket>(config: Config, socket: S) {
     let device = setup_device(&config);
-    let port_forwarding = if config.port_forwarding { PortForwarding::new(config.listen.port()) } else { None };
+    let port_forwarding = if config.port_forwarding { socket.create_port_forwarding() } else { None };
     let stats_file = match config.stats_file {
         None => None,
         Some(ref name) => {
@@ -183,7 +187,7 @@ fn run<P: Protocol>(config: Config) {
         }
     };
     let mut cloud =
-        GenericCloud::<TunTapDevice, P, UdpSocket, SystemTimeSource>::new(&config, device, port_forwarding, stats_file);
+        GenericCloud::<TunTapDevice, P, S, SystemTimeSource>::new(&config, socket, device, port_forwarding, stats_file);
     for addr in config.peers {
         try_fail!(cloud.connect(&addr as &str), "Failed to send message to {}: {}", &addr);
         cloud.add_reconnect_peer(addr);
@@ -224,15 +228,7 @@ fn main() {
     let args: Args = Args::from_args();
     if args.version {
         println!("VpnCloud v{}", env!("CARGO_PKG_VERSION"));
-        return
-    }
-    if args.genkey {
-        let (privkey, pubkey) = Crypto::generate_keypair(args.password.as_deref());
-        println!("Private key: {}\nPublic key: {}\n", privkey, pubkey);
-        println!(
-            "Attention: Keep the private key secret and use only the public key on other nodes to establish trust."
-        );
-        return
+        return;
     }
     let logger = try_fail!(DualLogger::new(args.log_file.as_ref()), "Failed to open logfile: {}");
     log::set_boxed_logger(Box::new(logger)).unwrap();
@@ -244,24 +240,43 @@ fn main() {
     } else {
         log::LevelFilter::Info
     });
-    if args.migrate_config {
-        let file = args.config.unwrap();
-        info!("Trying to convert from old config format");
-        let f = try_fail!(File::open(&file), "Failed to open config file: {:?}");
-        let config_file_old: OldConfigFile =
-            try_fail!(serde_yaml::from_reader(f), "Config file not valid for version 1: {:?}");
-        let new_config = config_file_old.convert();
-        info!("Successfully converted from old format");
-        info!("Renaming original file to {}.orig", file);
-        try_fail!(fs::rename(&file, format!("{}.orig", file)), "Failed to rename original file: {:?}");
-        info!("Writing new config back into {}", file);
-        let f = try_fail!(File::create(&file), "Failed to open config file: {:?}");
-        try_fail!(
-            fs::set_permissions(&file, fs::Permissions::from_mode(0o600)),
-            "Failed to set permissions on file: {:?}"
-        );
-        try_fail!(serde_yaml::to_writer(f, &new_config), "Failed to write converted config: {:?}");
-        return
+    if let Some(cmd) = args.cmd {
+        match cmd {
+            Command::GenKey => {
+                let (privkey, pubkey) = Crypto::generate_keypair(args.password.as_deref());
+                println!("Private key: {}\nPublic key: {}\n", privkey, pubkey);
+                println!(
+                    "Attention: Keep the private key secret and use only the public key on other nodes to establish trust."
+                );
+            }
+            Command::MigrateConfig { config_file } => {
+                info!("Trying to convert from old config format");
+                let f = try_fail!(File::open(&config_file), "Failed to open config file: {:?}");
+                let config_file_old: OldConfigFile =
+                    try_fail!(serde_yaml::from_reader(f), "Config file not valid for version 1: {:?}");
+                let new_config = config_file_old.convert();
+                info!("Successfully converted from old format");
+                info!("Renaming original file to {}.orig", config_file);
+                try_fail!(
+                    fs::rename(&config_file, format!("{}.orig", config_file)),
+                    "Failed to rename original file: {:?}"
+                );
+                info!("Writing new config back into {}", config_file);
+                let f = try_fail!(File::create(&config_file), "Failed to open config file: {:?}");
+                try_fail!(
+                    fs::set_permissions(&config_file, fs::Permissions::from_mode(0o600)),
+                    "Failed to set permissions on file: {:?}"
+                );
+                try_fail!(serde_yaml::to_writer(f, &new_config), "Failed to write converted config: {:?}");
+            }
+            Command::WsProxy => {
+                wsproxy::run_proxy();
+            }
+            Command::WsClient { url } => {
+                wsproxy::run_client(url);
+            }
+        }
+        return;
     }
     let mut config = Config::default();
     if let Some(ref file) = args.config {
@@ -284,8 +299,21 @@ fn main() {
     }
     config.merge_args(args);
     debug!("Config: {:?}", config);
-    match config.device_type {
-        Type::Tap => run::<payload::Frame>(config),
-        Type::Tun => run::<payload::Packet>(config)
+    if config.crypto.password.is_none() && config.crypto.private_key.is_none() {
+        error!("Either password or private key must be set in config or given as parameter");
+        return;
+    }
+    if config.listen.starts_with("ws") {
+        let socket = try_fail!(ProxyConnection::listen(&config.listen), "Failed to open socket {}: {}", config.listen);
+        match config.device_type {
+            Type::Tap => run::<payload::Frame, _>(config, socket),
+            Type::Tun => run::<payload::Packet, _>(config, socket),
+        }
+    } else {
+        let socket = try_fail!(UdpSocket::listen(&config.listen), "Failed to open socket {}: {}", config.listen);
+        match config.device_type {
+            Type::Tap => run::<payload::Frame, _>(config, socket),
+            Type::Tun => run::<payload::Packet, _>(config, socket),
+        }
     }
 }

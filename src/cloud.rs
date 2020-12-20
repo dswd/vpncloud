@@ -98,11 +98,7 @@ pub struct GenericCloud<D: Device, P: Protocol, S: Socket, TS: TimeSource> {
 
 impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS> {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(config: &Config, device: D, port_forwarding: Option<PortForwarding>, stats_file: Option<File>) -> Self {
-        let socket = match S::listen(config.listen) {
-            Ok(socket) => socket,
-            Err(err) => fail!("Failed to open socket {}: {}", config.listen, err)
-        };
+    pub fn new(config: &Config, socket: S, device: D, port_forwarding: Option<PortForwarding>, stats_file: Option<File>) -> Self {
         let (learning, broadcast) = match config.mode {
             Mode::Normal => {
                 match config.device_type {

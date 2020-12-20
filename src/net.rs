@@ -5,12 +5,13 @@
 use std::{
     collections::{HashMap, VecDeque},
     io::{self, ErrorKind},
-    net::{IpAddr, SocketAddr, UdpSocket},
+    net::{IpAddr, SocketAddr, UdpSocket, Ipv6Addr},
     os::unix::io::{AsRawFd, RawFd},
     sync::atomic::{AtomicBool, Ordering}
 };
 
 use super::util::{MockTimeSource, MsgBuffer, Time, TimeSource};
+use crate::port_forwarding::PortForwarding;
 
 pub fn mapped_addr(addr: SocketAddr) -> SocketAddr {
     match addr {
@@ -21,14 +22,28 @@ pub fn mapped_addr(addr: SocketAddr) -> SocketAddr {
 
 
 pub trait Socket: AsRawFd + Sized {
-    fn listen(addr: SocketAddr) -> Result<Self, io::Error>;
+    fn listen(addr: &str) -> Result<Self, io::Error>;
     fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error>;
     fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error>;
     fn address(&self) -> Result<SocketAddr, io::Error>;
+    fn create_port_forwarding(&self) -> Option<PortForwarding>;
+}
+
+fn parse_listen(addr: &str) -> SocketAddr {
+    if let Some(addr) = addr.strip_prefix("*:") {
+        let port = try_fail!(addr.parse::<u16>(), "Invalid port: {}");
+        SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
+    } else if addr.contains(':') {
+        try_fail!(addr.parse::<SocketAddr>(), "Invalid address: {}: {}", addr)
+    } else {
+        let port = try_fail!(addr.parse::<u16>(), "Invalid port: {}");
+        SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
+    }
 }
 
 impl Socket for UdpSocket {
-    fn listen(addr: SocketAddr) -> Result<Self, io::Error> {
+    fn listen(addr: &str) -> Result<Self, io::Error> {
+        let addr = parse_listen(addr);
         UdpSocket::bind(addr)
     }
 
@@ -45,6 +60,10 @@ impl Socket for UdpSocket {
 
     fn address(&self) -> Result<SocketAddr, io::Error> {
         self.local_addr()
+    }
+
+    fn create_port_forwarding(&self) -> Option<PortForwarding> {
+        PortForwarding::new(self.address().unwrap().port())
     }
 }
 
@@ -106,8 +125,8 @@ impl AsRawFd for MockSocket {
 }
 
 impl Socket for MockSocket {
-    fn listen(addr: SocketAddr) -> Result<Self, io::Error> {
-        Ok(Self::new(addr))
+    fn listen(addr: &str) -> Result<Self, io::Error> {
+        Ok(Self::new(parse_listen(addr)))
     }
 
     fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
@@ -131,6 +150,10 @@ impl Socket for MockSocket {
 
     fn address(&self) -> Result<SocketAddr, io::Error> {
         Ok(self.address)
+    }
+
+    fn create_port_forwarding(&self) -> Option<PortForwarding> {
+        None
     }
 }
 
