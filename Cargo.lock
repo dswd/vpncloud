@@ -11,13 +11,14 @@ dependencies = [
 
 [[package]]
 name = "attohttpc"
-version = "0.10.1"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baf13118df3e3dce4b5ac930641343b91b656e4e72c8f8325838b01a4b1c9d45"
+checksum = "1082810677916862c7704351dfe4696a837aaf34da0dd6431abc60783e71ee8f"
 dependencies = [
  "http",
  "log",
  "url",
+ "wildmatch",
 ]
 
 [[package]]
@@ -208,13 +209,13 @@ dependencies = [
 
 [[package]]
 name = "igd"
-version = "0.11.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fd32c880165b2f776af0b38d206d1cabaebcf46c166ac6ae004a5d45f7d48ef"
+checksum = "4c4e7ee8b51e541486d7040883fe1f00e2a9954bcc24fd155b7e4f03ed4b93dd"
 dependencies = [
  "attohttpc",
  "log",
- "rand 0.7.3",
+ "rand 0.8.0",
  "url",
  "xmltree",
 ]
@@ -938,6 +939,12 @@ dependencies = [
  "js-sys",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "wildmatch"
+version = "1.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79346daa5ca66c72db46ee4dac6e605811478ae0807b385d18328be3f5c0eb74"
 
 [[package]]
 name = "winapi"
