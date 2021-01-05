@@ -42,10 +42,12 @@ use ring::{
     aead::{self, LessSafeKey, UnboundKey},
     rand::{SecureRandom, SystemRandom}
 };
+use std::cell::UnsafeCell;
 
 use std::{
     io::{Cursor, Read, Write},
     mem,
+    sync::atomic::{AtomicUsize, Ordering},
     time::{Duration, Instant}
 };
 
@@ -126,35 +128,42 @@ impl CryptoKey {
     }
 }
 
+// Why this is safe:
+// Only 2 of the 4 keys are accessed. 
+// Only the other two keys will ever be replaced and then become current.
+// Between two replacements is enough time so that all calls using those keys are long done.
 
 pub struct CryptoCore {
     rand: SystemRandom,
-    keys: [CryptoKey; 4],
-    current_key: usize,
-    nonce_half: bool
+    keys: [UnsafeCell<CryptoKey>; 4],
+    current_key: AtomicUsize,
+    nonce_half: bool,
+    algorithm: &'static aead::Algorithm
 }
 
 impl CryptoCore {
     pub fn new(key: LessSafeKey, nonce_half: bool) -> Self {
         let rand = SystemRandom::new();
+        let algorithm = key.algorithm();
         let dummy_key_data = random_data(key.algorithm().key_len());
         let dummy_key1 = LessSafeKey::new(UnboundKey::new(key.algorithm(), &dummy_key_data).unwrap());
         let dummy_key2 = LessSafeKey::new(UnboundKey::new(key.algorithm(), &dummy_key_data).unwrap());
         let dummy_key3 = LessSafeKey::new(UnboundKey::new(key.algorithm(), &dummy_key_data).unwrap());
         Self {
             keys: [
-                CryptoKey::new(&rand, key, nonce_half),
-                CryptoKey::new(&rand, dummy_key1, nonce_half),
-                CryptoKey::new(&rand, dummy_key2, nonce_half),
-                CryptoKey::new(&rand, dummy_key3, nonce_half)
+                UnsafeCell::new(CryptoKey::new(&rand, key, nonce_half)),
+                UnsafeCell::new(CryptoKey::new(&rand, dummy_key1, nonce_half)),
+                UnsafeCell::new(CryptoKey::new(&rand, dummy_key2, nonce_half)),
+                UnsafeCell::new(CryptoKey::new(&rand, dummy_key3, nonce_half))
             ],
-            current_key: 0,
+            current_key: AtomicUsize::new(0),
             nonce_half,
-            rand
+            rand,
+            algorithm
         }
     }
 
-    pub fn encrypt(&mut self, buffer: &mut MsgBuffer) {
+    pub fn encrypt(&self, buffer: &mut MsgBuffer) {
         let data_start = buffer.get_start();
         let data_length = buffer.len();
         assert!(buffer.get_start() >= EXTRA_LEN);
@@ -162,11 +171,12 @@ impl CryptoCore {
         buffer.set_length(data_length + EXTRA_LEN + TAG_LEN);
         let (extra, data_and_tag) = buffer.message_mut().split_at_mut(EXTRA_LEN);
         let (data, tag_space) = data_and_tag.split_at_mut(data_length);
-        let key = &mut self.keys[self.current_key];
+        let current_key = self.current_key.load(Ordering::SeqCst);
+        let key = unsafe { self.keys[current_key].get().as_mut().unwrap() };
         key.send_nonce.increment();
         {
             let mut extra = Cursor::new(extra);
-            extra.write_u8(self.current_key as u8).unwrap();
+            extra.write_u8(current_key as u8).unwrap();
             extra.write_all(&key.send_nonce.as_bytes()[5..]).unwrap();
         }
         let nonce = aead::Nonce::assume_unique_for_key(*key.send_nonce.as_bytes());
@@ -190,7 +200,7 @@ impl CryptoCore {
         Ok(())
     }
 
-    pub fn decrypt(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
+    pub fn decrypt(&self, buffer: &mut MsgBuffer) -> Result<(), Error> {
         assert!(buffer.len() >= EXTRA_LEN + TAG_LEN);
         let (extra, data_and_tag) = buffer.message_mut().split_at_mut(EXTRA_LEN);
         let key_id;
@@ -202,34 +212,37 @@ impl CryptoCore {
             extra.read_exact(&mut nonce.0[5..]).map_err(|_| Error::Crypto("Input data too short"))?;
             nonce.set_msb(if self.nonce_half { 0x00 } else { 0x80 });
         }
-        let key = &mut self.keys[key_id as usize];
+        let key = unsafe { self.keys[key_id as usize].get().as_mut().unwrap() };
         let result = Self::decrypt_with_key(key, nonce, data_and_tag);
         buffer.set_start(buffer.get_start() + EXTRA_LEN);
         buffer.set_length(buffer.len() - TAG_LEN);
         result
     }
 
-    pub fn rotate_key(&mut self, key: LessSafeKey, id: u64, use_for_sending: bool) {
+    pub fn rotate_key(&self, key: LessSafeKey, id: u64, use_for_sending: bool) {
         debug!("Rotated key {} (use for sending: {})", id, use_for_sending);
         let id = (id % 4) as usize;
-        self.keys[id] = CryptoKey::new(&self.rand, key, self.nonce_half);
+        let mut new_key = CryptoKey::new(&self.rand, key, self.nonce_half);
+        let stored_key = unsafe { self.keys[id].get().as_mut().unwrap() };
+        mem::swap(&mut new_key, stored_key);
         if use_for_sending {
-            self.current_key = id
+            self.current_key.store(id, Ordering::SeqCst);
         }
     }
 
     pub fn algorithm(&self) -> &'static aead::Algorithm {
-        self.keys[self.current_key].key.algorithm()
+        self.algorithm
     }
 
-    pub fn every_second(&mut self) {
+    pub fn every_second(&self) {
         // Set min nonce on all keys
-        for k in &mut self.keys {
-            k.update_min_nonce();
+        for k in &self.keys {
+            unsafe { k.get().as_mut().unwrap().update_min_nonce() };
         }
     }
 }
 
+unsafe impl Sync for CryptoCore {}
 
 pub fn create_dummy_pair(algo: &'static aead::Algorithm) -> (CryptoCore, CryptoCore) {
     let key_data = random_data(algo.key_len());

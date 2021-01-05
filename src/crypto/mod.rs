@@ -2,7 +2,7 @@ mod core;
 mod init;
 mod rotate;
 
-pub use self::core::{EXTRA_LEN, TAG_LEN};
+pub use self::core::{EXTRA_LEN, TAG_LEN, CryptoCore};
 use self::{
     core::{test_speed, CryptoCore},
     init::{InitResult, InitState, CLOSING},

@@ -1,4 +1,8 @@
-use super::{shared::SharedData, SPACE_BEFORE};
+use super::{
+    shared::{SharedPeerCrypto, SharedTable, SharedTraffic},
+    SPACE_BEFORE
+};
+
 use crate::{
     config::DEFAULT_PEER_TIMEOUT,
     crypto::{is_init_message, MessageResult, PeerCrypto},
@@ -6,13 +10,11 @@ use crate::{
     error::Error,
     messages::{AddrList, NodeInfo, PeerInfo},
     net::{mapped_addr, Socket},
-    table::ClaimTable,
-    traffic::TrafficStats,
     types::{NodeId, RangeList},
     util::{MsgBuffer, Time, TimeSource},
     Config, Crypto, Device, Protocol
 };
-use rand::{random, seq::SliceRandom, thread_rng};
+use rand::{seq::SliceRandom};
 use smallvec::{smallvec, SmallVec};
 use std::{
     collections::HashMap,
@@ -20,7 +22,6 @@ use std::{
     io::Cursor,
     marker::PhantomData,
     net::{SocketAddr, ToSocketAddrs},
-    sync::Arc
 };
 
 pub struct SocketThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
@@ -38,12 +39,11 @@ pub struct SocketThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
     next_housekeep: Time,
     own_addresses: AddrList,
     pending_inits: HashMap<SocketAddr, PeerCrypto<NodeInfo>, Hash>,
-    // Shared fields
-    shared: Arc<SharedData>,
-    traffic: TrafficStats,
-    peers: HashMap<SocketAddr, PeerData, Hash>,
     crypto: Crypto,
-    table: ClaimTable<TS>
+    peers: HashMap<SocketAddr, PeerData, Hash>,
+    // Shared fields
+    traffic: SharedTraffic,
+    table: SharedTable<TS>
 }
 
 impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS> {
@@ -273,6 +273,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
     }
 
     fn housekeep(&mut self) -> Result<(), Error> {
+        // self.shared.sync();
         // TODO: sync
         unimplemented!();
     }

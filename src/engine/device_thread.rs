@@ -1,19 +1,16 @@
-use crate::{
-    engine::{addr_nice, Hash, PeerData},
-    messages::MESSAGE_TYPE_DATA,
-    net::Socket,
-    table::ClaimTable,
-    traffic::TrafficStats,
-    Protocol
+use super::{
+    shared::{SharedPeerCrypto, SharedTable, SharedTraffic},
+    SPACE_BEFORE
 };
-use std::{collections::HashMap, marker::PhantomData, net::SocketAddr, sync::Arc};
-
-use super::{shared::SharedData, SPACE_BEFORE};
 use crate::{
     device::Device,
     error::Error,
-    util::{MsgBuffer, Time, TimeSource}
+    messages::MESSAGE_TYPE_DATA,
+    net::Socket,
+    util::{MsgBuffer, Time, TimeSource},
+    Protocol
 };
+use std::{marker::PhantomData, net::SocketAddr};
 
 pub struct DeviceThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
     // Read-only fields
@@ -25,10 +22,9 @@ pub struct DeviceThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
     device: D,
     next_housekeep: Time,
     // Shared fields
-    shared: Arc<SharedData>,
-    peers: HashMap<SocketAddr, PeerData, Hash>,
-    traffic: TrafficStats,
-    table: ClaimTable<TS>
+    traffic: SharedTraffic,
+    peer_crypto: SharedPeerCrypto,
+    table: SharedTable<TS>
 }
 
 impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS> {
@@ -46,31 +42,29 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
     #[inline]
     fn send_msg(&mut self, addr: SocketAddr, type_: u8, msg: &mut MsgBuffer) -> Result<(), Error> {
         debug!("Sending msg with {} bytes to {}", msg.len(), addr);
-        let peer = match self.peers.get_mut(&addr) {
-            Some(peer) => peer,
-            None => return Err(Error::Message("Sending to node that is not a peer"))
-        };
-        peer.crypto.send_message(type_, msg)?;
-        self.send_to(addr, msg)
+        if self.peer_crypto.send_message(addr, type_, msg)? {
+            self.send_to(addr, msg)
+        } else {
+            Err(Error::Message("Sending to node that is not a peer"))
+        }
     }
 
     #[inline]
     fn broadcast_msg(&mut self, type_: u8, msg: &mut MsgBuffer) -> Result<(), Error> {
-        debug!("Broadcasting message type {}, {:?} bytes to {} peers", type_, msg.len(), self.peers.len());
+        debug!("Broadcasting message type {}, {:?} bytes to {} peers", type_, msg.len(), self.peer_crypto.count());
         let mut msg_data = MsgBuffer::new(100);
-        for (addr, peer) in &mut self.peers {
+        self.peer_crypto.for_each(|addr, crypto| {
             msg_data.set_start(msg.get_start());
             msg_data.set_length(msg.len());
             msg_data.message_mut().clone_from_slice(msg.message());
-            peer.crypto.send_message(type_, &mut msg_data)?;
-            self.traffic.count_out_traffic(*addr, msg_data.len());
-            match self.socket.send(msg_data.message(), *addr) {
+            crypto.send_message(type_, &mut msg_data)?;
+            self.traffic.count_out_traffic(addr, msg_data.len());
+            match self.socket.send(msg_data.message(), addr) {
                 Ok(written) if written == msg_data.len() => Ok(()),
                 Ok(_) => Err(Error::Socket("Sent out truncated packet")),
                 Err(e) => Err(Error::SocketIo("IOError when sending", e))
-            }?
-        }
-        Ok(())
+            }
+        })
     }
 
     fn forward_packet(&mut self, data: &mut MsgBuffer) -> Result<(), Error> {
@@ -97,7 +91,9 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
     }
 
     fn housekeep(&mut self) -> Result<(), Error> {
-        // TODO: sync
+        self.peer_crypto.sync();
+        self.table.sync();
+        self.traffic.sync();
         unimplemented!();
     }
 
