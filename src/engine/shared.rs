@@ -12,7 +12,7 @@ use parking_lot::Mutex;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 pub struct SharedPeerCrypto {
-    peers: Arc<Mutex<HashMap<SocketAddr, CryptoCore, Hash>>>
+    peers: Arc<Mutex<HashMap<SocketAddr, Arc<CryptoCore>, Hash>>>
 }
 
 impl SharedPeerCrypto {

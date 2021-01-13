@@ -53,7 +53,9 @@
 
 use super::{
     core::{CryptoCore, EXTRA_LEN},
-    Algorithms, EcdhPrivateKey, EcdhPublicKey, Ed25519PublicKey, Error, MsgBuffer, Payload
+    rotate::RotationState,
+    Algorithms, EcdhPrivateKey, EcdhPublicKey, Ed25519PublicKey, Error, MsgBuffer, Payload, PeerCrypto,
+    MESSAGE_TYPE_ROTATION
 };
 use crate::types::NodeId;
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
@@ -72,6 +74,7 @@ use std::{
     sync::Arc
 };
 
+pub const INIT_MESSAGE_FIRST_BYTE: u8 = 0xff;
 
 pub const STAGE_PING: u8 = 1;
 pub const STAGE_PONG: u8 = 2;
@@ -83,6 +86,11 @@ pub const MAX_FAILED_RETRIES: usize = 120;
 
 pub const SALTED_NODE_ID_HASH_LEN: usize = 20;
 pub type SaltedNodeIdHash = [u8; SALTED_NODE_ID_HASH_LEN];
+
+
+pub fn is_init_message(msg: &[u8]) -> bool {
+    !msg.is_empty() && msg[0] == INIT_MESSAGE_FIRST_BYTE
+}
 
 
 #[allow(clippy::large_enum_variant)]
@@ -141,6 +149,9 @@ impl InitMsg {
     fn read_from(buffer: &[u8], trusted_keys: &[Ed25519PublicKey]) -> Result<(Self, Ed25519PublicKey), Error> {
         let mut r = Cursor::new(buffer);
 
+        if r.read_u8().map_err(|_| Error::Parse("Init message too short"))? != INIT_MESSAGE_FIRST_BYTE {
+            return Err(Error::Parse("Init message has invalid first byte"))
+        }
         let mut public_key_salt = [0; 4];
         r.read_exact(&mut public_key_salt).map_err(|_| Error::Parse("Init message too short"))?;
         let mut public_key_hash = [0; 4];
@@ -290,6 +301,7 @@ impl InitMsg {
     fn write_to(&self, buffer: &mut [u8], key: &Ed25519KeyPair) -> Result<usize, io::Error> {
         let mut w = Cursor::new(buffer);
 
+        w.write_u8(INIT_MESSAGE_FIRST_BYTE)?;
         let rand = SystemRandom::new();
         let mut salt = [0; 4];
         rand.fill(&mut salt).unwrap();
@@ -378,9 +390,9 @@ pub enum InitResult<P: Payload> {
     Success { peer_payload: P, is_initiator: bool }
 }
 
-
 pub struct InitState<P: Payload> {
     node_id: NodeId,
+    is_initiator: bool,
     salted_node_id_hash: SaltedNodeIdHash,
     payload: P,
     key_pair: Arc<Ed25519KeyPair>,
@@ -389,7 +401,7 @@ pub struct InitState<P: Payload> {
     next_stage: u8,
     close_time: usize,
     last_message: Option<Vec<u8>>,
-    crypto: Option<CryptoCore>,
+    crypto: Option<Arc<CryptoCore>>,
     algorithms: Algorithms,
     selected_algorithm: Option<&'static Algorithm>,
     failed_retries: usize
@@ -409,6 +421,7 @@ impl<P: Payload> InitState<P> {
         hash[4..].clone_from_slice(&d.as_ref()[..16]);
         Self {
             node_id,
+            is_initiator: false,
             salted_node_id_hash: hash,
             payload,
             key_pair,
@@ -431,7 +444,7 @@ impl<P: Payload> InitState<P> {
 
         // create stage 1 msg
         self.send_message(STAGE_PING, Some(ecdh_public_key), out);
-
+        self.is_initiator = true;
         self.next_stage = STAGE_PONG;
     }
 
@@ -588,6 +601,7 @@ impl<P: Payload> InitState<P> {
                 // the node with the higher node_id "wins" and gets to initialize the connection
                 if salted_node_id_hash > self.salted_node_id_hash {
                     // reset to initial state
+                    self.is_initiator = false;
                     self.next_stage = STAGE_PING;
                     self.last_message = None;
                     self.ecdh_private_key = None;
@@ -614,7 +628,8 @@ impl<P: Payload> InitState<P> {
                 self.selected_algorithm = algorithm.map(|a| a.0);
                 if let Some((algorithm, _speed)) = algorithm {
                     let master_key = self.derive_master_key(algorithm, my_ecdh_private_key, &ecdh_public_key);
-                    self.crypto = Some(CryptoCore::new(master_key, self.salted_node_id_hash > salted_node_id_hash));
+                    self.crypto =
+                        Some(Arc::new(CryptoCore::new(master_key, self.salted_node_id_hash > salted_node_id_hash)));
                 }
 
                 // create and send stage 2 reply
@@ -630,7 +645,8 @@ impl<P: Payload> InitState<P> {
                 self.selected_algorithm = algorithm.map(|a| a.0);
                 if let Some((algorithm, _speed)) = algorithm {
                     let master_key = self.derive_master_key(algorithm, ecdh_private_key, &ecdh_public_key);
-                    self.crypto = Some(CryptoCore::new(master_key, self.salted_node_id_hash > salted_node_id_hash));
+                    self.crypto =
+                        Some(Arc::new(CryptoCore::new(master_key, self.salted_node_id_hash > salted_node_id_hash)));
                 }
 
                 // decrypt the payload
@@ -657,8 +673,19 @@ impl<P: Payload> InitState<P> {
         }
     }
 
-    pub fn take_core(&mut self) -> Option<CryptoCore> {
-        self.crypto.take()
+    pub fn finish(self, buffer: &mut MsgBuffer) -> PeerCrypto {
+        assert!(buffer.is_empty());
+        let rotation = if self.crypto.is_some() { Some(RotationState::new(!self.is_initiator, buffer)) } else { None };
+        if !buffer.is_empty() {
+            buffer.prepend_byte(MESSAGE_TYPE_ROTATION);
+        }
+        PeerCrypto {
+            algorithm: self.crypto.map(|c| c.algorithm()),
+            core: self.crypto,
+            rotation,
+            rotate_counter: 0,
+            last_init_message: self.last_message
+        }
     }
 }
 

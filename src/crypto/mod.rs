@@ -2,11 +2,10 @@ mod core;
 mod init;
 mod rotate;
 
-pub use self::core::{EXTRA_LEN, TAG_LEN, CryptoCore};
-use self::{
-    core::{test_speed, CryptoCore},
-    init::{InitResult, InitState, CLOSING},
-    rotate::RotationState
+use self::{core::test_speed, init::InitState, rotate::RotationState};
+pub use self::{
+    core::{CryptoCore, EXTRA_LEN, TAG_LEN},
+    init::{is_init_message, INIT_MESSAGE_FIRST_BYTE}
 };
 use crate::{
     error::Error,
@@ -26,7 +25,7 @@ use thiserror::Error;
 
 
 const SALT: &[u8; 32] = b"vpncloudVPNCLOUDvpncl0udVpnCloud";
-const INIT_MESSAGE_FIRST_BYTE: u8 = 0xff;
+
 const MESSAGE_TYPE_ROTATION: u8 = 0x10;
 
 pub type Ed25519PublicKey = [u8; ED25519_PUBLIC_KEY_LEN];
@@ -186,100 +185,35 @@ impl Crypto {
         Ok(result)
     }
 
-    pub fn peer_instance<P: Payload>(&self, payload: P) -> PeerCrypto<P> {
-        PeerCrypto::new(
-            self.node_id,
-            payload,
-            self.key_pair.clone(),
-            self.trusted_keys.clone(),
-            self.algorithms.clone()
-        )
+    pub fn peer_instance<P: Payload>(&self, payload: P) -> InitState<P> {
+        InitState::new(self.node_id, payload, self.key_pair.clone(), self.trusted_keys.clone(), self.algorithms.clone())
     }
 }
 
 
 #[derive(Debug, PartialEq)]
-pub enum MessageResult<P: Payload> {
+pub enum MessageResult {
     Message(u8),
-    Initialized(P),
-    InitializedWithReply(P),
     Reply,
     None
 }
 
 
-pub struct PeerCrypto<P: Payload> {
+// TODO: completely rewrite
+// PeerCrypto is only for initialized crypto
+// Init is consumed and generates PeerCrypto
+pub struct PeerCrypto {
     #[allow(dead_code)]
-    node_id: NodeId,
-    init: Option<InitState<P>>,
+    last_init_message: Option<Vec<u8>>,
+    algorithm: Option<&'static Algorithm>,
     rotation: Option<RotationState>,
-    unencrypted: bool,
-    core: Option<CryptoCore>,
+    core: Option<Arc<CryptoCore>>,
     rotate_counter: usize
 }
 
-impl<P: Payload> PeerCrypto<P> {
-    pub fn new(
-        node_id: NodeId, init_payload: P, key_pair: Arc<Ed25519KeyPair>, trusted_keys: Arc<[Ed25519PublicKey]>,
-        algorithms: Algorithms
-    ) -> Self
-    {
-        Self {
-            node_id,
-            init: Some(InitState::new(node_id, init_payload, key_pair, trusted_keys, algorithms)),
-            rotation: None,
-            unencrypted: false,
-            core: None,
-            rotate_counter: 0
-        }
-    }
-
-    fn get_init(&mut self) -> Result<&mut InitState<P>, Error> {
-        if let Some(init) = &mut self.init {
-            Ok(init)
-        } else {
-            Err(Error::InvalidCryptoState("Initialization already finished"))
-        }
-    }
-
-    fn get_core(&mut self) -> Result<&mut CryptoCore, Error> {
-        if let Some(core) = &mut self.core {
-            Ok(core)
-        } else {
-            Err(Error::InvalidCryptoState("Crypto core not ready yet"))
-        }
-    }
-
-    fn get_rotation(&mut self) -> Result<&mut RotationState, Error> {
-        if let Some(rotation) = &mut self.rotation {
-            Ok(rotation)
-        } else {
-            Err(Error::InvalidCryptoState("Key rotation not initialized"))
-        }
-    }
-
-    pub fn initialize(&mut self, out: &mut MsgBuffer) -> Result<(), Error> {
-        let init = self.get_init()?;
-        if init.stage() != init::STAGE_PING {
-            Err(Error::InvalidCryptoState("Initialization already ongoing"))
-        } else {
-            init.send_ping(out);
-            out.prepend_byte(INIT_MESSAGE_FIRST_BYTE);
-            Ok(())
-        }
-    }
-
-    pub fn has_init(&self) -> bool {
-        self.init.is_some()
-    }
-
-    pub fn is_ready(&self) -> bool {
-        self.core.is_some()
-    }
-
+impl PeerCrypto {
     pub fn algorithm_name(&self) -> &'static str {
-        if let Some(ref core) = self.core {
-            let algo = core.algorithm();
+        if let Some(algo) = self.algorithm {
             if algo == &aead::CHACHA20_POLY1305 {
                 "CHACHA20"
             } else if algo == &aead::AES_128_GCM {
@@ -294,72 +228,43 @@ impl<P: Payload> PeerCrypto<P> {
         }
     }
 
-    fn handle_init_message(&mut self, buffer: &mut MsgBuffer) -> Result<MessageResult<P>, Error> {
-        let result = self.get_init()?.handle_init(buffer)?;
-        if !buffer.is_empty() {
-            buffer.prepend_byte(INIT_MESSAGE_FIRST_BYTE);
-        }
-        match result {
-            InitResult::Continue => Ok(MessageResult::Reply),
-            InitResult::Success { peer_payload, is_initiator } => {
-                self.core = self.get_init()?.take_core();
-                if self.core.is_none() {
-                    self.unencrypted = true;
-                }
-                if self.get_init()?.stage() == init::CLOSING {
-                    self.init = None
-                }
-                if self.core.is_some() {
-                    self.rotation = Some(RotationState::new(!is_initiator, buffer));
-                }
-                if !is_initiator {
-                    if self.unencrypted {
-                        return Ok(MessageResult::Initialized(peer_payload))
-                    }
-                    assert!(!buffer.is_empty());
-                    buffer.prepend_byte(MESSAGE_TYPE_ROTATION);
-                    self.encrypt_message(buffer)?;
-                }
-                Ok(MessageResult::InitializedWithReply(peer_payload))
-            }
-        }
+    fn handle_init_message(&mut self, buffer: &mut MsgBuffer) -> Result<MessageResult, Error> {
+        // TODO: parse message stage
+        // TODO: depending on stage resend last message
+        Ok(MessageResult::None)
     }
 
     fn handle_rotate_message(&mut self, data: &[u8]) -> Result<(), Error> {
-        if self.unencrypted {
-            return Ok(())
-        }
-        if let Some(rot) = self.get_rotation()?.handle_message(data)? {
-            let core = self.get_core()?;
-            let algo = core.algorithm();
-            let key = LessSafeKey::new(UnboundKey::new(algo, &rot.key[..algo.key_len()]).unwrap());
-            core.rotate_key(key, rot.id, rot.use_for_sending);
+        if let Some(rotation) = &mut self.rotation {
+            if let Some(rot) = rotation.handle_message(data)? {
+                let algo = self.algorithm.unwrap();
+                let key = LessSafeKey::new(UnboundKey::new(algo, &rot.key[..algo.key_len()]).unwrap());
+                self.core.unwrap().rotate_key(key, rot.id, rot.use_for_sending);
+            }
         }
         Ok(())
     }
 
-    fn encrypt_message(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
-        if self.unencrypted {
-            return Ok(())
+    fn encrypt_message(&mut self, buffer: &mut MsgBuffer) {
+        if let Some(core) = &mut self.core {
+            core.encrypt(buffer)
         }
-        self.get_core()?.encrypt(buffer);
-        Ok(())
     }
 
     fn decrypt_message(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
-        if self.unencrypted {
-            return Ok(())
+        if let Some(core) = &mut self.core {
+            core.decrypt(buffer)
+        } else {
+            Ok(())
         }
-        self.get_core()?.decrypt(buffer)
     }
 
-    pub fn handle_message(&mut self, buffer: &mut MsgBuffer) -> Result<MessageResult<P>, Error> {
+    pub fn handle_message(&mut self, buffer: &mut MsgBuffer) -> Result<MessageResult, Error> {
         if buffer.is_empty() {
             return Err(Error::InvalidCryptoState("No message in buffer"))
         }
         if is_init_message(buffer.buffer()) {
             debug!("Received init message");
-            buffer.take_prefix();
             self.handle_init_message(buffer)
         } else {
             debug!("Received encrypted message");
@@ -376,50 +281,35 @@ impl<P: Payload> PeerCrypto<P> {
         }
     }
 
-    pub fn send_message(&mut self, type_: u8, buffer: &mut MsgBuffer) -> Result<(), Error> {
+    pub fn send_message(&mut self, type_: u8, buffer: &mut MsgBuffer) {
         assert_ne!(type_, MESSAGE_TYPE_ROTATION);
         buffer.prepend_byte(type_);
-        self.encrypt_message(buffer)
+        self.encrypt_message(buffer);
     }
 
-    pub fn every_second(&mut self, out: &mut MsgBuffer) -> Result<MessageResult<P>, Error> {
+    pub fn every_second(&mut self, out: &mut MsgBuffer) -> MessageResult {
         out.clear();
         if let Some(ref mut core) = self.core {
             core.every_second()
-        }
-        if let Some(ref mut init) = self.init {
-            init.every_second(out)?;
-        }
-        if self.init.as_ref().map(|i| i.stage()).unwrap_or(CLOSING) == CLOSING {
-            self.init = None
-        }
-        if !out.is_empty() {
-            out.prepend_byte(INIT_MESSAGE_FIRST_BYTE);
-            return Ok(MessageResult::Reply)
         }
         if let Some(ref mut rotate) = self.rotation {
             self.rotate_counter += 1;
             if self.rotate_counter >= ROTATE_INTERVAL {
                 self.rotate_counter = 0;
                 if let Some(rot) = rotate.cycle(out) {
-                    let core = self.get_core()?;
-                    let algo = core.algorithm();
+                    let algo = self.algorithm.unwrap();
                     let key = LessSafeKey::new(UnboundKey::new(algo, &rot.key[..algo.key_len()]).unwrap());
-                    core.rotate_key(key, rot.id, rot.use_for_sending);
+                    self.core.unwrap().rotate_key(key, rot.id, rot.use_for_sending);
                 }
                 if !out.is_empty() {
                     out.prepend_byte(MESSAGE_TYPE_ROTATION);
-                    self.encrypt_message(out)?;
-                    return Ok(MessageResult::Reply)
+                    self.encrypt_message(out);
+                    return MessageResult::Reply
                 }
             }
         }
-        Ok(MessageResult::None)
+        MessageResult::None
     }
-}
-
-pub fn is_init_message(msg: &[u8]) -> bool {
-    !msg.is_empty() && msg[0] == INIT_MESSAGE_FIRST_BYTE
 }
 
 
