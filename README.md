@@ -2,6 +2,7 @@ VpnCloud - Peer-to-Peer VPN
 ---------------------------
 ![Checks](https://github.com/dswd/vpncloud/workflows/Checks/badge.svg?branch=master)
 ![Security audit](https://github.com/dswd/vpncloud/workflows/Security%20audit/badge.svg?branch=master)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdswd%2Fvpncloud.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdswd%2Fvpncloud?ref=badge_shield)
 
 **VpnCloud** is a high performance peer-to-peer mesh VPN over UDP supporting strong encryption, NAT traversal and a simple configuration. It establishes a fully-meshed self-healing VPN network in a peer-to-peer manner with strong end-to-end encryption based on elliptic curve keys and AES-256. VpnCloud creates a virtual network interface on the host and forwards all received data via UDP to the destination. It can work on TUN devices (IP based) and TAP devices (Ethernet based).
 
@@ -70,3 +71,7 @@ contributions are very welcome:
 
 ### Semantic Versioning
 This project uses [semantic versioning](http://semver.org).
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdswd%2Fvpncloud.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdswd%2Fvpncloud?ref=badge_large)
