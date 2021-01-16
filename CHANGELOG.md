@@ -4,6 +4,7 @@ This project follows [semantic versioning](http://semver.org).
 
 ### UNRELEASED
 
+- [added] Support for creating shell completions
 - [removed] Removed dummy device type
 - [changed] Updated depdendencies
 - [changed] Changed Rust version to 1.49.0

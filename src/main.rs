@@ -234,6 +234,10 @@ fn main() {
         );
         return
     }
+    if let Some(shell) = args.completion {
+        Args::clap().gen_completions_to(env!("CARGO_PKG_NAME"), shell, &mut io::stdout());
+        return
+    }
     let logger = try_fail!(DualLogger::new(args.log_file.as_ref()), "Failed to open logfile: {}");
     log::set_boxed_logger(Box::new(logger)).unwrap();
     assert!(!args.verbose || !args.quiet);

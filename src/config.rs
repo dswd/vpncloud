@@ -10,6 +10,7 @@ use std::{
     net::{IpAddr, Ipv6Addr, SocketAddr}
 };
 use structopt::StructOpt;
+use structopt::clap::Shell;
 
 
 pub const DEFAULT_PEER_TIMEOUT: u16 = 300;
@@ -325,7 +326,7 @@ pub struct Args {
     pub mode: Option<Mode>,
 
     /// The shared password to encrypt all traffic
-    #[structopt(short, long, required_unless_one = &["private-key", "config", "genkey", "version"], env)]
+    #[structopt(short, long, required_unless_one = &["private-key", "config", "genkey", "version", "completion"], env)]
     pub password: Option<String>,
 
     /// The private key to use
@@ -458,7 +459,11 @@ pub struct Args {
 
     /// Migrate an old config file
     #[structopt(long, alias = "migrate", requires = "config")]
-    pub migrate_config: bool
+    pub migrate_config: bool,
+
+    /// Generate shell completions
+    #[structopt(long)]
+    pub completion: Option<Shell>
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
