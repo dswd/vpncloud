@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use super::{device::Type, types::Mode, util::Duration};
 use crate::config::{ConfigFile, ConfigFileBeacon, ConfigFileDevice, ConfigFileStatsd, CryptoConfig};
 
@@ -117,7 +118,9 @@ impl OldConfigFile {
                 server: self.statsd_server
             }),
             switch_timeout: self.dst_timeout,
-            user: self.user
+            user: self.user,
+            event_script: None,
+            event_scripts: HashMap::new()
         }
     }
 }

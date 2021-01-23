@@ -36,7 +36,7 @@ struct IfReq {
 impl IfReq {
     fn new(name: &str) -> Self {
         assert!(name.len() < libc::IF_NAMESIZE);
-        let mut ifr_name = [0 as u8; libc::IF_NAMESIZE];
+        let mut ifr_name = [0; libc::IF_NAMESIZE];
         ifr_name[..name.len()].clone_from_slice(name.as_bytes());
         Self { ifr_name, data: IfReqData { _dummy: [0; 24] } }
     }
