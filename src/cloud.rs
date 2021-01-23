@@ -36,7 +36,7 @@ use crate::{
     table::ClaimTable,
     traffic::TrafficStats,
     types::{Address, Mode, NodeId, Range, RangeList},
-    util::{addr_nice, resolve, CtrlC, Duration, MsgBuffer, StatsdMsg, Time, TimeSource}
+    util::{addr_nice, bytes_to_hex, resolve, CtrlC, Duration, MsgBuffer, StatsdMsg, Time, TimeSource}
 };
 
 pub type Hash = BuildHasherDefault<FnvHasher>;
@@ -126,7 +126,12 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                     info!("Auto-claiming {} due to interface address", range);
                     claims.push(range);
                 }
-                Err(e) => error!("{}", e)
+                Err(Error::DeviceIo(_, e)) if e.kind() == io::ErrorKind::AddrNotAvailable => {
+                    info!("No address set on interface.")
+                }
+                Err(e) => {
+                    error!("{}", e)
+                }
             }
         }
         let now = TS::now();
@@ -644,7 +649,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                 ("PEER", format!("{:?}", addr_nice(addr))),
                 ("IFNAME", self.device.ifname().to_owned()),
                 ("CLAIMS", info.claims.iter().map(|r| format!("{:?}", r)).collect::<Vec<String>>().join(" ")),
-                ("NODE_ID", format!("{:?}", info.node_id)),
+                ("NODE_ID", bytes_to_hex(&info.node_id)),
             ],
             true
         );
@@ -673,7 +678,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                 vec![
                     ("PEER", format!("{:?}", addr)),
                     ("IFNAME", self.device.ifname().to_owned()),
-                    ("NODE_ID", format!("{:?}", peer.node_id)),
+                    ("NODE_ID", bytes_to_hex(&peer.node_id)),
                 ],
                 true
             );
