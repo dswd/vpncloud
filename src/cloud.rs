@@ -281,16 +281,18 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                 return Ok(())
             }
         }
+        if !addrs.is_empty() {
+            self.config.call_event_script(
+                "peer_connecting",
+                vec![("PEER", format!("{:?}", addr_nice(addrs[0]))), ("IFNAME", self.device.ifname().to_owned())],
+                true
+            );
+        }
         // Send a message to each resolved address
         for a in addrs {
             // Ignore error this time
             self.connect_sock(a).ok();
         }
-        self.config.call_event_script(
-            "peer_connecting",
-            vec![("PEER", format!("{:?}", addr)), ("IFNAME", self.device.ifname().to_owned())],
-            true
-        );
         Ok(())
     }
 
@@ -638,7 +640,12 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         info!("Added peer {}", addr_nice(addr));
         self.config.call_event_script(
             "peer_connected",
-            vec![("PEER", format!("{:?}", addr)), ("IFNAME", self.device.ifname().to_owned())],
+            vec![
+                ("PEER", format!("{:?}", addr_nice(addr))),
+                ("IFNAME", self.device.ifname().to_owned()),
+                ("CLAIMS", info.claims.iter().map(|r| format!("{:?}", r)).collect::<Vec<String>>().join(" ")),
+                ("NODE_ID", format!("{:?}", info.node_id)),
+            ],
             true
         );
         if let Some(init) = self.pending_inits.remove(&addr) {
@@ -658,14 +665,18 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     }
 
     fn remove_peer(&mut self, addr: SocketAddr) {
-        if let Some(_peer) = self.peers.remove(&addr) {
+        if let Some(peer) = self.peers.remove(&addr) {
             info!("Closing connection to {}", addr_nice(addr));
+            self.table.remove_claims(addr);
             self.config.call_event_script(
                 "peer_disconnected",
-                vec![("PEER", format!("{:?}", addr)), ("IFNAME", self.device.ifname().to_owned())],
+                vec![
+                    ("PEER", format!("{:?}", addr)),
+                    ("IFNAME", self.device.ifname().to_owned()),
+                    ("NODE_ID", format!("{:?}", peer.node_id)),
+                ],
                 true
             );
-            self.table.remove_claims(addr);
         }
     }
 
@@ -781,7 +792,10 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                     Ok(res) => {
                         self.config.call_event_script(
                             "peer_connecting",
-                            vec![("PEER", format!("{:?}", src)), ("IFNAME", self.device.ifname().to_owned())],
+                            vec![
+                                ("PEER", format!("{:?}", addr_nice(src))),
+                                ("IFNAME", self.device.ifname().to_owned()),
+                            ],
                             true
                         );
                         self.pending_inits.insert(src, init);
@@ -825,7 +839,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                 self.pending_inits.remove(&src);
                 self.config.call_event_script(
                     "peer_disconnected",
-                    vec![("PEER", format!("{:?}", src)), ("IFNAME", self.device.ifname().to_owned())],
+                    vec![("PEER", format!("{:?}", addr_nice(src))), ("IFNAME", self.device.ifname().to_owned())],
                     true
                 );
             }
