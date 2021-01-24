@@ -5,12 +5,12 @@
 use std::{
     cmp,
     collections::VecDeque,
+    convert::TryInto,
     fmt,
     fs::{self, File},
     io::{self, BufRead, BufReader, Cursor, Error as IoError, Read, Write},
     net::{Ipv4Addr, UdpSocket},
     os::unix::io::{AsRawFd, RawFd},
-    convert::TryInto,
     str,
     str::FromStr
 };
@@ -329,7 +329,7 @@ impl Device for MockDevice {
     }
 
     fn ifname(&self) -> &str {
-        unimplemented!()
+        "mock0"
     }
 
     fn read(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
