@@ -2,31 +2,31 @@
 // Copyright (C) 2015-2020  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
+use std::process::Command;
 use std::{
     fmt,
     net::{Ipv4Addr, SocketAddr, ToSocketAddrs, UdpSocket},
-    sync::atomic::{AtomicIsize, Ordering}
+    sync::atomic::{AtomicIsize, Ordering},
 };
 
 use crate::error::Error;
 
-#[cfg(not(target_os = "linux"))] use time;
+#[cfg(not(target_os = "linux"))]
+use time;
 
 use signal::{trap::Trap, Signal};
 use smallvec::SmallVec;
 use std::time::Instant;
 
-
 pub type Duration = u32;
 pub type Time = i64;
-
 
 #[derive(Clone)]
 pub struct MsgBuffer {
     space_before: usize,
     buffer: [u8; 65535],
     start: usize,
-    end: usize
+    end: usize,
 }
 
 impl MsgBuffer {
@@ -98,7 +98,6 @@ impl MsgBuffer {
     }
 }
 
-
 const HEX_CHARS: &[u8] = b"0123456789abcdef";
 
 pub fn bytes_to_hex(bytes: &[u8]) -> String {
@@ -113,12 +112,11 @@ pub fn bytes_to_hex(bytes: &[u8]) -> String {
 pub fn addr_nice(addr: SocketAddr) -> SocketAddr {
     if let SocketAddr::V6(v6addr) = addr {
         if let Some(ip) = v6addr.ip().to_ipv4() {
-            return (ip, addr.port()).into()
+            return (ip, addr.port()).into();
         }
     }
     addr
 }
-
 
 pub struct Encoder;
 
@@ -172,7 +170,6 @@ impl Encoder {
     }
 }
 
-
 macro_rules! fail {
     ($format:expr) => ( {
         use std::process;
@@ -215,17 +212,14 @@ pub fn get_internal_ip() -> Ipv4Addr {
     }
 }
 
-
 #[allow(unknown_lints, clippy::needless_pass_by_value)]
 pub fn resolve<Addr: ToSocketAddrs + fmt::Debug>(addr: Addr) -> Result<SmallVec<[SocketAddr; 4]>, Error> {
     let mut addrs =
         addr.to_socket_addrs().map_err(|_| Error::NameUnresolvable(format!("{:?}", addr)))?.collect::<SmallVec<_>>();
     // Try IPv4 first as it usually is faster
-    addrs.sort_by_key(|addr| {
-        match *addr {
-            SocketAddr::V4(_) => 4,
-            SocketAddr::V6(_) => 6
-        }
+    addrs.sort_by_key(|addr| match *addr {
+        SocketAddr::V4(_) => 4,
+        SocketAddr::V6(_) => 6,
     });
     // Remove duplicates in addrs (why are there duplicates???)
     addrs.dedup();
@@ -239,7 +233,6 @@ macro_rules! addr {
     }};
 }
 
-
 pub struct Bytes(pub u64);
 
 impl fmt::Display for Bytes {
@@ -248,31 +241,30 @@ impl fmt::Display for Bytes {
         if size >= 512.0 {
             size /= 1024.0;
         } else {
-            return write!(formatter, "{:.0} B", size)
+            return write!(formatter, "{:.0} B", size);
         }
         if size >= 512.0 {
             size /= 1024.0;
         } else {
-            return write!(formatter, "{:.1} KiB", size)
+            return write!(formatter, "{:.1} KiB", size);
         }
         if size >= 512.0 {
             size /= 1024.0;
         } else {
-            return write!(formatter, "{:.1} MiB", size)
+            return write!(formatter, "{:.1} MiB", size);
         }
         if size >= 512.0 {
             size /= 1024.0;
         } else {
-            return write!(formatter, "{:.1} GiB", size)
+            return write!(formatter, "{:.1} GiB", size);
         }
         write!(formatter, "{:.1} TiB", size)
     }
 }
 
-
 pub struct CtrlC {
     dummy_time: Instant,
-    trap: Trap
+    trap: Trap,
 }
 
 impl CtrlC {
@@ -292,7 +284,6 @@ impl Default for CtrlC {
         Self { dummy_time, trap }
     }
 }
-
 
 pub trait TimeSource: Sync + Copy + Send + 'static {
     fn now() -> Time;
@@ -336,7 +327,6 @@ impl TimeSource for MockTimeSource {
     }
 }
 
-
 /// Helper function that multiplies the base62 data in buf[0..buflen] by 16 and adds m to it
 fn base62_add_mult_16(buf: &mut [u8], mut buflen: usize, m: u8) -> usize {
     let mut d: usize = m as usize;
@@ -356,7 +346,7 @@ fn base62_add_mult_16(buf: &mut [u8], mut buflen: usize, m: u8) -> usize {
 const BASE62: [char; 62] = [
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
     'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
-    'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'
+    'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 ];
 
 pub fn to_base62(data: &[u8]) -> String {
@@ -382,7 +372,7 @@ pub fn from_base62(data: &str) -> Result<Vec<u8>, char> {
             '0'..='9' => ((c as usize) % ('0' as usize)),
             'A'..='Z' => ((c as usize) % ('A' as usize)) + 10,
             'a'..='z' => ((c as usize) % ('a' as usize)) + 36,
-            _ => return Err(c)
+            _ => return Err(c),
         };
         for item in &mut buf {
             val += *item as usize * 62;
@@ -397,11 +387,10 @@ pub fn from_base62(data: &str) -> Result<Vec<u8>, char> {
     Ok(buf)
 }
 
-
 #[derive(Default)]
 pub struct StatsdMsg {
     entries: Vec<String>,
-    key: Vec<String>
+    key: Vec<String>,
 }
 
 impl StatsdMsg {
@@ -426,6 +415,16 @@ impl StatsdMsg {
     }
 }
 
+pub fn run_cmd(mut cmd: Command) {
+    match cmd.status() {
+        Ok(status) => {
+            if !status.success() {
+                error!("Command returned error: {:?}", status.code())
+            }
+        }
+        Err(e) => error!("Failed to execute command {:?}: {}", cmd, e),
+    }
+}
 
 #[test]
 fn base62() {

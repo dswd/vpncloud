@@ -4,18 +4,19 @@
 
 use super::{device::Type, types::Mode, util::Duration};
 pub use crate::crypto::Config as CryptoConfig;
-
+use crate::util::run_cmd;
 use std::{
     cmp::max,
-    net::{IpAddr, Ipv6Addr, SocketAddr}
+    collections::HashMap,
+    ffi::OsStr,
+    net::{IpAddr, Ipv6Addr, SocketAddr},
+    process::Command,
+    thread
 };
-use structopt::StructOpt;
-use structopt::clap::Shell;
-
+use structopt::{clap::Shell, StructOpt};
 
 pub const DEFAULT_PEER_TIMEOUT: u16 = 300;
 pub const DEFAULT_PORT: u16 = 3210;
-
 
 fn parse_listen(addr: &str) -> SocketAddr {
     if let Some(addr) = addr.strip_prefix("*:") {
@@ -61,7 +62,9 @@ pub struct Config {
     pub statsd_server: Option<String>,
     pub statsd_prefix: Option<String>,
     pub user: Option<String>,
-    pub group: Option<String>
+    pub group: Option<String>,
+    pub hook: Option<String>,
+    pub hooks: HashMap<String, String>
 }
 
 impl Default for Config {
@@ -94,7 +97,9 @@ impl Default for Config {
             statsd_server: None,
             statsd_prefix: None,
             user: None,
-            group: None
+            group: None,
+            hook: None,
+            hooks: HashMap::new()
         }
     }
 }
@@ -199,6 +204,12 @@ impl Config {
         if !file.crypto.algorithms.is_empty() {
             self.crypto.algorithms = file.crypto.algorithms.clone();
         }
+        if let Some(val) = file.hook {
+            self.hook = Some(val)
+        }
+        for (k, v) in file.hooks {
+            self.hooks.insert(k, v);
+        }
     }
 
     pub fn merge_args(&mut self, mut args: Args) {
@@ -292,6 +303,16 @@ impl Config {
         if !args.algorithms.is_empty() {
             self.crypto.algorithms = args.algorithms.clone();
         }
+        for s in args.hook {
+            if s.contains(':') {
+                let pos = s.find(':').unwrap();
+                let name = &s[..pos];
+                let hook = &s[pos+1..];
+                self.hooks.insert(name.to_string(), hook.to_string());
+            } else {
+                self.hook = Some(s);
+            }
+        }
     }
 
     pub fn get_keepalive(&self) -> Duration {
@@ -300,8 +321,31 @@ impl Config {
             None => max(self.peer_timeout / 2 - 60, 1)
         }
     }
-}
 
+    pub fn call_hook(
+        &self, event: &'static str, envs: impl IntoIterator<Item = (&'static str, impl AsRef<OsStr>)>, detach: bool
+    ) {
+        let mut script = None;
+        if let Some(ref s) = self.hook {
+            script = Some(s);
+        }
+        if let Some(ref s) = self.hooks.get(event) {
+            script = Some(s);
+        }
+        if script.is_none() {
+            return
+        }
+        let script = script.unwrap();
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c").arg(script).envs(envs).env("EVENT", event);
+        debug!("Running event script: {:?}", cmd);
+        if detach {
+            thread::spawn(move || run_cmd(cmd));
+        } else {
+            run_cmd(cmd)
+        }
+    }
+}
 
 #[derive(StructOpt, Debug, Default)]
 pub struct Args {
@@ -463,7 +507,11 @@ pub struct Args {
 
     /// Generate shell completions
     #[structopt(long)]
-    pub completion: Option<Shell>
+    pub completion: Option<Shell>,
+
+    /// Call script on event
+    #[structopt(long)]
+    pub hook: Vec<String>
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
@@ -517,9 +565,10 @@ pub struct ConfigFile {
     pub stats_file: Option<String>,
     pub statsd: Option<ConfigFileStatsd>,
     pub user: Option<String>,
-    pub group: Option<String>
+    pub group: Option<String>,
+    pub hook: Option<String>,
+    pub hooks: HashMap<String, String>
 }
-
 
 #[test]
 fn config_file() {
@@ -587,7 +636,9 @@ statsd:
         statsd: Some(ConfigFileStatsd {
             server: Some("example.com:1234".to_string()),
             prefix: Some("prefix".to_string())
-        })
+        }),
+        hook: None,
+        hooks: HashMap::new()
     })
 }
 
@@ -621,9 +672,12 @@ fn default_config_as_default() {
         statsd_server: None,
         statsd_prefix: None,
         user: None,
-        group: None
+        group: None,
+        hook: None,
+        hooks: HashMap::new()
     };
-    let default_config_file = serde_yaml::from_str::<ConfigFile>(include_str!("../assets/example.net.disabled")).unwrap();
+    let default_config_file =
+        serde_yaml::from_str::<ConfigFile>(include_str!("../assets/example.net.disabled")).unwrap();
     default_config.merge_file(default_config_file);
     assert_eq!(default_config, Config::default());
 }
@@ -664,7 +718,9 @@ fn config_merge() {
         statsd: Some(ConfigFileStatsd {
             server: Some("example.com:1234".to_string()),
             prefix: Some("prefix".to_string())
-        })
+        }),
+        hook: None,
+        hooks: HashMap::new()
     });
     assert_eq!(config, Config {
         device_type: Type::Tun,
@@ -753,6 +809,8 @@ fn config_merge() {
         stats_file: Some("/var/log/vpncloud-mynet.stats".to_string()),
         statsd_server: Some("example.com:2345".to_string()),
         statsd_prefix: Some("prefix2".to_string()),
-        daemonize: true
+        daemonize: true,
+        hook: None,
+        hooks: HashMap::new()
     });
 }
