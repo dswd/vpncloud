@@ -140,9 +140,7 @@ fn setup_device(config: &Config) -> TunTapDevice {
         config.device_name
     );
     info!("Opened device {}", device.ifname());
-    config.call_event_script("device_setup", vec![
-        ("IFNAME", device.ifname())
-    ], true);
+    config.call_hook("device_setup", vec![("IFNAME", device.ifname())], true);
     if let Err(err) = device.set_mtu(None) {
         error!("Error setting optimal MTU on {}: {}", device.ifname(), err);
     }
@@ -162,9 +160,7 @@ fn setup_device(config: &Config) -> TunTapDevice {
             warn!("Your networking configuration might be affected by a vulnerability (https://vpncloud.ddswd.de/docs/security/cve-2019-14899/), please change your rp_filter setting to 1 (currently {}).", val);
         }
     }
-    config.call_event_script("device_configured", vec![
-        ("IFNAME", device.ifname())
-    ], true);
+    config.call_hook("device_configured", vec![("IFNAME", device.ifname())], true);
     device
 }
 

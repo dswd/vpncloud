@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use super::{device::Type, types::Mode, util::Duration};
 use crate::config::{ConfigFile, ConfigFileBeacon, ConfigFileDevice, ConfigFileStatsd, CryptoConfig};
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
 pub enum OldCryptoMethod {
@@ -113,14 +113,11 @@ impl OldConfigFile {
             pid_file: self.pid_file,
             port_forwarding: self.port_forwarding,
             stats_file: self.stats_file,
-            statsd: Some(ConfigFileStatsd {
-                prefix: self.statsd_prefix,
-                server: self.statsd_server
-            }),
+            statsd: Some(ConfigFileStatsd { prefix: self.statsd_prefix, server: self.statsd_server }),
             switch_timeout: self.dst_timeout,
             user: self.user,
-            event_script: None,
-            event_scripts: HashMap::new()
+            hook: None,
+            hooks: HashMap::new()
         }
     }
 }

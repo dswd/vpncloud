@@ -5,16 +5,15 @@
 use super::{device::Type, types::Mode, util::Duration};
 pub use crate::crypto::Config as CryptoConfig;
 use crate::util::run_cmd;
-use std::collections::HashMap;
-use std::ffi::OsStr;
-use std::process::Command;
 use std::{
     cmp::max,
+    collections::HashMap,
+    ffi::OsStr,
     net::{IpAddr, Ipv6Addr, SocketAddr},
-    thread,
+    process::Command,
+    thread
 };
-use structopt::clap::Shell;
-use structopt::StructOpt;
+use structopt::{clap::Shell, StructOpt};
 
 pub const DEFAULT_PEER_TIMEOUT: u16 = 300;
 pub const DEFAULT_PORT: u16 = 3210;
@@ -64,8 +63,8 @@ pub struct Config {
     pub statsd_prefix: Option<String>,
     pub user: Option<String>,
     pub group: Option<String>,
-    pub event_script: Option<String>,
-    pub event_scripts: HashMap<String, String>,
+    pub hook: Option<String>,
+    pub hooks: HashMap<String, String>
 }
 
 impl Default for Config {
@@ -99,8 +98,8 @@ impl Default for Config {
             statsd_prefix: None,
             user: None,
             group: None,
-            event_script: None,
-            event_scripts: HashMap::new(),
+            hook: None,
+            hooks: HashMap::new()
         }
     }
 }
@@ -205,11 +204,11 @@ impl Config {
         if !file.crypto.algorithms.is_empty() {
             self.crypto.algorithms = file.crypto.algorithms.clone();
         }
-        if let Some(val) = file.event_script {
-            self.event_script = Some(val)
+        if let Some(val) = file.hook {
+            self.hook = Some(val)
         }
-        for (k, v) in file.event_scripts {
-            self.event_scripts.insert(k, v);
+        for (k, v) in file.hooks {
+            self.hooks.insert(k, v);
         }
     }
 
@@ -304,31 +303,37 @@ impl Config {
         if !args.algorithms.is_empty() {
             self.crypto.algorithms = args.algorithms.clone();
         }
-        for s in args.event_script {
-            self.event_script = Some(s);
-            //TODO: parse params
+        for s in args.hook {
+            if s.contains(':') {
+                let pos = s.find(':').unwrap();
+                let name = &s[..pos];
+                let hook = &s[pos+1..];
+                self.hooks.insert(name.to_string(), hook.to_string());
+            } else {
+                self.hook = Some(s);
+            }
         }
     }
 
     pub fn get_keepalive(&self) -> Duration {
         match self.keepalive {
             Some(dur) => dur,
-            None => max(self.peer_timeout / 2 - 60, 1),
+            None => max(self.peer_timeout / 2 - 60, 1)
         }
     }
 
-    pub fn call_event_script(
-        &self, event: &'static str, envs: impl IntoIterator<Item = (&'static str, impl AsRef<OsStr>)>, detach: bool,
+    pub fn call_hook(
+        &self, event: &'static str, envs: impl IntoIterator<Item = (&'static str, impl AsRef<OsStr>)>, detach: bool
     ) {
         let mut script = None;
-        if let Some(ref s) = self.event_script {
+        if let Some(ref s) = self.hook {
             script = Some(s);
         }
-        if let Some(ref s) = self.event_scripts.get(event) {
+        if let Some(ref s) = self.hooks.get(event) {
             script = Some(s);
         }
         if script.is_none() {
-            return;
+            return
         }
         let script = script.unwrap();
         let mut cmd = Command::new("sh");
@@ -506,7 +511,7 @@ pub struct Args {
 
     /// Call script on event
     #[structopt(long)]
-    pub event_script: Vec<String>,
+    pub hook: Vec<String>
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
@@ -516,7 +521,7 @@ pub struct ConfigFileDevice {
     pub type_: Option<Type>,
     pub name: Option<String>,
     pub path: Option<String>,
-    pub fix_rp_filter: Option<bool>,
+    pub fix_rp_filter: Option<bool>
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
@@ -525,14 +530,14 @@ pub struct ConfigFileBeacon {
     pub store: Option<String>,
     pub load: Option<String>,
     pub interval: Option<Duration>,
-    pub password: Option<String>,
+    pub password: Option<String>
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields, default)]
 pub struct ConfigFileStatsd {
     pub server: Option<String>,
-    pub prefix: Option<String>,
+    pub prefix: Option<String>
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
@@ -561,8 +566,8 @@ pub struct ConfigFile {
     pub statsd: Option<ConfigFileStatsd>,
     pub user: Option<String>,
     pub group: Option<String>,
-    pub event_script: Option<String>,
-    pub event_scripts: HashMap<String, String>,
+    pub hook: Option<String>,
+    pub hooks: HashMap<String, String>
 }
 
 #[test]
@@ -598,46 +603,43 @@ statsd:
   server: example.com:1234
   prefix: prefix
     ";
-    assert_eq!(
-        serde_yaml::from_str::<ConfigFile>(config_file).unwrap(),
-        ConfigFile {
-            device: Some(ConfigFileDevice {
-                type_: Some(Type::Tun),
-                name: Some("vpncloud%d".to_string()),
-                path: Some("/dev/net/tun".to_string()),
-                fix_rp_filter: None
-            }),
-            ip: Some("10.0.1.1/16".to_string()),
-            ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
-            ifdown: Some("true".to_string()),
-            crypto: CryptoConfig::default(),
-            listen: None,
-            peers: Some(vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()]),
-            peer_timeout: Some(600),
-            keepalive: Some(840),
-            beacon: Some(ConfigFileBeacon {
-                store: Some("/run/vpncloud.beacon.out".to_string()),
-                load: Some("/run/vpncloud.beacon.in".to_string()),
-                interval: Some(3600),
-                password: Some("test123".to_string())
-            }),
-            mode: Some(Mode::Normal),
-            switch_timeout: Some(300),
-            claims: Some(vec!["10.0.1.0/24".to_string()]),
-            auto_claim: None,
-            port_forwarding: Some(true),
-            user: Some("nobody".to_string()),
-            group: Some("nogroup".to_string()),
-            pid_file: Some("/run/vpncloud.run".to_string()),
-            stats_file: Some("/var/log/vpncloud.stats".to_string()),
-            statsd: Some(ConfigFileStatsd {
-                server: Some("example.com:1234".to_string()),
-                prefix: Some("prefix".to_string())
-            }),
-            event_script: None,
-            event_scripts: HashMap::new()
-        }
-    )
+    assert_eq!(serde_yaml::from_str::<ConfigFile>(config_file).unwrap(), ConfigFile {
+        device: Some(ConfigFileDevice {
+            type_: Some(Type::Tun),
+            name: Some("vpncloud%d".to_string()),
+            path: Some("/dev/net/tun".to_string()),
+            fix_rp_filter: None
+        }),
+        ip: Some("10.0.1.1/16".to_string()),
+        ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
+        ifdown: Some("true".to_string()),
+        crypto: CryptoConfig::default(),
+        listen: None,
+        peers: Some(vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()]),
+        peer_timeout: Some(600),
+        keepalive: Some(840),
+        beacon: Some(ConfigFileBeacon {
+            store: Some("/run/vpncloud.beacon.out".to_string()),
+            load: Some("/run/vpncloud.beacon.in".to_string()),
+            interval: Some(3600),
+            password: Some("test123".to_string())
+        }),
+        mode: Some(Mode::Normal),
+        switch_timeout: Some(300),
+        claims: Some(vec!["10.0.1.0/24".to_string()]),
+        auto_claim: None,
+        port_forwarding: Some(true),
+        user: Some("nobody".to_string()),
+        group: Some("nogroup".to_string()),
+        pid_file: Some("/run/vpncloud.run".to_string()),
+        stats_file: Some("/var/log/vpncloud.stats".to_string()),
+        statsd: Some(ConfigFileStatsd {
+            server: Some("example.com:1234".to_string()),
+            prefix: Some("prefix".to_string())
+        }),
+        hook: None,
+        hooks: HashMap::new()
+    })
 }
 
 #[test]
@@ -671,8 +673,8 @@ fn default_config_as_default() {
         statsd_prefix: None,
         user: None,
         group: None,
-        event_script: None,
-        event_scripts: HashMap::new(),
+        hook: None,
+        hooks: HashMap::new()
     };
     let default_config_file =
         serde_yaml::from_str::<ConfigFile>(include_str!("../assets/example.net.disabled")).unwrap();
@@ -688,7 +690,7 @@ fn config_merge() {
             type_: Some(Type::Tun),
             name: Some("vpncloud%d".to_string()),
             path: None,
-            fix_rp_filter: None,
+            fix_rp_filter: None
         }),
         ip: None,
         ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
@@ -702,7 +704,7 @@ fn config_merge() {
             store: Some("/run/vpncloud.beacon.out".to_string()),
             load: Some("/run/vpncloud.beacon.in".to_string()),
             interval: Some(7200),
-            password: Some("test123".to_string()),
+            password: Some("test123".to_string())
         }),
         mode: Some(Mode::Normal),
         switch_timeout: Some(300),
@@ -715,41 +717,38 @@ fn config_merge() {
         stats_file: Some("/var/log/vpncloud.stats".to_string()),
         statsd: Some(ConfigFileStatsd {
             server: Some("example.com:1234".to_string()),
-            prefix: Some("prefix".to_string()),
+            prefix: Some("prefix".to_string())
         }),
-        event_script: None,
-        event_scripts: HashMap::new(),
+        hook: None,
+        hooks: HashMap::new()
     });
-    assert_eq!(
-        config,
-        Config {
-            device_type: Type::Tun,
-            device_name: "vpncloud%d".to_string(),
-            device_path: None,
-            ip: None,
-            ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
-            ifdown: Some("true".to_string()),
-            listen: "[::]:3210".parse::<SocketAddr>().unwrap(),
-            peers: vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()],
-            peer_timeout: 600,
-            keepalive: Some(840),
-            switch_timeout: 300,
-            beacon_store: Some("/run/vpncloud.beacon.out".to_string()),
-            beacon_load: Some("/run/vpncloud.beacon.in".to_string()),
-            beacon_interval: 7200,
-            beacon_password: Some("test123".to_string()),
-            mode: Mode::Normal,
-            port_forwarding: true,
-            claims: vec!["10.0.1.0/24".to_string()],
-            user: Some("nobody".to_string()),
-            group: Some("nogroup".to_string()),
-            pid_file: Some("/run/vpncloud.run".to_string()),
-            stats_file: Some("/var/log/vpncloud.stats".to_string()),
-            statsd_server: Some("example.com:1234".to_string()),
-            statsd_prefix: Some("prefix".to_string()),
-            ..Default::default()
-        }
-    );
+    assert_eq!(config, Config {
+        device_type: Type::Tun,
+        device_name: "vpncloud%d".to_string(),
+        device_path: None,
+        ip: None,
+        ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
+        ifdown: Some("true".to_string()),
+        listen: "[::]:3210".parse::<SocketAddr>().unwrap(),
+        peers: vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()],
+        peer_timeout: 600,
+        keepalive: Some(840),
+        switch_timeout: 300,
+        beacon_store: Some("/run/vpncloud.beacon.out".to_string()),
+        beacon_load: Some("/run/vpncloud.beacon.in".to_string()),
+        beacon_interval: 7200,
+        beacon_password: Some("test123".to_string()),
+        mode: Mode::Normal,
+        port_forwarding: true,
+        claims: vec!["10.0.1.0/24".to_string()],
+        user: Some("nobody".to_string()),
+        group: Some("nogroup".to_string()),
+        pid_file: Some("/run/vpncloud.run".to_string()),
+        stats_file: Some("/var/log/vpncloud.stats".to_string()),
+        statsd_server: Some("example.com:1234".to_string()),
+        statsd_prefix: Some("prefix".to_string()),
+        ..Default::default()
+    });
     config.merge_args(Args {
         type_: Some(Type::Tap),
         device: Some("vpncloud0".to_string()),
@@ -778,43 +777,40 @@ fn config_merge() {
         group: Some("root".to_string()),
         ..Default::default()
     });
-    assert_eq!(
-        config,
-        Config {
-            device_type: Type::Tap,
-            device_name: "vpncloud0".to_string(),
-            device_path: Some("/dev/null".to_string()),
-            fix_rp_filter: false,
-            ip: None,
-            ifup: Some("ifconfig $IFNAME 10.0.1.2/16 mtu 1400 up".to_string()),
-            ifdown: Some("ifconfig $IFNAME down".to_string()),
-            crypto: CryptoConfig { password: Some("anothersecret".to_string()), ..CryptoConfig::default() },
-            listen: "[::]:3211".parse::<SocketAddr>().unwrap(),
-            peers: vec![
-                "remote.machine.foo:3210".to_string(),
-                "remote.machine.bar:3210".to_string(),
-                "another:3210".to_string()
-            ],
-            peer_timeout: 1801,
-            keepalive: Some(850),
-            switch_timeout: 301,
-            beacon_store: Some("/run/vpncloud.beacon.out2".to_string()),
-            beacon_load: Some("/run/vpncloud.beacon.in2".to_string()),
-            beacon_interval: 3600,
-            beacon_password: Some("test1234".to_string()),
-            mode: Mode::Switch,
-            port_forwarding: false,
-            claims: vec!["10.0.1.0/24".to_string()],
-            auto_claim: true,
-            user: Some("root".to_string()),
-            group: Some("root".to_string()),
-            pid_file: Some("/run/vpncloud-mynet.run".to_string()),
-            stats_file: Some("/var/log/vpncloud-mynet.stats".to_string()),
-            statsd_server: Some("example.com:2345".to_string()),
-            statsd_prefix: Some("prefix2".to_string()),
-            daemonize: true,
-            event_script: None,
-            event_scripts: HashMap::new()
-        }
-    );
+    assert_eq!(config, Config {
+        device_type: Type::Tap,
+        device_name: "vpncloud0".to_string(),
+        device_path: Some("/dev/null".to_string()),
+        fix_rp_filter: false,
+        ip: None,
+        ifup: Some("ifconfig $IFNAME 10.0.1.2/16 mtu 1400 up".to_string()),
+        ifdown: Some("ifconfig $IFNAME down".to_string()),
+        crypto: CryptoConfig { password: Some("anothersecret".to_string()), ..CryptoConfig::default() },
+        listen: "[::]:3211".parse::<SocketAddr>().unwrap(),
+        peers: vec![
+            "remote.machine.foo:3210".to_string(),
+            "remote.machine.bar:3210".to_string(),
+            "another:3210".to_string()
+        ],
+        peer_timeout: 1801,
+        keepalive: Some(850),
+        switch_timeout: 301,
+        beacon_store: Some("/run/vpncloud.beacon.out2".to_string()),
+        beacon_load: Some("/run/vpncloud.beacon.in2".to_string()),
+        beacon_interval: 3600,
+        beacon_password: Some("test1234".to_string()),
+        mode: Mode::Switch,
+        port_forwarding: false,
+        claims: vec!["10.0.1.0/24".to_string()],
+        auto_claim: true,
+        user: Some("root".to_string()),
+        group: Some("root".to_string()),
+        pid_file: Some("/run/vpncloud-mynet.run".to_string()),
+        stats_file: Some("/var/log/vpncloud-mynet.stats".to_string()),
+        statsd_server: Some("example.com:2345".to_string()),
+        statsd_prefix: Some("prefix2".to_string()),
+        daemonize: true,
+        hook: None,
+        hooks: HashMap::new()
+    });
 }

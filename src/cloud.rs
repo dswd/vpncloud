@@ -129,9 +129,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                 Err(Error::DeviceIo(_, e)) if e.kind() == io::ErrorKind::AddrNotAvailable => {
                     info!("No address set on interface.")
                 }
-                Err(e) => {
-                    error!("{}", e)
-                }
+                Err(e) => error!("{}", e)
             }
         }
         let now = TS::now();
@@ -287,7 +285,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             }
         }
         if !addrs.is_empty() {
-            self.config.call_event_script(
+            self.config.call_hook(
                 "peer_connecting",
                 vec![("PEER", format!("{:?}", addr_nice(addrs[0]))), ("IFNAME", self.device.ifname().to_owned())],
                 true
@@ -643,7 +641,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
 
     fn add_new_peer(&mut self, addr: SocketAddr, info: NodeInfo) -> Result<(), Error> {
         info!("Added peer {}", addr_nice(addr));
-        self.config.call_event_script(
+        self.config.call_hook(
             "peer_connected",
             vec![
                 ("PEER", format!("{:?}", addr_nice(addr))),
@@ -673,7 +671,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         if let Some(peer) = self.peers.remove(&addr) {
             info!("Closing connection to {}", addr_nice(addr));
             self.table.remove_claims(addr);
-            self.config.call_event_script(
+            self.config.call_hook(
                 "peer_disconnected",
                 vec![
                     ("PEER", format!("{:?}", addr)),
@@ -795,7 +793,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                 let msg_result = init.handle_message(data);
                 match msg_result {
                     Ok(res) => {
-                        self.config.call_event_script(
+                        self.config.call_hook(
                             "peer_connecting",
                             vec![
                                 ("PEER", format!("{:?}", addr_nice(src))),
@@ -842,7 +840,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                 debug!("Fatal crypto init error from {}: {}", src, e);
                 info!("Closing pending connection to {} due to error in crypto init", addr_nice(src));
                 self.pending_inits.remove(&src);
-                self.config.call_event_script(
+                self.config.call_hook(
                     "peer_disconnected",
                     vec![("PEER", format!("{:?}", addr_nice(src))), ("IFNAME", self.device.ifname().to_owned())],
                     true
@@ -878,7 +876,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         let waiter = try_fail!(WaitImpl::new(&self.socket, &self.device, 1000), "Failed to setup poll: {}");
         let mut buffer = MsgBuffer::new(SPACE_BEFORE);
         let mut poll_error = false;
-        self.config.call_event_script("vpn_started", vec![("IFNAME", self.device.ifname())], true);
+        self.config.call_hook("vpn_started", vec![("IFNAME", self.device.ifname())], true);
         for evt in waiter {
             match evt {
                 WaitResult::Error(err) => {
@@ -904,7 +902,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             }
         }
         info!("Shutting down...");
-        self.config.call_event_script("vpn_shutdown", vec![("IFNAME", self.device.ifname())], true);
+        self.config.call_hook("vpn_shutdown", vec![("IFNAME", self.device.ifname())], true);
         buffer.clear();
         self.broadcast_msg(MESSAGE_TYPE_CLOSE, &mut buffer).ok();
         if let Some(ref path) = self.config.beacon_store {
