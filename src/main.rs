@@ -5,7 +5,7 @@
 #![cfg_attr(feature = "bench", feature(test))]
 
 #[macro_use] extern crate log;
-#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate serde;
 
 #[cfg(test)] extern crate tempfile;
 #[cfg(feature = "bench")] extern crate test;
