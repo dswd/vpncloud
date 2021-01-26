@@ -30,7 +30,8 @@ use crate::{
     device::{Device, Type},
     error::Error,
     messages::{
-        AddrList, NodeInfo, PeerInfo, MESSAGE_TYPE_CLOSE, MESSAGE_TYPE_DATA, MESSAGE_TYPE_KEEPALIVE, MESSAGE_TYPE_NODE_INFO
+        AddrList, NodeInfo, PeerInfo, MESSAGE_TYPE_CLOSE, MESSAGE_TYPE_DATA, MESSAGE_TYPE_KEEPALIVE,
+        MESSAGE_TYPE_NODE_INFO
     },
     net::{mapped_addr, Socket},
     payload::Protocol,
@@ -39,7 +40,7 @@ use crate::{
     table::ClaimTable,
     traffic::TrafficStats,
     types::{Address, Mode, NodeId, Range, RangeList},
-    util::{addr_nice, resolve, CtrlC, Duration, MsgBuffer, StatsdMsg, Time, TimeSource}
+    util::{addr_nice, bytes_to_hex, resolve, CtrlC, Duration, MsgBuffer, StatsdMsg, Time, TimeSource}
 };
 
 pub type Hash = BuildHasherDefault<FnvHasher>;
@@ -128,6 +129,9 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                     let range = Range { base: Address::from_ipv4(ip), prefix_len: 32 };
                     info!("Auto-claiming {} due to interface address", range);
                     claims.push(range);
+                }
+                Err(Error::DeviceIo(_, e)) if e.kind() == io::ErrorKind::AddrNotAvailable => {
+                    info!("No address set on interface.")
                 }
                 Err(e) => error!("{}", e)
             }
@@ -229,6 +233,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             self.own_addresses.push(pfw.get_internal_ip().into());
             self.own_addresses.push(pfw.get_external_ip().into());
         }
+        // TODO: detect address changes and call event
         Ok(())
     }
 
@@ -282,6 +287,13 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             {
                 return Ok(())
             }
+        }
+        if !addrs.is_empty() {
+            self.config.call_hook(
+                "peer_connecting",
+                vec![("PEER", format!("{:?}", addr_nice(addrs[0]))), ("IFNAME", self.device.ifname().to_owned())],
+                true
+            );
         }
         // Send a message to each resolved address
         for a in addrs {
@@ -458,6 +470,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             self.next_stats_out = now + STATS_INTERVAL;
             self.traffic.period(Some(5));
         }
+        // TODO: every 5 minutes: EVENT periodic
         if let Some(peers) = self.beacon_serializer.get_cmd_results() {
             debug!("Loaded beacon with peers: {:?}", peers);
             for peer in peers {
@@ -632,6 +645,16 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
 
     fn add_new_peer(&mut self, addr: SocketAddr, info: NodeInfo) -> Result<(), Error> {
         info!("Added peer {}", addr_nice(addr));
+        self.config.call_hook(
+            "peer_connected",
+            vec![
+                ("PEER", format!("{:?}", addr_nice(addr))),
+                ("IFNAME", self.device.ifname().to_owned()),
+                ("CLAIMS", info.claims.iter().map(|r| format!("{:?}", r)).collect::<Vec<String>>().join(" ")),
+                ("NODE_ID", bytes_to_hex(&info.node_id)),
+            ],
+            true
+        );
         if let Some(init) = self.pending_inits.remove(&addr) {
             self.peers.insert(addr, PeerData {
                 addrs: info.addrs.clone(),
@@ -649,9 +672,18 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     }
 
     fn remove_peer(&mut self, addr: SocketAddr) {
-        if let Some(_peer) = self.peers.remove(&addr) {
+        if let Some(peer) = self.peers.remove(&addr) {
             info!("Closing connection to {}", addr_nice(addr));
             self.table.remove_claims(addr);
+            self.config.call_hook(
+                "peer_disconnected",
+                vec![
+                    ("PEER", format!("{:?}", addr)),
+                    ("IFNAME", self.device.ifname().to_owned()),
+                    ("NODE_ID", bytes_to_hex(&peer.node_id)),
+                ],
+                true
+            );
         }
     }
 
@@ -765,6 +797,14 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                 let msg_result = init.handle_message(data);
                 match msg_result {
                     Ok(res) => {
+                        self.config.call_hook(
+                            "peer_connecting",
+                            vec![
+                                ("PEER", format!("{:?}", addr_nice(src))),
+                                ("IFNAME", self.device.ifname().to_owned()),
+                            ],
+                            true
+                        );
                         self.pending_inits.insert(src, init);
                         Ok(res)
                     }
@@ -804,6 +844,11 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                 debug!("Fatal crypto init error from {}: {}", src, e);
                 info!("Closing pending connection to {} due to error in crypto init", addr_nice(src));
                 self.pending_inits.remove(&src);
+                self.config.call_hook(
+                    "peer_disconnected",
+                    vec![("PEER", format!("{:?}", addr_nice(src))), ("IFNAME", self.device.ifname().to_owned())],
+                    true
+                );
             }
             Err(e @ Error::CryptoInit(_)) => {
                 debug!("Recoverable init error from {}: {}", src, e);
@@ -835,6 +880,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         let waiter = try_fail!(WaitImpl::new(&self.socket, &self.device, 1000), "Failed to setup poll: {}");
         let mut buffer = MsgBuffer::new(SPACE_BEFORE);
         let mut poll_error = false;
+        self.config.call_hook("vpn_started", vec![("IFNAME", self.device.ifname())], true);
         for evt in waiter {
             match evt {
                 WaitResult::Error(err) => {
@@ -860,6 +906,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             }
         }
         info!("Shutting down...");
+        self.config.call_hook("vpn_shutdown", vec![("IFNAME", self.device.ifname())], true);
         buffer.clear();
         self.broadcast_msg(MESSAGE_TYPE_CLOSE, &mut buffer).ok();
         if let Some(ref path) = self.config.beacon_store {

@@ -5,7 +5,7 @@
 #![cfg_attr(feature = "bench", feature(test))]
 
 #[macro_use] extern crate log;
-#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate serde;
 
 #[cfg(test)] extern crate tempfile;
 #[cfg(feature = "bench")] extern crate test;
@@ -140,6 +140,7 @@ fn setup_device(config: &Config) -> TunTapDevice {
         config.device_name
     );
     info!("Opened device {}", device.ifname());
+    config.call_hook("device_setup", vec![("IFNAME", device.ifname())], true);
     if let Err(err) = device.set_mtu(None) {
         error!("Error setting optimal MTU on {}: {}", device.ifname(), err);
     }
@@ -159,6 +160,7 @@ fn setup_device(config: &Config) -> TunTapDevice {
             warn!("Your networking configuration might be affected by a vulnerability (https://vpncloud.ddswd.de/docs/security/cve-2019-14899/), please change your rp_filter setting to 1 (currently {}).", val);
         }
     }
+    config.call_hook("device_configured", vec![("IFNAME", device.ifname())], true);
     device
 }
 
@@ -232,6 +234,10 @@ fn main() {
         println!(
             "Attention: Keep the private key secret and use only the public key on other nodes to establish trust."
         );
+        return
+    }
+    if let Some(shell) = args.completion {
+        Args::clap().gen_completions_to(env!("CARGO_PKG_NAME"), shell, &mut io::stdout());
         return
     }
     let logger = try_fail!(DualLogger::new(args.log_file.as_ref()), "Failed to open logfile: {}");
