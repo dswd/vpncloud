@@ -23,6 +23,7 @@ impl Protocol for Frame {
     /// # Errors
     /// This method will fail when the given data is not a valid ethernet frame.
     fn parse(data: &[u8]) -> Result<(Address, Address), Error> {
+        // HOT PATH
         let mut cursor = Cursor::new(data);
         let mut src = [0; 16];
         let mut dst = [0; 16];
@@ -90,6 +91,7 @@ impl Protocol for Packet {
     /// # Errors
     /// This method will fail when the given data is not a valid ipv4 and ipv6 packet.
     fn parse(data: &[u8]) -> Result<(Address, Address), Error> {
+        // HOT PATH
         if data.is_empty() {
             return Err(Error::Parse("Empty header"))
         }

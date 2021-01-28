@@ -41,6 +41,7 @@ impl<TS: TimeSource> ClaimTable<TS> {
     }
 
     pub fn cache(&mut self, addr: Address, peer: SocketAddr) {
+        // HOT PATH
         self.cache.insert(addr, CacheValue { peer, timeout: TS::now() + self.cache_timeout as Time });
     }
 
@@ -89,9 +90,11 @@ impl<TS: TimeSource> ClaimTable<TS> {
     }
 
     pub fn lookup(&mut self, addr: Address) -> Option<SocketAddr> {
+        // HOT PATH
         if let Some(entry) = self.cache.get(&addr) {
             return Some(entry.peer)
         }
+        // COLD PATH
         let mut found = None;
         let mut prefix_len = -1;
         for entry in &self.claims {

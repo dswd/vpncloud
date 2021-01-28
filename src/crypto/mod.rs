@@ -347,6 +347,7 @@ impl<P: Payload> PeerCrypto<P> {
     }
 
     fn decrypt_message(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
+        // HOT PATH
         if self.unencrypted {
             return Ok(())
         }
@@ -354,18 +355,22 @@ impl<P: Payload> PeerCrypto<P> {
     }
 
     pub fn handle_message(&mut self, buffer: &mut MsgBuffer) -> Result<MessageResult<P>, Error> {
+        // HOT PATH
         if buffer.is_empty() {
             return Err(Error::InvalidCryptoState("No message in buffer"))
         }
         if is_init_message(buffer.buffer()) {
+            // COLD PATH
             debug!("Received init message");
             buffer.take_prefix();
             self.handle_init_message(buffer)
         } else {
+            // HOT PATH
             debug!("Received encrypted message");
             self.decrypt_message(buffer)?;
             let msg_type = buffer.take_prefix();
             if msg_type == MESSAGE_TYPE_ROTATION {
+                // COLD PATH
                 debug!("Received rotation message");
                 self.handle_rotate_message(buffer.buffer())?;
                 buffer.clear();
@@ -377,6 +382,7 @@ impl<P: Payload> PeerCrypto<P> {
     }
 
     pub fn send_message(&mut self, type_: u8, buffer: &mut MsgBuffer) -> Result<(), Error> {
+        // HOT PATH
         assert_ne!(type_, MESSAGE_TYPE_ROTATION);
         buffer.prepend_byte(type_);
         self.encrypt_message(buffer)
@@ -419,6 +425,7 @@ impl<P: Payload> PeerCrypto<P> {
 }
 
 pub fn is_init_message(msg: &[u8]) -> bool {
+    // HOT PATH
     !msg.is_empty() && msg[0] == INIT_MESSAGE_FIRST_BYTE
 }
 
