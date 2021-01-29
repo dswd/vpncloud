@@ -13,6 +13,7 @@ use std::{
 use super::util::{MockTimeSource, MsgBuffer, Time, TimeSource};
 
 pub fn mapped_addr(addr: SocketAddr) -> SocketAddr {
+    // HOT PATH
     match addr {
         SocketAddr::V4(addr4) => SocketAddr::new(IpAddr::V6(addr4.ip().to_ipv6_mapped()), addr4.port()),
         _ => addr
@@ -131,20 +132,5 @@ impl Socket for MockSocket {
 
     fn address(&self) -> Result<SocketAddr, io::Error> {
         Ok(self.address)
-    }
-}
-
-#[cfg(feature = "bench")]
-mod bench {
-    use std::net::{Ipv4Addr, SocketAddrV4, UdpSocket};
-    use test::Bencher;
-
-    #[bench]
-    fn udp_send(b: &mut Bencher) {
-        let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let data = [0; 1400];
-        let addr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 1);
-        b.iter(|| sock.send_to(&data, &addr).unwrap());
-        b.bytes = 1400;
     }
 }

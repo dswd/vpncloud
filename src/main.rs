@@ -2,13 +2,10 @@
 // Copyright (C) 2015-2020  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-#![cfg_attr(feature = "bench", feature(test))]
-
 #[macro_use] extern crate log;
 #[macro_use] extern crate serde;
 
 #[cfg(test)] extern crate tempfile;
-#[cfg(feature = "bench")] extern crate test;
 
 #[macro_use]
 pub mod util;

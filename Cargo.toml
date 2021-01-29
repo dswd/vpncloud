@@ -33,11 +33,16 @@ smallvec = "1.6"
 
 [dev-dependencies]
 tempfile = "3"
+criterion = "0.3"
 
 [features]
 default = ["nat"]
 bench = []
 nat = ["igd"]
+
+[[bench]]
+name = "bench"
+harness = false
 
 [profile.release]
 lto = true

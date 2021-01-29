@@ -1,41 +1,41 @@
-//! This module implements a crypto core for encrypting and decrypting message streams
-//!
-//! The crypto core only encrypts and decrypts messages, using given keys. Negotiating and rotating the keys is out of
-//! scope of the crypto core. The crypto core assumes that the remote node will always have the necessary key to decrypt
-//! the message.
-//!
-//! The crypto core encrypts messages in place, writes some extra data (key id and nonce) into a given space and
-//! includes the given header data in the authentication tag. When decrypting messages, the crypto core reads the extra
-//! data, uses the key id to find the right key to decrypting the message and then decrypts the message, using the given
-//! nonce and including the given header data in the verification of the authentication tag.
-//!
-//! While the core only uses a single key at a time for encrypting messages, it is ready to decrypt messages based on
-//! one of 4 stored keys (the encryption key being one of them). An external key rotation is responsible for adding the
-//! key to the remote peer before switching to the key on the local peer for encryption.
-//!
-//! As mentioned, the encryption and decryption works in place. Therefore the parameter payload_and_tag contains (when
-//! decrypting) or provides space for (when encrypting) the payload and the authentication tag. When encrypting, that
-//! means, that the last TAG_LEN bytes of payload_and_tag must be reserved for the tag and must not contain payload
-//! bytes.
-//!
-//! The nonce is a value of 12 bytes (192 bits). Since both nodes can use the same key for encryption, the most
-//! significant byte (msb) of the nonce is initialized differently on both peers: one peer uses the value 0x00 and the
-//! other one 0x80. That means that the nonce space is essentially divided in two halves, one for each node.
-//!
-//! To save space and keep the encrypted data aligned to 64 bits, not all bytes of the nonce are transferred. Instead,
-//! only 7 bytes are included in messages (another byte is used for the key id, hence 64 bit alignment). The rest of the
-//! nonce is deduced by the nodes: All other bytes are assumed to be 0x00, except for the most significant byte, which
-//! is assumed to be the opposite ones own msb. This has two nice effects:
-//! 1) Long before the nonce could theoretically repeat, the messages can no longer be decrypted by the peer as the
-//! higher bytes are no longer zero as assumed.
-//! 2) By deducing the msb to be the opposite of ones own msb, it is no longer possible for an attacker to redirect a
-//! message back to the sender because then the assumed nonce will be wrong and the message fails to decrypt. Otherwise,
-//! this could lead to problems as nodes would be able to accidentally decrypt their own messages.
-//!
-//! In order to be resistent against replay attacks but allow for reordering of messages, the crypto core uses nonce
-//! pinning. For every active key, the biggest nonce seen so far is being tracked. Every second, the biggest nonce seen
-//! one second ago plus 1 becomes the minimum nonce that is accepted for that key. That means, that reordering can
-//! happen within one second but after a second, old messages will not be accepted anymore.
+// This module implements a crypto core for encrypting and decrypting message streams
+//
+// The crypto core only encrypts and decrypts messages, using given keys. Negotiating and rotating the keys is out of
+// scope of the crypto core. The crypto core assumes that the remote node will always have the necessary key to decrypt
+// the message.
+//
+// The crypto core encrypts messages in place, writes some extra data (key id and nonce) into a given space and
+// includes the given header data in the authentication tag. When decrypting messages, the crypto core reads the extra
+// data, uses the key id to find the right key to decrypting the message and then decrypts the message, using the given
+// nonce and including the given header data in the verification of the authentication tag.
+//
+// While the core only uses a single key at a time for encrypting messages, it is ready to decrypt messages based on
+// one of 4 stored keys (the encryption key being one of them). An external key rotation is responsible for adding the
+// key to the remote peer before switching to the key on the local peer for encryption.
+//
+// As mentioned, the encryption and decryption works in place. Therefore the parameter payload_and_tag contains (when
+// decrypting) or provides space for (when encrypting) the payload and the authentication tag. When encrypting, that
+// means, that the last TAG_LEN bytes of payload_and_tag must be reserved for the tag and must not contain payload
+// bytes.
+//
+// The nonce is a value of 12 bytes (192 bits). Since both nodes can use the same key for encryption, the most
+// significant byte (msb) of the nonce is initialized differently on both peers: one peer uses the value 0x00 and the
+// other one 0x80. That means that the nonce space is essentially divided in two halves, one for each node.
+//
+// To save space and keep the encrypted data aligned to 64 bits, not all bytes of the nonce are transferred. Instead,
+// only 7 bytes are included in messages (another byte is used for the key id, hence 64 bit alignment). The rest of the
+// nonce is deduced by the nodes: All other bytes are assumed to be 0x00, except for the most significant byte, which
+// is assumed to be the opposite ones own msb. This has two nice effects:
+// 1) Long before the nonce could theoretically repeat, the messages can no longer be decrypted by the peer as the
+// higher bytes are no longer zero as assumed.
+// 2) By deducing the msb to be the opposite of ones own msb, it is no longer possible for an attacker to redirect a
+// message back to the sender because then the assumed nonce will be wrong and the message fails to decrypt. Otherwise,
+// this could lead to problems as nodes would be able to accidentally decrypt their own messages.
+//
+// In order to be resistent against replay attacks but allow for reordering of messages, the crypto core uses nonce
+// pinning. For every active key, the biggest nonce seen so far is being tracked. Every second, the biggest nonce seen
+// one second ago plus 1 becomes the minimum nonce that is accepted for that key. That means, that reordering can
+// happen within one second but after a second, old messages will not be accepted anymore.
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use ring::{
@@ -465,39 +465,5 @@ mod tests {
     fn test_speed_chacha() {
         let speed = test_speed(&aead::CHACHA20_POLY1305, &Duration::from_secs_f32(0.2));
         assert!(speed > 10.0);
-    }
-}
-
-#[cfg(feature = "bench")]
-mod benches {
-
-    use super::*;
-    use test::Bencher;
-
-    fn crypto_bench(b: &mut Bencher, algo: &'static aead::Algorithm) {
-        let mut buffer = MsgBuffer::new(EXTRA_LEN);
-        buffer.set_length(1400);
-        let (mut sender, mut receiver) = create_dummy_pair(algo);
-        b.iter(|| {
-            sender.encrypt(&mut buffer);
-            receiver.decrypt(&mut buffer).unwrap();
-        });
-        b.bytes = 1400;
-    }
-
-
-    #[bench]
-    fn crypto_chacha20(b: &mut Bencher) {
-        crypto_bench(b, &aead::CHACHA20_POLY1305)
-    }
-
-    #[bench]
-    fn crypto_aes128(b: &mut Bencher) {
-        crypto_bench(b, &aead::AES_128_GCM)
-    }
-
-    #[bench]
-    fn crypto_aes256(b: &mut Bencher) {
-        crypto_bench(b, &aead::AES_256_GCM)
     }
 }
