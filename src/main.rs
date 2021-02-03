@@ -2,17 +2,10 @@
 // Copyright (C) 2015-2020  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-#![cfg_attr(feature = "bench", feature(test))]
+#[macro_use] extern crate log;
+#[macro_use] extern crate serde;
 
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate serde_derive;
-
-#[cfg(test)]
-extern crate tempfile;
-#[cfg(feature = "bench")]
-extern crate test;
+#[cfg(test)] extern crate tempfile;
 
 #[macro_use]
 pub mod util;
@@ -47,7 +40,7 @@ use std::{
     process,
     str::FromStr,
     sync::Mutex,
-    thread,
+    thread
 };
 
 use crate::{
@@ -59,11 +52,11 @@ use crate::{
     oldconfig::OldConfigFile,
     payload::Protocol,
     util::SystemTimeSource,
-    wsproxy::ProxyConnection,
+    wsproxy::ProxyConnection
 };
 
 struct DualLogger {
-    file: Option<Mutex<File>>,
+    file: Option<Mutex<File>>
 }
 
 impl DualLogger {
@@ -119,18 +112,18 @@ fn run_script(script: &str, ifname: &str) {
                 error!("Script returned with error: {:?}", status.code())
             }
         }
-        Err(e) => error!("Failed to execute script {:?}: {}", script, e),
+        Err(e) => error!("Failed to execute script {:?}: {}", script, e)
     }
 }
 
 fn parse_ip_netmask(addr: &str) -> Result<(Ipv4Addr, Ipv4Addr), String> {
     let (ip_str, len_str) = match addr.find('/') {
         Some(pos) => (&addr[..pos], &addr[pos + 1..]),
-        None => (addr, "24"),
+        None => (addr, "24")
     };
     let prefix_len = u8::from_str(len_str).map_err(|_| format!("Invalid prefix length: {}", len_str))?;
     if prefix_len > 32 {
-        return Err(format!("Invalid prefix length: {}", prefix_len));
+        return Err(format!("Invalid prefix length: {}", prefix_len))
     }
     let ip = Ipv4Addr::from_str(ip_str).map_err(|_| format!("Invalid ip address: {}", ip_str))?;
     let netmask = Ipv4Addr::from(u32::max_value().checked_shl(32 - prefix_len as u32).unwrap());
@@ -145,6 +138,7 @@ fn setup_device(config: &Config) -> TunTapDevice {
         config.device_name
     );
     info!("Opened device {}", device.ifname());
+    config.call_hook("device_setup", vec![("IFNAME", device.ifname())], true);
     if let Err(err) = device.set_mtu(None) {
         error!("Error setting optimal MTU on {}: {}", device.ifname(), err);
     }
@@ -164,6 +158,7 @@ fn setup_device(config: &Config) -> TunTapDevice {
             warn!("Your networking configuration might be affected by a vulnerability (https://vpncloud.ddswd.de/docs/security/cve-2019-14899/), please change your rp_filter setting to 1 (currently {}).", val);
         }
     }
+    config.call_hook("device_configured", vec![("IFNAME", device.ifname())], true);
     device
 }
 
@@ -228,7 +223,7 @@ fn main() {
     let args: Args = Args::from_args();
     if args.version {
         println!("VpnCloud v{}", env!("CARGO_PKG_VERSION"));
-        return;
+        return
     }
     let logger = try_fail!(DualLogger::new(args.log_file.as_ref()), "Failed to open logfile: {}");
     log::set_boxed_logger(Box::new(logger)).unwrap();
@@ -269,11 +264,15 @@ fn main() {
                 );
                 try_fail!(serde_yaml::to_writer(f, &new_config), "Failed to write converted config: {:?}");
             }
+            Command::Completion { shell } => {
+                Args::clap().gen_completions_to(env!("CARGO_PKG_NAME"), shell, &mut io::stdout());
+                return
+            }
             Command::WsProxy => {
                 wsproxy::run_proxy();
             }
         }
-        return;
+        return
     }
     let mut config = Config::default();
     if let Some(ref file) = args.config {
@@ -298,19 +297,19 @@ fn main() {
     debug!("Config: {:?}", config);
     if config.crypto.password.is_none() && config.crypto.private_key.is_none() {
         error!("Either password or private key must be set in config or given as parameter");
-        return;
+        return
     }
     if config.listen.starts_with("ws://") {
         let socket = try_fail!(ProxyConnection::listen(&config.listen), "Failed to open socket {}: {}", config.listen);
         match config.device_type {
             Type::Tap => run::<payload::Frame, _>(config, socket),
-            Type::Tun => run::<payload::Packet, _>(config, socket),
+            Type::Tun => run::<payload::Packet, _>(config, socket)
         }
     } else {
         let socket = try_fail!(UdpSocket::listen(&config.listen), "Failed to open socket {}: {}", config.listen);
         match config.device_type {
             Type::Tap => run::<payload::Frame, _>(config, socket),
-            Type::Tun => run::<payload::Packet, _>(config, socket),
+            Type::Tun => run::<payload::Packet, _>(config, socket)
         }
     }
 }

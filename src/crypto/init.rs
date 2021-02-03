@@ -1,54 +1,54 @@
-//! This module implements a 3-way handshake to initialize an authenticated and encrypted connection.
-//!
-//! The handshake assumes that each node has a asymmetric Curve 25519 key pair as well as a list of trusted public keys
-//! and a set of supported crypto algorithms as well as the expected speed when using them. If successful, the handshake
-//! will negotiate a crypto algorithm to use and a common ephemeral symmetric key and exchange a given payload between
-//! the nodes.
-//!
-//! The handshake consists of 3 stages, "ping", "pong" and "peng". In the following description, the node that initiates
-//! the connection is named "A" and the other node is named "B". Since a lot of things are going on in parallel in the
-//! handshake, those aspects are described separately in the following paragraphs.
-//!
-//! Every message contains the node id of the sender. If a node receives a message with its own node id, it just ignores
-//! it and closes the connection. This is the way nodes avoid to connect to themselves as it is not trivial for a node
-//! to know its own addresses (especially in the case of NAT).
-//!
-//! All initialization messages are signed by the asymmetric key of the sender. Also the messages indicate the public
-//! key being used, so the receiver can use the correct public key to verify the signature. The public key itself is not
-//! attached to the message for privacy reasons (the public key is stable over multiple restarts while the node id is
-//! only valid for a single run). Instead, a 2 byte salt value as well as the last 2 bytes of the salted sha 2 hash of
-//! the public key are used to identify the public key. This way, a receiver that trusts this public key can identify
-//! it but a random observer can't. If the public key is unknown or the signature can't be verified, the message is
-//! ignored.
-//!
-//! Every message contains a byte that specifies the stage (ping = 1, pong = 2, peng = 3). If a message with an
-//! unexpected stage is received, it is ignored and the last message that has been sent is repeated. There is only one
-//! exception to this rule: if a "pong" message is expected, but a "ping" message is received instead AND the node id of
-//! the sender is greater than the node id of the receiver, the receiving node will reset its state and assume the role
-//! of a receiver of the initialization (i.e. "B"). This is used to "negotiate" the roles A and B when both nodes
-//! initiate the connection in parallel and think they are A.
-//!
-//! Upon connection creation, both nodes create a random ephemeral ECDH key pair and exchange the public keys in the
-//! ping and pong messages. A sends the ping message to B containing A's public key and B replies with a pong message
-//! containing B's public key. That means, that after receiving the ping message B can calculate the shared key material
-//! and after receiving the pong message A can calculate the shared key material.
-//!
-//! The ping message and the pong message contain a set of supported crypto algorithms together with the estimated
-//! speeds of the algorithms. When B receives a ping message, or A receives a pong message, it can combine this
-//! information with its own algorithm list and select the algorithm with the best expected speed for the crypto core.
-//!
-//! The pong and peng message contain the payload that the nodes want to exchange in the initialization phase apart from
-//! the cryptographic initialization. This payload is encoded according to the application and encrypted using the key
-//! material and the crypto algorithm that have been negotiated via the ping and pong messages. The pong message,
-//! therefore contains information to set up symmetric encryption as well as a part that is already encrypted.
-//!
-//! The handshake ends for A after sending the peng message and for B after receiving this message. At this time both
-//! nodes initialize the connection using the payload and enter normal operation. The negotiated crypto core is used for
-//! future communication and the key rotation is started. Since the peng message can be lost, A needs to keep the
-//! initialization state in order to repeat a lost peng message. After one second, A removes that state.
-//!
-//! Once every second, both nodes check whether they have already finished the initialization. If not, they repeat their
-//! last message. After 5 seconds, the initialization is aborted as failed.
+// This module implements a 3-way handshake to initialize an authenticated and encrypted connection.
+//
+// The handshake assumes that each node has a asymmetric Curve 25519 key pair as well as a list of trusted public keys
+// and a set of supported crypto algorithms as well as the expected speed when using them. If successful, the handshake
+// will negotiate a crypto algorithm to use and a common ephemeral symmetric key and exchange a given payload between
+// the nodes.
+//
+// The handshake consists of 3 stages, "ping", "pong" and "peng". In the following description, the node that initiates
+// the connection is named "A" and the other node is named "B". Since a lot of things are going on in parallel in the
+// handshake, those aspects are described separately in the following paragraphs.
+//
+// Every message contains the node id of the sender. If a node receives a message with its own node id, it just ignores
+// it and closes the connection. This is the way nodes avoid to connect to themselves as it is not trivial for a node
+// to know its own addresses (especially in the case of NAT).
+//
+// All initialization messages are signed by the asymmetric key of the sender. Also the messages indicate the public
+// key being used, so the receiver can use the correct public key to verify the signature. The public key itself is not
+// attached to the message for privacy reasons (the public key is stable over multiple restarts while the node id is
+// only valid for a single run). Instead, a 2 byte salt value as well as the last 2 bytes of the salted sha 2 hash of
+// the public key are used to identify the public key. This way, a receiver that trusts this public key can identify
+// it but a random observer can't. If the public key is unknown or the signature can't be verified, the message is
+// ignored.
+//
+// Every message contains a byte that specifies the stage (ping = 1, pong = 2, peng = 3). If a message with an
+// unexpected stage is received, it is ignored and the last message that has been sent is repeated. There is only one
+// exception to this rule: if a "pong" message is expected, but a "ping" message is received instead AND the node id of
+// the sender is greater than the node id of the receiver, the receiving node will reset its state and assume the role
+// of a receiver of the initialization (i.e. "B"). This is used to "negotiate" the roles A and B when both nodes
+// initiate the connection in parallel and think they are A.
+//
+// Upon connection creation, both nodes create a random ephemeral ECDH key pair and exchange the public keys in the
+// ping and pong messages. A sends the ping message to B containing A's public key and B replies with a pong message
+// containing B's public key. That means, that after receiving the ping message B can calculate the shared key material
+// and after receiving the pong message A can calculate the shared key material.
+//
+// The ping message and the pong message contain a set of supported crypto algorithms together with the estimated
+// speeds of the algorithms. When B receives a ping message, or A receives a pong message, it can combine this
+// information with its own algorithm list and select the algorithm with the best expected speed for the crypto core.
+//
+// The pong and peng message contain the payload that the nodes want to exchange in the initialization phase apart from
+// the cryptographic initialization. This payload is encoded according to the application and encrypted using the key
+// material and the crypto algorithm that have been negotiated via the ping and pong messages. The pong message,
+// therefore contains information to set up symmetric encryption as well as a part that is already encrypted.
+//
+// The handshake ends for A after sending the peng message and for B after receiving this message. At this time both
+// nodes initialize the connection using the payload and enter normal operation. The negotiated crypto core is used for
+// future communication and the key rotation is started. Since the peng message can be lost, A needs to keep the
+// initialization state in order to repeat a lost peng message. After one second, A removes that state.
+//
+// Once every second, both nodes check whether they have already finished the initialization. If not, they repeat their
+// last message. After 5 seconds, the initialization is aborted as failed.
 
 
 use super::{

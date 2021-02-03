@@ -14,6 +14,7 @@ use super::util::{MockTimeSource, MsgBuffer, Time, TimeSource};
 use crate::port_forwarding::PortForwarding;
 
 pub fn mapped_addr(addr: SocketAddr) -> SocketAddr {
+    // HOT PATH
     match addr {
         SocketAddr::V4(addr4) => SocketAddr::new(IpAddr::V6(addr4.ip().to_ipv6_mapped()), addr4.port()),
         _ => addr

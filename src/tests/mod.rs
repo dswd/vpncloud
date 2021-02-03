@@ -9,7 +9,8 @@ mod peers;
 use std::{
     collections::{HashMap, VecDeque},
     io::Write,
-    net::{IpAddr, Ipv6Addr, SocketAddr},
+    net::SocketAddr,
+    str::FromStr,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Once
@@ -89,16 +90,17 @@ impl<P: Protocol> Simulator<P> {
     pub fn add_node(&mut self, nat: bool, config: &Config) -> SocketAddr {
         let mut config = config.clone();
         MockSocket::set_nat(nat);
-        config.listen = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), self.next_port);
+        config.listen = format!("[::]:{}", self.next_port);
         if config.crypto.password.is_none() && config.crypto.private_key.is_none() {
             config.crypto.password = Some("test123".to_string())
         }
         DebugLogger::set_node(self.next_port as usize);
         self.next_port += 1;
-        let node = TestNode::new(&config, MockDevice::new(), None, None);
+        let addr = SocketAddr::from_str(&config.listen).unwrap();
+        let node = TestNode::new(&config, MockSocket::new(addr), MockDevice::new(), None, None);
         DebugLogger::set_node(0);
-        self.nodes.insert(config.listen, node);
-        config.listen
+        self.nodes.insert(addr, node);
+        addr
     }
 
     #[allow(dead_code)]

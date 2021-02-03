@@ -41,7 +41,12 @@ impl<TS: TimeSource> ClaimTable<TS> {
     }
 
     pub fn cache(&mut self, addr: Address, peer: SocketAddr) {
+        // HOT PATH
         self.cache.insert(addr, CacheValue { peer, timeout: TS::now() + self.cache_timeout as Time });
+    }
+
+    pub fn clear_cache(&mut self) {
+        self.cache.clear()
     }
 
     pub fn set_claims(&mut self, peer: SocketAddr, mut claims: RangeList) {
@@ -85,9 +90,11 @@ impl<TS: TimeSource> ClaimTable<TS> {
     }
 
     pub fn lookup(&mut self, addr: Address) -> Option<SocketAddr> {
+        // HOT PATH
         if let Some(entry) = self.cache.get(&addr) {
             return Some(entry.peer)
         }
+        // COLD PATH
         let mut found = None;
         let mut prefix_len = -1;
         for entry in &self.claims {
@@ -149,36 +156,3 @@ impl<TS: TimeSource> ClaimTable<TS> {
 }
 
 // TODO: test
-
-#[cfg(feature = "bench")]
-mod bench {
-    use super::*;
-    use crate::util::MockTimeSource;
-
-    use smallvec::smallvec;
-    use std::str::FromStr;
-    use test::Bencher;
-
-    #[bench]
-    fn lookup_warm(b: &mut Bencher) {
-        let mut table = ClaimTable::<MockTimeSource>::new(60, 60);
-        let addr = Address::from_str("1.2.3.4").unwrap();
-        table.cache(addr, SocketAddr::from_str("1.2.3.4:3210").unwrap());
-        b.iter(|| table.lookup(addr));
-        b.bytes = 1400;
-    }
-
-    #[bench]
-    fn lookup_cold(b: &mut Bencher) {
-        let mut table = ClaimTable::<MockTimeSource>::new(60, 60);
-        let addr = Address::from_str("1.2.3.4").unwrap();
-        table.set_claims(SocketAddr::from_str("1.2.3.4:3210").unwrap(), smallvec![
-            Range::from_str("1.2.3.4/32").unwrap()
-        ]);
-        b.iter(|| {
-            table.cache.clear();
-            table.lookup(addr)
-        });
-        b.bytes = 1400;
-    }
-}

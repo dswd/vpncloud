@@ -1,29 +1,29 @@
-//! This module implements a turn based key rotation.
-//!
-//! The main idea is that both peers periodically create ecdh key pairs and exchange their public keys to create
-//! common key material. There are always two separate ecdh handshakes going on: one initiated by each peer.
-//! However, one handshake is always one step ahead of the other. That means that every message being sent contains a
-//! public key from step 1 of the handshake "proposed key" and a public key from step 2 of the handshake "confirmed
-//! key" (all messages except first message).
-//!
-//! When receiving a message from the peer, the node will create a new ecdh key pair and perform the key
-//! calculation for the proposed key. The peer will store the public key for the confirmation as pending to be
-//! confirmed in the next cycle. Also, if the message contains a confirmation (all but the very first message do),
-//! the node will use the stored private key to perform the ecdh key calculation and emit that key to be used in
-//! the crypto stream.
-//!
-//! Upon each cycle, a node first checks if it still has a proposed key that has not been confirmed by the remote
-//! peer. If so, a message must have been lost and the whole last message including the proposed key as well as the
-//! last confirmed key is being resent. If no proposed key is stored, the node will create a new ecdh key pair, and
-//! store the private key as proposed key. It then sends out a message containing the public key as proposal, as
-//! well as confirming the pending key. This key is also emitted to be added to the crypto stream but not to be
-//! used for encrypting.
-//!
-//! Monotonically increasing message ids guard the communication from message duplication and also serve as
-//! identifiers for the keys to be used in the crypto stream. Since the keys are rotating, the last 2 bits of the
-//! id are enough to identify the key.
-//!
-//! The whole communication is sent via the crypto stream and is therefore encrypted and protected against tampering.
+// This module implements a turn based key rotation.
+//
+// The main idea is that both peers periodically create ecdh key pairs and exchange their public keys to create
+// common key material. There are always two separate ecdh handshakes going on: one initiated by each peer.
+// However, one handshake is always one step ahead of the other. That means that every message being sent contains a
+// public key from step 1 of the handshake "proposed key" and a public key from step 2 of the handshake "confirmed
+// key" (all messages except first message).
+//
+// When receiving a message from the peer, the node will create a new ecdh key pair and perform the key
+// calculation for the proposed key. The peer will store the public key for the confirmation as pending to be
+// confirmed in the next cycle. Also, if the message contains a confirmation (all but the very first message do),
+// the node will use the stored private key to perform the ecdh key calculation and emit that key to be used in
+// the crypto stream.
+//
+// Upon each cycle, a node first checks if it still has a proposed key that has not been confirmed by the remote
+// peer. If so, a message must have been lost and the whole last message including the proposed key as well as the
+// last confirmed key is being resent. If no proposed key is stored, the node will create a new ecdh key pair, and
+// store the private key as proposed key. It then sends out a message containing the public key as proposal, as
+// well as confirming the pending key. This key is also emitted to be added to the crypto stream but not to be
+// used for encrypting.
+//
+// Monotonically increasing message ids guard the communication from message duplication and also serve as
+// identifiers for the keys to be used in the crypto stream. Since the keys are rotating, the last 2 bits of the
+// id are enough to identify the key.
+//
+// The whole communication is sent via the crypto stream and is therefore encrypted and protected against tampering.
 
 use super::{Error, Key, MsgBuffer};
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};

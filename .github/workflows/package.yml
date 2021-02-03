@@ -11,7 +11,7 @@ jobs:
       - name: Run builder
         uses: ./.github/actions/build-deb
         with:
-          rust: '1.48.0'
+          rust: '1.49.0'
       - name: Archive artifacts
         uses: actions/upload-artifact@v1
         with:
@@ -31,7 +31,7 @@ jobs:
       - name: Run builder
         uses: ./.github/actions/build-rpm
         with:
-          rust: '1.48.0'
+          rust: '1.49.0'
       - name: Archive artifacts
         uses: actions/upload-artifact@v1
         with:
