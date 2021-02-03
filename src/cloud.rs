@@ -221,6 +221,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             self.own_addresses.push(pfw.get_internal_ip().into());
             self.own_addresses.push(pfw.get_external_ip().into());
         }
+        debug!("Own addresses: {:?}", self.own_addresses);
         Ok(())
     }
 

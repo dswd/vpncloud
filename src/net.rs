@@ -20,6 +20,11 @@ pub fn mapped_addr(addr: SocketAddr) -> SocketAddr {
     }
 }
 
+pub fn get_ip() -> IpAddr {
+    let s = UdpSocket::bind("[::]:0").unwrap();
+    s.connect("8.8.8.8:0").unwrap();
+    s.local_addr().unwrap().ip()
+}
 
 pub trait Socket: AsRawFd + Sized {
     fn listen(addr: &str) -> Result<Self, io::Error>;
@@ -59,7 +64,9 @@ impl Socket for UdpSocket {
     }
 
     fn address(&self) -> Result<SocketAddr, io::Error> {
-        self.local_addr()
+        let mut addr = self.local_addr()?;
+        addr.set_ip(get_ip());
+        Ok(addr)
     }
 
     fn create_port_forwarding(&self) -> Option<PortForwarding> {

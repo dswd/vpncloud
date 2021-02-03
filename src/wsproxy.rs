@@ -1,5 +1,5 @@
 use super::{
-    net::{mapped_addr, Socket},
+    net::{mapped_addr, get_ip, Socket},
     poll::{WaitImpl, WaitResult},
     port_forwarding::PortForwarding,
     util::MsgBuffer
@@ -50,19 +50,18 @@ fn serve_proxy_connection(stream: TcpStream) -> Result<(), io::Error> {
     let mut websocket = io_error!(accept(stream), "Failed to initialize websocket with {}: {}", peer)?;
     let udpsocket = UdpSocket::bind("[::]:0")?;
     let mut msg = Vec::with_capacity(18);
-    let addr = udpsocket.local_addr()?;
+    let mut addr = udpsocket.local_addr()?;
     info!("Listening on {} for peer {}", addr, peer);
+    addr.set_ip(get_ip());
     write_addr(addr, &mut msg)?;
     io_error!(websocket.write_message(Message::Binary(msg)), "Failed to write to ws connection: {}")?;
     let websocketfd = websocket.get_ref().as_raw_fd();
-    let poll = WaitImpl::new(websocketfd, udpsocket.as_raw_fd(), 60)?;
+    let poll = WaitImpl::new(websocketfd, udpsocket.as_raw_fd(), 60*1000)?;
     let mut buffer = [0; 65535];
     for evt in poll {
         match evt {
             WaitResult::Socket => {
-                info!("WS -> UDP");
                 let msg = io_error!(websocket.read_message(), "Failed to read message on websocket {}: {}", peer)?;
-                info!("MSG: {}", msg);
                 match msg {
                     Message::Binary(data) => {
                         let dst = read_addr(Cursor::new(&data))?;
@@ -73,7 +72,6 @@ fn serve_proxy_connection(stream: TcpStream) -> Result<(), io::Error> {
                 }
             }
             WaitResult::Device => {
-                info!("UDP -> WS");
                 let (size, addr) = udpsocket.recv_from(&mut buffer)?;
                 let mut data = Vec::with_capacity(18 + size);
                 write_addr(addr, &mut data)?;
@@ -81,7 +79,6 @@ fn serve_proxy_connection(stream: TcpStream) -> Result<(), io::Error> {
                 io_error!(websocket.write_message(Message::Binary(data)), "Failed to write to {}: {}", peer)?;
             }
             WaitResult::Timeout => {
-                info!("Sending ping");
                 io_error!(websocket.write_message(Message::Ping(vec![])), "Failed to send ping: {}")?;
             }
             WaitResult::Error(err) => return Err(err)
@@ -163,12 +160,4 @@ impl Socket for ProxyConnection {
     fn create_port_forwarding(&self) -> Option<PortForwarding> {
         None
     }
-}
-
-pub fn run_client(url: String) {
-    let (mut socket, _) = connect(Url::parse(&url).unwrap()).unwrap();
-    socket.write_message(Message::Text("test".to_string())).unwrap();
-    let msg = socket.read_message().unwrap();
-    info!("msg: {}", msg);
-    socket.close(None).unwrap();
 }

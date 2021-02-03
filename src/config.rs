@@ -446,10 +446,6 @@ pub enum Command {
 
     WsProxy,
 
-    WsClient {
-        url: String,
-    },
-
     #[structopt(alias = "migrate")]
     MigrateConfig {
         /// Config file

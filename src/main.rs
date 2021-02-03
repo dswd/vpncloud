@@ -272,9 +272,6 @@ fn main() {
             Command::WsProxy => {
                 wsproxy::run_proxy();
             }
-            Command::WsClient { url } => {
-                wsproxy::run_client(url);
-            }
         }
         return;
     }
