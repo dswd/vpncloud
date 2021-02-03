@@ -9,7 +9,6 @@ use std::{
     cmp::max,
     collections::HashMap,
     ffi::OsStr,
-    net::{IpAddr, Ipv6Addr, SocketAddr},
     process,
     thread
 };
