@@ -4,8 +4,9 @@ This project follows [semantic versioning](http://semver.org).
 
 ### UNRELEASED
 
-- [added] Support for creating shell completions
+- [added] Support for websocket proxy mode
 - [added] Support for hook scripts to handle certain situations
+- [added] Support for creating shell completions
 - [removed] Removed dummy device type
 - [changed] Updated dependencies
 - [changed] Changed Rust version to 1.49.0
