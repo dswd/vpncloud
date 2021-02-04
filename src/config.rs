@@ -499,7 +499,13 @@ pub enum Command {
     #[structopt(name = "genkey", alias = "gen-key")]
     GenKey,
 
-    WsProxy,
+    /// Run a websocket proxy
+    #[structopt(alias = "wsproxy")]
+    WsProxy {
+        /// Websocket listen address IP:PORT
+        #[structopt(long, short, default_value="3210")]
+        listen: String
+    },
 
     /// Migrate an old config file
     #[structopt(alias = "migrate")]

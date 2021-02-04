@@ -268,8 +268,8 @@ fn main() {
                 Args::clap().gen_completions_to(env!("CARGO_PKG_NAME"), shell, &mut io::stdout());
                 return
             }
-            Command::WsProxy => {
-                wsproxy::run_proxy();
+            Command::WsProxy { listen } => {
+                try_fail!(wsproxy::run_proxy(&listen), "Failed to run websocket proxy: {:?}");
             }
         }
         return

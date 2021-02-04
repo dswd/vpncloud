@@ -35,7 +35,7 @@ pub trait Socket: AsRawFd + Sized {
     fn create_port_forwarding(&self) -> Option<PortForwarding>;
 }
 
-fn parse_listen(addr: &str) -> SocketAddr {
+pub fn parse_listen(addr: &str) -> SocketAddr {
     if let Some(addr) = addr.strip_prefix("*:") {
         let port = try_fail!(addr.parse::<u16>(), "Invalid port: {}");
         SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)

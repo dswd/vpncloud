@@ -1,5 +1,5 @@
 use super::{
-    net::{mapped_addr, get_ip, Socket},
+    net::{mapped_addr, get_ip, parse_listen, Socket},
     poll::{WaitImpl, WaitResult},
     port_forwarding::PortForwarding,
     util::MsgBuffer
@@ -87,9 +87,9 @@ fn serve_proxy_connection(stream: TcpStream) -> Result<(), io::Error> {
     Ok(())
 }
 
-pub fn run_proxy() -> Result<(), io::Error> {
-    // TODO: configurable listen
-    let server = TcpListener::bind("127.0.0.1:9001")?;
+pub fn run_proxy(listen: &str) -> Result<(), io::Error> {
+    let addr = parse_listen(listen);
+    let server = TcpListener::bind(addr)?;
     for stream in server.incoming() {
         let stream = stream?;
         let peer = stream.peer_addr()?;
