@@ -5,7 +5,7 @@ import atexit, argparse, os
 
 REGION = "eu-central-1"
 
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 
 
 parser = argparse.ArgumentParser(description='Create a test setup')
@@ -25,15 +25,22 @@ if args.keyname:
     with open(args.keyfile, 'r') as fp:
         privatekey = fp.read()
 
+opts = {}
+if os.path.exists(args.version):
+    opts["vpncloud_file"] = args.version
+    opts["vpncloud_version"] = None
+else:
+    opts["vpncloud_version"] = args.version
+
 setup = EC2Environment(
     region = REGION, 
     node_count = args.count, 
     instance_type = args.instancetype, 
-    vpncloud_version = args.version, 
     cluster_nodes = args.cluster,
     subnet = args.subnet or CREATE, 
     keyname = args.keyname or CREATE,
-    privatekey = privatekey
+    privatekey = privatekey,
+    **opts
 )
 
 if not args.keyname:

@@ -1,5 +1,5 @@
 use super::{
-    net::{mapped_addr, get_ip, parse_listen, Socket},
+    net::{get_ip, mapped_addr, parse_listen, Socket},
     poll::{WaitImpl, WaitResult},
     port_forwarding::PortForwarding,
     util::MsgBuffer
@@ -47,6 +47,7 @@ fn read_addr<R: Read>(mut r: R) -> Result<SocketAddr, io::Error> {
 fn serve_proxy_connection(stream: TcpStream) -> Result<(), io::Error> {
     let peer = stream.peer_addr()?;
     info!("WS client {} connected", peer);
+    stream.set_nodelay(true)?;
     let mut websocket = io_error!(accept(stream), "Failed to initialize websocket with {}: {}", peer)?;
     let udpsocket = UdpSocket::bind("[::]:0")?;
     let mut msg = Vec::with_capacity(18);
@@ -56,7 +57,7 @@ fn serve_proxy_connection(stream: TcpStream) -> Result<(), io::Error> {
     write_addr(addr, &mut msg)?;
     io_error!(websocket.write_message(Message::Binary(msg)), "Failed to write to ws connection: {}")?;
     let websocketfd = websocket.get_ref().as_raw_fd();
-    let poll = WaitImpl::new(websocketfd, udpsocket.as_raw_fd(), 60*1000)?;
+    let poll = WaitImpl::new(websocketfd, udpsocket.as_raw_fd(), 60 * 1000)?;
     let mut buffer = [0; 65535];
     for evt in poll {
         match evt {
@@ -90,6 +91,7 @@ fn serve_proxy_connection(stream: TcpStream) -> Result<(), io::Error> {
 pub fn run_proxy(listen: &str) -> Result<(), io::Error> {
     let addr = parse_listen(listen);
     let server = TcpListener::bind(addr)?;
+    info!("Listening on ws://{}", server.local_addr()?);
     for stream in server.incoming() {
         let stream = stream?;
         let peer = stream.peer_addr()?;
@@ -126,7 +128,8 @@ impl AsRawFd for ProxyConnection {
 impl Socket for ProxyConnection {
     fn listen(url: &str) -> Result<Self, io::Error> {
         let parsed_url = io_error!(Url::parse(url), "Invalid URL {}: {}", url)?;
-        let (socket, _) = io_error!(connect(parsed_url), "Failed to connect to URL {}: {}", url)?;
+        let (mut socket, _) = io_error!(connect(parsed_url), "Failed to connect to URL {}: {}", url)?;
+        socket.get_mut().set_nodelay(true)?;
         let addr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
         let mut con = ProxyConnection { addr, socket };
         let addr_data = con.read_message()?;

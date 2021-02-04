@@ -358,7 +358,7 @@ pub struct Args {
     pub mode: Option<Mode>,
 
     /// The shared password to encrypt all traffic
-    #[structopt(short, long, required_unless_one = &["private-key", "config", "genkey", "version", "completion"], env)]
+    #[structopt(short, long, env)]
     pub password: Option<String>,
 
     /// The private key to use

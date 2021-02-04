@@ -10,7 +10,6 @@ use std::{
     collections::{HashMap, VecDeque},
     io::Write,
     net::SocketAddr,
-    str::FromStr,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Once
@@ -91,12 +90,12 @@ impl<P: Protocol> Simulator<P> {
         let mut config = config.clone();
         MockSocket::set_nat(nat);
         config.listen = format!("[::]:{}", self.next_port);
+        let addr = config.listen.parse::<SocketAddr>().unwrap();
         if config.crypto.password.is_none() && config.crypto.private_key.is_none() {
             config.crypto.password = Some("test123".to_string())
         }
         DebugLogger::set_node(self.next_port as usize);
         self.next_port += 1;
-        let addr = SocketAddr::from_str(&config.listen).unwrap();
         let node = TestNode::new(&config, MockSocket::new(addr), MockDevice::new(), None, None);
         DebugLogger::set_node(0);
         self.nodes.insert(addr, node);
