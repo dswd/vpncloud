@@ -11,7 +11,7 @@ use std::{
     os::unix::io::{AsRawFd, RawFd},
     thread::spawn
 };
-use tungstenite::{client::AutoStream, connect, protocol::WebSocket, server::accept, stream::Stream, Message};
+use tungstenite::{client::AutoStream, connect, protocol::WebSocket, server::accept, Message};
 use url::Url;
 
 
@@ -119,10 +119,7 @@ impl ProxyConnection {
 
 impl AsRawFd for ProxyConnection {
     fn as_raw_fd(&self) -> RawFd {
-        match self.socket.get_ref() {
-            Stream::Plain(sock) => sock.as_raw_fd(),
-            Stream::Tls(sock) => sock.get_ref().as_raw_fd()
-        }
+        self.socket.get_ref().as_raw_fd()
     }
 }
 

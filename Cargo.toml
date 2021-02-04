@@ -29,7 +29,7 @@ privdrop = "0.5"
 byteorder = "1.4"
 thiserror = "1.0"
 smallvec = "1.6"
-tungstenite = { version = "0.12", optional = true }
+tungstenite = { version = "0.12", optional = true, default-features = false }
 url = { version = "2.2", optional = true }
 
 [dev-dependencies]
@@ -37,7 +37,7 @@ tempfile = "3"
 criterion = "0.3"
 
 [features]
-default = ["nat"]
+default = ["nat", "websocket"]
 nat = ["igd"]
 websocket = ["tungstenite", "url"]
 
