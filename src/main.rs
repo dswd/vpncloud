@@ -27,7 +27,7 @@ pub mod port_forwarding;
 pub mod table;
 pub mod traffic;
 pub mod types;
-pub mod wsproxy;
+#[cfg(feature = "websocket")] pub mod wsproxy;
 
 use structopt::StructOpt;
 
@@ -52,8 +52,10 @@ use crate::{
     oldconfig::OldConfigFile,
     payload::Protocol,
     util::SystemTimeSource,
-    wsproxy::ProxyConnection
 };
+
+#[cfg(feature = "websocket")]
+use crate::wsproxy::ProxyConnection;
 
 struct DualLogger {
     file: Option<Mutex<File>>
@@ -268,6 +270,7 @@ fn main() {
                 Args::clap().gen_completions_to(env!("CARGO_PKG_NAME"), shell, &mut io::stdout());
                 return
             }
+            #[cfg(feature = "websocket")]
             Command::WsProxy { listen } => {
                 try_fail!(wsproxy::run_proxy(&listen), "Failed to run websocket proxy: {:?}");
             }
@@ -299,17 +302,18 @@ fn main() {
         error!("Either password or private key must be set in config or given as parameter");
         return
     }
+    #[cfg(feature = "websocket")]
     if config.listen.starts_with("ws://") {
         let socket = try_fail!(ProxyConnection::listen(&config.listen), "Failed to open socket {}: {}", config.listen);
         match config.device_type {
             Type::Tap => run::<payload::Frame, _>(config, socket),
             Type::Tun => run::<payload::Packet, _>(config, socket)
         }
-    } else {
-        let socket = try_fail!(UdpSocket::listen(&config.listen), "Failed to open socket {}: {}", config.listen);
-        match config.device_type {
-            Type::Tap => run::<payload::Frame, _>(config, socket),
-            Type::Tun => run::<payload::Packet, _>(config, socket)
-        }
+        return        
+    }
+    let socket = try_fail!(UdpSocket::listen(&config.listen), "Failed to open socket {}: {}", config.listen);
+    match config.device_type {
+        Type::Tap => run::<payload::Frame, _>(config, socket),
+        Type::Tun => run::<payload::Packet, _>(config, socket)
     }
 }

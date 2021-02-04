@@ -29,8 +29,8 @@ privdrop = "0.5"
 byteorder = "1.4"
 thiserror = "1.0"
 smallvec = "1.6"
-tungstenite = "0.12"
-url = "2.2"
+tungstenite = { version = "0.12", optional = true }
+url = { version = "2.2", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
@@ -38,8 +38,8 @@ criterion = "0.3"
 
 [features]
 default = ["nat"]
-bench = []
 nat = ["igd"]
+websocket = ["tungstenite", "url"]
 
 [[bench]]
 name = "bench"

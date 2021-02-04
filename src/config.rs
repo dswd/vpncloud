@@ -500,6 +500,7 @@ pub enum Command {
     GenKey,
 
     /// Run a websocket proxy
+    #[cfg(feature = "websocket")]
     #[structopt(alias = "wsproxy")]
     WsProxy {
         /// Websocket listen address IP:PORT
