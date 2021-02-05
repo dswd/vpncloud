@@ -11,6 +11,7 @@ This project follows [semantic versioning](http://semver.org).
 - [changed] Updated dependencies
 - [changed] Changed Rust version to 1.49.0
 - [fixed] Added missing peer address propagation
+- [fixed] Fixed problem with peer addresses without port
 
 ### v2.0.1 (2020-11-07)
 

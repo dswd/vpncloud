@@ -45,7 +45,7 @@ use std::{
 
 use crate::{
     cloud::GenericCloud,
-    config::{Args, Command, Config},
+    config::{Args, Command, Config, DEFAULT_PORT},
     crypto::Crypto,
     device::{Device, TunTapDevice, Type},
     net::Socket,
@@ -185,7 +185,11 @@ fn run<P: Protocol, S: Socket>(config: Config, socket: S) {
     };
     let mut cloud =
         GenericCloud::<TunTapDevice, P, S, SystemTimeSource>::new(&config, socket, device, port_forwarding, stats_file);
-    for addr in config.peers {
+    for mut addr in config.peers {
+        if addr.find(':').unwrap_or(0) <= addr.find(']').unwrap_or(0) {
+            // : not present or only in IPv6 address
+            addr = format!("{}:{}", addr, DEFAULT_PORT)
+        }
         try_fail!(cloud.connect(&addr as &str), "Failed to send message to {}: {}", &addr);
         cloud.add_reconnect_peer(addr);
     }
@@ -239,8 +243,8 @@ fn main() {
     });
     if let Some(cmd) = args.cmd {
         match cmd {
-            Command::GenKey => {
-                let (privkey, pubkey) = Crypto::generate_keypair(args.password.as_deref());
+            Command::GenKey { password } => {
+                let (privkey, pubkey) = Crypto::generate_keypair(password.as_deref());
                 println!("Private key: {}\nPublic key: {}\n", privkey, pubkey);
                 println!(
                     "Attention: Keep the private key secret and use only the public key on other nodes to establish trust."

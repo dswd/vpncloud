@@ -242,12 +242,8 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     ///
     /// This method adds a peer to the list of nodes to reconnect to. A periodic task will try to
     /// connect to the peer if it is not already connected.
-    pub fn add_reconnect_peer(&mut self, mut add: String) {
+    pub fn add_reconnect_peer(&mut self, add: String) {
         let now = TS::now();
-        if add.find(':').unwrap_or(0) <= add.find(']').unwrap_or(0) {
-            // : not present or only in IPv6 address
-            add = format!("{}:{}", add, DEFAULT_PORT)
-        }
         let resolved = match resolve(&add as &str) {
             Ok(addrs) => addrs,
             Err(err) => {
@@ -465,7 +461,6 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             self.next_stats_out = now + STATS_INTERVAL;
             self.traffic.period(Some(5));
         }
-        // TODO: every 5 minutes: EVENT periodic
         if let Some(peers) = self.beacon_serializer.get_cmd_results() {
             debug!("Loaded beacon with peers: {:?}", peers);
             for peer in peers {

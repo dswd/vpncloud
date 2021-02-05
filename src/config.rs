@@ -497,7 +497,11 @@ pub struct Args {
 pub enum Command {
     /// Generate and print a key-pair and exit
     #[structopt(name = "genkey", alias = "gen-key")]
-    GenKey,
+    GenKey {
+        /// The shared password to encrypt all traffic
+        #[structopt(short, long, env)]
+        password: Option<String>,
+    },
 
     /// Run a websocket proxy
     #[cfg(feature = "websocket")]
@@ -519,7 +523,7 @@ pub enum Command {
     /// Generate shell completions
     Completion {
         /// Shell to create completions for
-        #[structopt(long)]
+        #[structopt(long, default_value="bash")]
         shell: Shell
     }
 }
