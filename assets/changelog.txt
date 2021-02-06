@@ -1,3 +1,16 @@
+vpncloud (2.1.0) stable; urgency=medium
+
+  * [added] Support for websocket proxy mode
+  * [added] Support for hook scripts to handle certain situations
+  * [added] Support for creating shell completions
+  * [removed] Removed dummy device type
+  * [changed] Updated dependencies
+  * [changed] Changed Rust version to 1.49.0
+  * [fixed] Added missing peer address propagation
+  * [fixed] Fixed problem with peer addresses without port
+
+ -- Dennis Schwerdel <schwerdel@googlemail.com>  Sat, 06 Feb 2020 13:13:00 +0100
+
 vpncloud (2.0.1) stable; urgency=medium
 
   * [changed] Changed documentation

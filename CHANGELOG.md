@@ -2,7 +2,7 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### UNRELEASED
+### v2.1.0 (2021-02-06)
 
 - [added] Support for websocket proxy mode
 - [added] Support for hook scripts to handle certain situations
