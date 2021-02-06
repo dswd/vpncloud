@@ -391,6 +391,7 @@ pub struct InitState<P: Payload> {
     last_message: Option<Vec<u8>>,
     crypto: Option<CryptoCore>,
     algorithms: Algorithms,
+    #[allow(dead_code)] // Used in tests
     selected_algorithm: Option<&'static Algorithm>,
     failed_retries: usize
 }
@@ -489,7 +490,7 @@ impl<P: Payload> InitState<P> {
         if let Some(crypto) = &mut self.crypto {
             crypto.decrypt(data)?;
         }
-        Ok(P::read_from(Cursor::new(data.message()))?)
+        P::read_from(Cursor::new(data.message()))
     }
 
     fn check_salted_node_id_hash(&self, hash: &SaltedNodeIdHash, node_id: NodeId) -> bool {

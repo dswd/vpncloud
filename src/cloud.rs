@@ -49,6 +49,7 @@ const SPACE_BEFORE: usize = 100;
 
 struct PeerData {
     addrs: AddrList,
+    #[allow(dead_code)] //TODO: export in status
     last_seen: Time,
     timeout: Time,
     peer_timeout: u16,

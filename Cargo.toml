@@ -34,7 +34,7 @@ url = { version = "2.2", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
-criterion = "0.3"
+criterion = { version = "0.3", features = ["html_reports"] }
 
 [features]
 default = ["nat", "websocket"]
