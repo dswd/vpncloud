@@ -5,11 +5,11 @@ import atexit, argparse, os
 
 REGION = "eu-central-1"
 
-VERSION = "2.0.1"
+VERSION = "2.1.0"
 
 
 parser = argparse.ArgumentParser(description='Create a test setup')
-parser.add_argument('--instancetype', default='t3.nano', help='EC2 instance type')
+parser.add_argument('--instancetype', default='t3a.nano', help='EC2 instance type')
 parser.add_argument('--version', default=VERSION, help='VpnCloud version to use')
 parser.add_argument('--count', '-c', dest="count", type=int, default=2, help='Number of instance to create')
 parser.add_argument('--cluster', action="store_true", help='Cluster instances to get reliable throughput')

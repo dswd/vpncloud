@@ -6,8 +6,8 @@ import time
 setup = EC2Environment(
     region = "eu-central-1", 
     node_count = 2, 
-    instance_type = 't3.nano', 
-    vpncloud_version = "1.4.0"
+    instance_type = 't3a.nano', 
+    vpncloud_version = "2.1.0"
 )
 
 sender = setup.nodes[0]

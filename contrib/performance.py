@@ -8,7 +8,7 @@ from datetime import date
 # Note: this script will run for ~8 minutes and incur costs of about $ 0.02
 
 FILE = "../target/release/vpncloud"
-VERSION = "2.0.1"
+VERSION = "2.1.0"
 REGION = "eu-central-1"
 
 env = EC2Environment(
