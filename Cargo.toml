@@ -35,6 +35,7 @@ url = { version = "2.2", optional = true }
 [dev-dependencies]
 tempfile = "3"
 criterion = { version = "0.3", features = ["html_reports"] }
+iai = "0.1"
 
 [features]
 default = ["nat", "websocket"]
@@ -42,7 +43,11 @@ nat = ["igd"]
 websocket = ["tungstenite", "url"]
 
 [[bench]]
-name = "bench"
+name = "criterion"
+harness = false
+
+[[bench]]
+name = "valgrind"
 harness = false
 
 [profile.release]
