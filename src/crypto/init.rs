@@ -1,3 +1,7 @@
+// VpnCloud - Peer-to-Peer VPN
+// Copyright (C) 2015-2021  Dennis Schwerdel
+// This software is licensed under GPL-3 or newer (see LICENSE.md)
+
 // This module implements a 3-way handshake to initialize an authenticated and encrypted connection.
 //
 // The handshake assumes that each node has a asymmetric Curve 25519 key pair as well as a list of trusted public keys

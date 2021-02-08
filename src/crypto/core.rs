@@ -1,3 +1,7 @@
+// VpnCloud - Peer-to-Peer VPN
+// Copyright (C) 2015-2021  Dennis Schwerdel
+// This software is licensed under GPL-3 or newer (see LICENSE.md)
+
 // This module implements a crypto core for encrypting and decrypting message streams
 //
 // The crypto core only encrypts and decrypts messages, using given keys. Negotiating and rotating the keys is out of
