@@ -344,7 +344,7 @@ impl Device for MockDevice {
     }
 
     fn write(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
-        self.outbound.push_back(buffer.message().to_owned());
+        self.outbound.push_back(buffer.message().into());
         Ok(())
     }
 
@@ -355,7 +355,7 @@ impl Device for MockDevice {
 
 impl Default for MockDevice {
     fn default() -> Self {
-        Self { outbound: VecDeque::new(), inbound: VecDeque::new() }
+        Self { outbound: VecDeque::with_capacity(10), inbound: VecDeque::with_capacity(10) }
     }
 }
 

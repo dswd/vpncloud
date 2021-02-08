@@ -93,8 +93,8 @@ impl MockSocket {
             nat: Self::get_nat(),
             nat_peers: HashMap::new(),
             address,
-            outbound: VecDeque::new(),
-            inbound: VecDeque::new()
+            outbound: VecDeque::with_capacity(10),
+            inbound: VecDeque::with_capacity(10)
         }
     }
 
@@ -149,7 +149,7 @@ impl Socket for MockSocket {
     }
 
     fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error> {
-        self.outbound.push_back((addr, data.to_owned()));
+        self.outbound.push_back((addr, data.into()));
         if self.nat {
             self.nat_peers.insert(addr, MockTimeSource::now() + 300);
         }

@@ -10,31 +10,17 @@ use ring::aead;
 use std::str::FromStr;
 use std::net::{SocketAddr, Ipv4Addr, SocketAddrV4, UdpSocket};
 
-mod util {
-    include!("../src/util.rs");
-}
-mod error {
-    include!("../src/error.rs");
-}
-mod payload {
-    include!("../src/payload.rs");
-}
-mod types {
-    include!("../src/types.rs");
-}
-mod table {
-    include!("../src/table.rs");
-}
-mod crypto_core {
-    include!("../src/crypto/core.rs");
-}
+include!(".code.rs");
 
 pub use error::Error;
 use util::{MockTimeSource, MsgBuffer};
+use config::Config;
 use types::{Address, Range};
+use device::Type;
 use table::{ClaimTable};
 use payload::{Packet, Frame, Protocol};
-use crypto_core::{create_dummy_pair, EXTRA_LEN};
+use crypto::core::{create_dummy_pair, EXTRA_LEN};
+use tests::common::{TunSimulator, TapSimulator};
 
 fn udp_send() {
     let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -107,4 +93,63 @@ fn crypto_aes256() {
     crypto_bench(&aead::AES_256_GCM)
 }
 
-iai::main!(udp_send, decode_ipv4, decode_ipv6, decode_ethernet, decode_ethernet_with_vlan, lookup_cold, lookup_warm, crypto_chacha20, crypto_aes128, crypto_aes256);
+fn full_communication_tun_router() {
+    log::set_max_level(log::LevelFilter::Error);
+    let config1 = Config {
+        device_type: Type::Tun,
+        auto_claim: false,
+        claims: vec!["1.1.1.1/32".to_string()],
+        ..Config::default()
+    };
+    let config2 = Config {
+        device_type: Type::Tun,
+        auto_claim: false,
+        claims: vec!["2.2.2.2/32".to_string()],
+        ..Config::default()
+    };
+    let mut sim = TunSimulator::new();
+    let node1 = sim.add_node(false, &config1);
+    let node2 = sim.add_node(false, &config2);
+
+    sim.connect(node1, node2);
+    sim.simulate_all_messages();
+    assert!(sim.is_connected(node1, node2));
+    assert!(sim.is_connected(node2, node1));
+
+    let mut payload = vec![0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2];
+    payload.append(&mut vec![0; 1400]);
+    for _ in 0..1000 {
+        sim.put_payload(node1, payload.clone());
+        sim.simulate_all_messages();
+        assert_eq!(Some(&payload), black_box(sim.pop_payload(node2).as_ref()));
+    }
+}
+
+fn full_communication_tap_switch() {
+    log::set_max_level(log::LevelFilter::Error);
+    let config = Config { device_type: Type::Tap, ..Config::default() };
+    let mut sim = TapSimulator::new();
+    let node1 = sim.add_node(false, &config);
+    let node2 = sim.add_node(false, &config);
+
+    sim.connect(node1, node2);
+    sim.simulate_all_messages();
+    assert!(sim.is_connected(node1, node2));
+    assert!(sim.is_connected(node2, node1));
+
+    let mut payload = vec![2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5];
+    payload.append(&mut vec![0; 1400]);
+    for _ in 0..1000 {
+        sim.put_payload(node1, payload.clone());
+        sim.simulate_all_messages();
+        assert_eq!(Some(&payload), black_box(sim.pop_payload(node2).as_ref()));
+    }
+}
+
+iai::main!(
+    udp_send, 
+    decode_ipv4, decode_ipv6, decode_ethernet, decode_ethernet_with_vlan, 
+    lookup_cold, lookup_warm, 
+    crypto_chacha20, crypto_aes128, crypto_aes256,
+    full_communication_tun_router, full_communication_tap_switch
+);

@@ -53,7 +53,7 @@ use std::{
     time::{Duration, Instant}
 };
 
-use super::{Error, MsgBuffer};
+use crate::{error::Error, util::MsgBuffer};
 
 
 const NONCE_LEN: usize = 12;

@@ -57,9 +57,9 @@
 
 use super::{
     core::{CryptoCore, EXTRA_LEN},
-    Algorithms, EcdhPrivateKey, EcdhPublicKey, Ed25519PublicKey, Error, MsgBuffer, Payload
+    Algorithms, EcdhPrivateKey, EcdhPublicKey, Ed25519PublicKey, Payload
 };
-use crate::types::NodeId;
+use crate::{error::Error, types::NodeId, util::MsgBuffer};
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
 use ring::{
     aead::{Algorithm, LessSafeKey, UnboundKey, AES_128_GCM, AES_256_GCM, CHACHA20_POLY1305},
@@ -404,8 +404,7 @@ impl<P: Payload> InitState<P> {
     pub fn new(
         node_id: NodeId, payload: P, key_pair: Arc<Ed25519KeyPair>, trusted_keys: Arc<[Ed25519PublicKey]>,
         algorithms: Algorithms
-    ) -> Self
-    {
+    ) -> Self {
         let mut hash = [0; SALTED_NODE_ID_HASH_LEN];
         let rng = SystemRandom::new();
         rng.fill(&mut hash[0..4]).unwrap();

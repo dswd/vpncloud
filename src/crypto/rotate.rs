@@ -29,7 +29,8 @@
 //
 // The whole communication is sent via the crypto stream and is therefore encrypted and protected against tampering.
 
-use super::{Error, Key, MsgBuffer};
+use super::Key;
+use crate::{error::Error, util::MsgBuffer};
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
 use ring::{
     agreement::{agree_ephemeral, EphemeralPrivateKey, UnparsedPublicKey, X25519},
