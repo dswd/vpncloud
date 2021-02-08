@@ -1,0 +1,22 @@
+[Unit]
+Description=VpnCloud websocket proxy
+After=network-online.target
+Wants=network-online.target
+Documentation=man:vpncloud(1)
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/vpncloud ws-proxy -l 3210
+RestartSec=5s
+Restart=on-failure
+TasksMax=10
+MemoryMax=50M
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/log /run
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_SYS_CHROOT
+DeviceAllow=/dev/null rw
+
+[Install]
+WantedBy=multi-user.target
