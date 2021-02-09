@@ -1,3 +1,7 @@
+// VpnCloud - Peer-to-Peer VPN
+// Copyright (C) 2015-2021  Dennis Schwerdel
+// This software is licensed under GPL-3 or newer (see LICENSE.md)
+
 use super::{device::Type, types::Mode, util::Duration};
 use crate::config::{ConfigFile, ConfigFileBeacon, ConfigFileDevice, ConfigFileStatsd, CryptoConfig};
 use std::collections::HashMap;

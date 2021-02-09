@@ -1,8 +1,8 @@
 // VpnCloud - Peer-to-Peer VPN
-// Copyright (C) 2015-2020  Dennis Schwerdel
+// Copyright (C) 2015-2021  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use super::*;
+use super::common::*;
 
 #[test]
 fn direct_connect() {

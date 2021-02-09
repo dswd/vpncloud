@@ -35,6 +35,7 @@ somewhat stable state. VpnCloud features the following functionality:
 * Support for different forwarding/routing behaviors (Hub, Switch, Router)
 * NAT and firewall traversal using hole punching
 * Automatic port forwarding via UPnP
+* Websocket proxy mode for restrictive environments
 * Support for tunneled VLans (TAP devices)
 * Support for publishing [beacons](https://vpncloud.ddswd.de/docs/beacons) to help nodes find each others
 * Support for statsd monitoring
@@ -61,6 +62,9 @@ contributions are very welcome:
 
 * **Linux packages**: VpnCloud is stable enough to be packaged for Linux
   distributions. Maintainers who want to package VpnCloud are very welcome.
+* **Help with other platforms**: If you are a Rust developer with experience
+  on Windows or MacOS your help on porting VpnCloud to those platforms is very
+  welcome.
 * **Security review**: The security has been implemented with strong security
   primitives but it would be great if a cryptography expert could verify the
   system.

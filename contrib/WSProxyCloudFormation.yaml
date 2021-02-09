@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  VpnCloud Websocket Proxy
+  This will configure a websocket proxy to be used with VpnCloud.
+  Versions: Ubuntu Server 20.04 LTS + VpnCloud 2.1.0
+Parameters:
+  LatestAmiId:
+    Description: "Image to use (just leave this as it is)"
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/canonical/ubuntu/server/20.04/stable/current/arm64/hvm/ebs-gp2/ami-id'
+    AllowedValues:
+      - '/aws/service/canonical/ubuntu/server/20.04/stable/current/arm64/hvm/ebs-gp2/ami-id'
+Resources:
+  ProxySecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable HTTP access via port 80 and any UDP port
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: udp
+          FromPort: '1024'
+          ToPort: '65535'
+          CidrIp: 0.0.0.0/0
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    DependsOn:
+      - ProxySecurityGroup 
+    Properties:
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        SecurityGroups:
+          - !Ref ProxySecurityGroup
+        InstanceMarketOptions:
+          MarketType: spot
+        InstanceType: t4g.nano
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+            - Key: Name
+              Value: VpnCloud WS Proxy
+        CreditSpecification:
+          CpuCredits: standard
+        BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeType: standard
+            VolumeSize: '8'
+            DeleteOnTermination: 'true'
+            Encrypted: 'false'
+        UserData:
+          Fn::Base64: !Sub |
+            #cloud-config
+            packages:
+            - iperf3
+            - socat
+            runcmd:
+            - wget https://github.com/dswd/vpncloud/releases/download/v2.1.0/vpncloud_2.1.0_arm64.deb -O /tmp/vpncloud.deb
+            - dpkg -i /tmp/vpncloud.deb
+            - nohup vpncloud ws-proxy -l 80 &
+  ProxyInstance:
+    Type: 'AWS::EC2::Instance'
+    DependsOn:
+      - LaunchTemplate
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId:
+          Ref: LaunchTemplate
+        Version: 1
+Outputs:
+  ProxyURL:
+    Description: URL to use in VpnCloud config
+    Value: !Join 
+      - ''
+      - - 'ws://'
+        - !GetAtt 
+          - ProxyInstance
+          - PublicDnsName
+        - ':80'

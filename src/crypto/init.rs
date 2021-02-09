@@ -1,3 +1,7 @@
+// VpnCloud - Peer-to-Peer VPN
+// Copyright (C) 2015-2021  Dennis Schwerdel
+// This software is licensed under GPL-3 or newer (see LICENSE.md)
+
 // This module implements a 3-way handshake to initialize an authenticated and encrypted connection.
 //
 // The handshake assumes that each node has a asymmetric Curve 25519 key pair as well as a list of trusted public keys
@@ -57,7 +61,7 @@ use super::{
     Algorithms, EcdhPrivateKey, EcdhPublicKey, Ed25519PublicKey, Error, MsgBuffer, Payload, PeerCrypto,
     MESSAGE_TYPE_ROTATION
 };
-use crate::types::NodeId;
+use crate::{error::Error, types::NodeId, util::MsgBuffer};
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
 use ring::{
     aead::{Algorithm, LessSafeKey, UnboundKey, AES_128_GCM, AES_256_GCM, CHACHA20_POLY1305},
@@ -403,6 +407,7 @@ pub struct InitState<P: Payload> {
     last_message: Option<Vec<u8>>,
     crypto: Option<Arc<CryptoCore>>,
     algorithms: Algorithms,
+    #[allow(dead_code)] // Used in tests
     selected_algorithm: Option<&'static Algorithm>,
     failed_retries: usize
 }
@@ -411,8 +416,7 @@ impl<P: Payload> InitState<P> {
     pub fn new(
         node_id: NodeId, payload: P, key_pair: Arc<Ed25519KeyPair>, trusted_keys: Arc<[Ed25519PublicKey]>,
         algorithms: Algorithms
-    ) -> Self
-    {
+    ) -> Self {
         let mut hash = [0; SALTED_NODE_ID_HASH_LEN];
         let rng = SystemRandom::new();
         rng.fill(&mut hash[0..4]).unwrap();
@@ -502,7 +506,7 @@ impl<P: Payload> InitState<P> {
         if let Some(crypto) = &mut self.crypto {
             crypto.decrypt(data)?;
         }
-        Ok(P::read_from(Cursor::new(data.message()))?)
+        P::read_from(Cursor::new(data.message()))
     }
 
     fn check_salted_node_id_hash(&self, hash: &SaltedNodeIdHash, node_id: NodeId) -> bool {

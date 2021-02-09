@@ -1,5 +1,5 @@
 // VpnCloud - Peer-to-Peer VPN
-// Copyright (C) 2019-2020  Dennis Schwerdel
+// Copyright (C) 2015-2021  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 use ring::digest;
@@ -325,15 +325,17 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
 fn encode() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let mut peers = Vec::new();
-    peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
-    peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
+    let mut peers = vec![
+        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
+        SocketAddr::from_str("6.6.6.6:53").unwrap()
+    ];
     assert_eq!("WsHI31EWDMBYxvITiILIrm2k9gEik22E", ser.encode(&peers));
     peers.push(SocketAddr::from_str("[::1]:5678").unwrap());
     assert_eq!("WsHI3GXKaXCveo6uejmZizZ72kR6Y0L9T7h49TXONp1ugfKvvvEik22E", ser.encode(&peers));
-    let mut peers = Vec::new();
-    peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
-    peers.push(SocketAddr::from_str("6.6.6.6:54").unwrap());
+    let peers = vec![
+        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
+        SocketAddr::from_str("6.6.6.6:54").unwrap()
+    ];
     assert_eq!("WsHI32gm9eMSHP3Lm1GXcdP7rD3ik22E", ser.encode(&peers));
 }
 
@@ -341,9 +343,10 @@ fn encode() {
 fn decode() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let mut peers = Vec::new();
-    peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
-    peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
+    let mut peers = vec![
+        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
+        SocketAddr::from_str("6.6.6.6:53").unwrap()
+    ];
     assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode("WsHI31EWDMBYxvITiILIrm2k9gEik22E", None)));
     peers.push(SocketAddr::from_str("[::1]:5678").unwrap());
     assert_eq!(
@@ -356,9 +359,10 @@ fn decode() {
 fn decode_split() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let mut peers = Vec::new();
-    peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
-    peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
+    let peers = vec![
+        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
+        SocketAddr::from_str("6.6.6.6:53").unwrap()
+    ];
     assert_eq!(
         format!("{:?}", peers),
         format!("{:?}", ser.decode("WsHI3-1E.WD:MB Yx\tvI\nTi(IL)Ir[m2]k9ügEäik22E", None))
@@ -373,9 +377,10 @@ fn decode_split() {
 fn decode_offset() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let mut peers = Vec::new();
-    peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
-    peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
+    let peers = vec![
+        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
+        SocketAddr::from_str("6.6.6.6:53").unwrap()
+    ];
     assert_eq!(
         format!("{:?}", peers),
         format!("{:?}", ser.decode("Hello World: WsHI31EWDMBYxvITiILIrm2k9gEik22E! End of the World", None))
@@ -386,9 +391,10 @@ fn decode_offset() {
 fn decode_multiple() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let mut peers = Vec::new();
-    peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
-    peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
+    let peers = vec![
+        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
+        SocketAddr::from_str("6.6.6.6:53").unwrap()
+    ];
     assert_eq!(
         format!("{:?}", peers),
         format!("{:?}", ser.decode("WsHI31HVpqxFNMNSPrvik22E WsHI34yOBcZIulKdtn2ik22E", None))
@@ -399,9 +405,6 @@ fn decode_multiple() {
 fn decode_ttl() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let mut peers = Vec::new();
-    peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
-    peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
     MockTimeSource::set_time(2000 * 3600);
     assert_eq!(2, ser.decode("WsHI31EWDMBYxvITiILIrm2k9gEik22E", None).len());
     MockTimeSource::set_time(2100 * 3600);
@@ -440,9 +443,10 @@ fn decode_invalid() {
 fn encode_decode() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let mut peers = Vec::new();
-    peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
-    peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
+    let peers = vec![
+        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
+        SocketAddr::from_str("6.6.6.6:53").unwrap()
+    ];
     let data = ser.encode(&peers);
     let peers2 = ser.decode(&data, None);
     assert_eq!(format!("{:?}", peers), format!("{:?}", peers2));
@@ -452,9 +456,10 @@ fn encode_decode() {
 fn encode_decode_file() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let mut peers = Vec::new();
-    peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
-    peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
+    let peers = vec![
+        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
+        SocketAddr::from_str("6.6.6.6:53").unwrap()
+    ];
     let file = tempfile::NamedTempFile::new().expect("Failed to create temp file");
     assert!(ser.write_to_file(&peers, file.path()).is_ok());
     let peers2 = ser.read_from_file(file.path(), None);
@@ -466,9 +471,10 @@ fn encode_decode_file() {
 fn encode_decode_cmd() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let mut peers = Vec::new();
-    peers.push(SocketAddr::from_str("1.2.3.4:5678").unwrap());
-    peers.push(SocketAddr::from_str("6.6.6.6:53").unwrap());
+    let peers = vec![
+        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
+        SocketAddr::from_str("6.6.6.6:53").unwrap()
+    ];
     let file = tempfile::NamedTempFile::new().expect("Failed to create temp file");
     assert!(ser.write_to_cmd(&peers, &format!("echo $beacon > {}", file.path().display())).is_ok());
     thread::sleep(Duration::from_millis(100));

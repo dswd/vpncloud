@@ -2,14 +2,16 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### UNRELEASED
+### v2.1.0 (2021-02-06)
 
-- [added] Support for creating shell completions
+- [added] Support for websocket proxy mode
 - [added] Support for hook scripts to handle certain situations
+- [added] Support for creating shell completions
 - [removed] Removed dummy device type
 - [changed] Updated dependencies
 - [changed] Changed Rust version to 1.49.0
 - [fixed] Added missing peer address propagation
+- [fixed] Fixed problem with peer addresses without port
 
 ### v2.0.1 (2020-11-07)
 

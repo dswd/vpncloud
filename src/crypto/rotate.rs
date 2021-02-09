@@ -1,3 +1,7 @@
+// VpnCloud - Peer-to-Peer VPN
+// Copyright (C) 2015-2021  Dennis Schwerdel
+// This software is licensed under GPL-3 or newer (see LICENSE.md)
+
 // This module implements a turn based key rotation.
 //
 // The main idea is that both peers periodically create ecdh key pairs and exchange their public keys to create
@@ -25,7 +29,8 @@
 //
 // The whole communication is sent via the crypto stream and is therefore encrypted and protected against tampering.
 
-use super::{Error, Key, MsgBuffer};
+use super::Key;
+use crate::{error::Error, util::MsgBuffer};
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
 use ring::{
     agreement::{agree_ephemeral, EphemeralPrivateKey, UnparsedPublicKey, X25519},

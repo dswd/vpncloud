@@ -1,16 +1,17 @@
 // VpnCloud - Peer-to-Peer VPN
-// Copyright (C) 2015-2020  Dennis Schwerdel
+// Copyright (C) 2015-2021  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 use std::{
     collections::{HashMap, VecDeque},
     io::{self, ErrorKind},
-    net::{IpAddr, SocketAddr, UdpSocket},
+    net::{IpAddr, SocketAddr, UdpSocket, Ipv6Addr},
     os::unix::io::{AsRawFd, RawFd},
     sync::atomic::{AtomicBool, Ordering}
 };
 
 use super::util::{MockTimeSource, MsgBuffer, Time, TimeSource};
+use crate::port_forwarding::PortForwarding;
 
 pub fn mapped_addr(addr: SocketAddr) -> SocketAddr {
     // HOT PATH
@@ -20,16 +21,35 @@ pub fn mapped_addr(addr: SocketAddr) -> SocketAddr {
     }
 }
 
+pub fn get_ip() -> IpAddr {
+    let s = UdpSocket::bind("[::]:0").unwrap();
+    s.connect("8.8.8.8:0").unwrap();
+    s.local_addr().unwrap().ip()
+}
 
 pub trait Socket: AsRawFd + Sized {
-    fn listen(addr: SocketAddr) -> Result<Self, io::Error>;
+    fn listen(addr: &str) -> Result<Self, io::Error>;
     fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error>;
     fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error>;
     fn address(&self) -> Result<SocketAddr, io::Error>;
+    fn create_port_forwarding(&self) -> Option<PortForwarding>;
+}
+
+pub fn parse_listen(addr: &str) -> SocketAddr {
+    if let Some(addr) = addr.strip_prefix("*:") {
+        let port = try_fail!(addr.parse::<u16>(), "Invalid port: {}");
+        SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
+    } else if addr.contains(':') {
+        try_fail!(addr.parse::<SocketAddr>(), "Invalid address: {}: {}", addr)
+    } else {
+        let port = try_fail!(addr.parse::<u16>(), "Invalid port: {}");
+        SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
+    }
 }
 
 impl Socket for UdpSocket {
-    fn listen(addr: SocketAddr) -> Result<Self, io::Error> {
+    fn listen(addr: &str) -> Result<Self, io::Error> {
+        let addr = parse_listen(addr);
         UdpSocket::bind(addr)
     }
 
@@ -45,7 +65,13 @@ impl Socket for UdpSocket {
     }
 
     fn address(&self) -> Result<SocketAddr, io::Error> {
-        self.local_addr()
+        let mut addr = self.local_addr()?;
+        addr.set_ip(get_ip());
+        Ok(addr)
+    }
+
+    fn create_port_forwarding(&self) -> Option<PortForwarding> {
+        PortForwarding::new(self.address().unwrap().port())
     }
 }
 
@@ -67,8 +93,8 @@ impl MockSocket {
             nat: Self::get_nat(),
             nat_peers: HashMap::new(),
             address,
-            outbound: VecDeque::new(),
-            inbound: VecDeque::new()
+            outbound: VecDeque::with_capacity(10),
+            inbound: VecDeque::with_capacity(10)
         }
     }
 
@@ -107,8 +133,8 @@ impl AsRawFd for MockSocket {
 }
 
 impl Socket for MockSocket {
-    fn listen(addr: SocketAddr) -> Result<Self, io::Error> {
-        Ok(Self::new(addr))
+    fn listen(addr: &str) -> Result<Self, io::Error> {
+        Ok(Self::new(parse_listen(addr)))
     }
 
     fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
@@ -123,7 +149,7 @@ impl Socket for MockSocket {
     }
 
     fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error> {
-        self.outbound.push_back((addr, data.to_owned()));
+        self.outbound.push_back((addr, data.into()));
         if self.nat {
             self.nat_peers.insert(addr, MockTimeSource::now() + 300);
         }
@@ -132,5 +158,24 @@ impl Socket for MockSocket {
 
     fn address(&self) -> Result<SocketAddr, io::Error> {
         Ok(self.address)
+    }
+
+    fn create_port_forwarding(&self) -> Option<PortForwarding> {
+        None
+    }
+}
+
+#[cfg(feature = "bench")]
+mod bench {
+    use std::net::{Ipv4Addr, SocketAddrV4, UdpSocket};
+    use test::Bencher;
+
+    #[bench]
+    fn udp_send(b: &mut Bencher) {
+        let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let data = [0; 1400];
+        let addr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 1);
+        b.iter(|| sock.send_to(&data, &addr).unwrap());
+        b.bytes = 1400;
     }
 }

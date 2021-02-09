@@ -1,5 +1,5 @@
 // VpnCloud - Peer-to-Peer VPN
-// Copyright (C) 2015-2020  Dennis Schwerdel
+// Copyright (C) 2015-2021  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 mod device_thread;
@@ -53,6 +53,7 @@ const SPACE_BEFORE: usize = 100;
 
 struct PeerData {
     addrs: AddrList,
+    #[allow(dead_code)] //TODO: export in status
     last_seen: Time,
     timeout: Time,
     peer_timeout: u16,
@@ -103,11 +104,7 @@ pub struct GenericCloud<D: Device, P: Protocol, S: Socket, TS: TimeSource> {
 
 impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS> {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(config: &Config, device: D, port_forwarding: Option<PortForwarding>, stats_file: Option<File>) -> Self {
-        let socket = match S::listen(config.listen) {
-            Ok(socket) => socket,
-            Err(err) => fail!("Failed to open socket {}: {}", config.listen, err)
-        };
+    pub fn new(config: &Config, socket: S, device: D, port_forwarding: Option<PortForwarding>, stats_file: Option<File>) -> Self {
         let (learning, broadcast) = match config.mode {
             Mode::Normal => {
                 match config.device_type {
@@ -235,6 +232,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             self.own_addresses.push(pfw.get_internal_ip().into());
             self.own_addresses.push(pfw.get_external_ip().into());
         }
+        debug!("Own addresses: {:?}", self.own_addresses);
         // TODO: detect address changes and call event
         Ok(())
     }
@@ -249,12 +247,8 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     ///
     /// This method adds a peer to the list of nodes to reconnect to. A periodic task will try to
     /// connect to the peer if it is not already connected.
-    pub fn add_reconnect_peer(&mut self, mut add: String) {
+    pub fn add_reconnect_peer(&mut self, add: String) {
         let now = TS::now();
-        if add.find(':').unwrap_or(0) <= add.find(']').unwrap_or(0) {
-            // : not present or only in IPv6 address
-            add = format!("{}:{}", add, DEFAULT_PORT)
-        }
         let resolved = match resolve(&add as &str) {
             Ok(addrs) => addrs,
             Err(err) => {
@@ -472,7 +466,6 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             self.next_stats_out = now + STATS_INTERVAL;
             self.traffic.period(Some(5));
         }
-        // TODO: every 5 minutes: EVENT periodic
         if let Some(peers) = self.beacon_serializer.get_cmd_results() {
             debug!("Loaded beacon with peers: {:?}", peers);
             for peer in peers {
@@ -921,7 +914,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     /// Also, this method will call `housekeep` every second.
     pub fn run(&mut self) {
         let ctrlc = CtrlC::new();
-        let waiter = try_fail!(WaitImpl::new(&self.socket, &self.device, 1000), "Failed to setup poll: {}");
+        let waiter = try_fail!(WaitImpl::new(self.socket.as_raw_fd(), self.device.as_raw_fd(), 1000), "Failed to setup poll: {}");
         let mut buffer = MsgBuffer::new(SPACE_BEFORE);
         let mut poll_error = false;
         self.config.call_hook("vpn_started", vec![("IFNAME", self.device.ifname())], true);

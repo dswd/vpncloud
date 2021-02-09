@@ -1,140 +1,82 @@
 # This configuration file uses the YAML format.
-
-# This configuration can be enabled/disabled and controlled by adding the
-# network to `/etc/default/vpncloud` and starting/stopping it via
-# `/etc/init.d/vpncloud start/stop` on non-systemd systems and via
-# `systemctl enable/disable vpncloud@NAME` and
-# `service vpncloud@NAME start/stop` on systemd systems.
+# ~ means "no value" (i.e. "default value")
+# Replace it by a value and put quotes (") around values with special characters
+# List items start with a dash and a space (- )
+# Note that the whitespace before the settings names is important for the file structure
 
 
-# The port number or ip:port on which to listen for data.
-# Note: Every VPN needs a different port number.
-listen: 3210
+listen: 3210                # The port number or ip:port on which to listen for data.
 
-# Address of a peer to connect to. The address should be in the form
-# `addr:port`. If the node is not started, the connection will be retried
-# periodically. This parameter can be repeated to connect to multiple peers.
-# Note: Several entries can be separated by spaces.
-peers:
-#  - node2.example.com:3210
-#  - node3.example.com:3210
+peers:                      # Address of a peer to connect to. 
+                            # The address should be in the form `addr:port`.
+                            # Put [] for an empty list
+  - node2.example.com:3210
+  - node3.example.com:3210
 
-# Peer timeout in seconds. The peers will exchange information periodically
-# and drop peers that are silent for this period of time.
-peer-timeout: 300
+crypto:                     # Crypto settings
+  password: ~  # <-- CHANGE # A password to encrypt the VPN data.
+  private-key: ~            # Private key (alternative to password)
+  public-key: ~             # Public key (alternative to password)
+  trusted-keys: []          # Trusted keys (alternative to password)
+                            # Replace [] with list of keys
 
-# Switch table entry timeout in seconds. This parameter is only used in switch
-# mode. Addresses that have not been seen for the given period of time  will
-# be forgot.
-switch-timeout: 300
+ip: ~          # <-- CHANGE # An IP address to set on the device, e.g. 10.0.0.1
+                            # Must be different for every node on the VPN
 
 
-# Crypto settings
-#crypto:
+# ------------------ Advanced features ahead --------------------
 
-  # An optional password to encrypt the VPN data.
-  #password: ""
+auto-claim: true            # Whether to automatically claim the configured IP on tun devices
 
-  # Private key
-  #private-key: ""
-
-  # Public key
-  #public-key: ""
-
-  # Trusted keys
-  #trusted-keys:
-
-  # Supported algorithms. Subset of "aes128", "aes256", "chacha20", and 
-  # "plain" where "plain" means unencrypted.
-  #algorithms:
-
-
-# Device settings
-device:
-
-  # Name of the virtual device. Any `%d` will be filled with a free number.
-  name: "vpncloud%d"
-
-  # Set the type of network. There are two options: **tap** devices process
-  # Ethernet frames **tun** devices process IP packets. [default: `tun`]
-  type: tun
-
-  # The path of the /dev/net/tun device. Only change if you need to.
-  #path: /dev/net/tun
-
-  # Whether to fix detected rp-filter problems
-  fix-rp-filter: false
-
-
-# The mode of the VPN. The VPN can like a router, a switch or a hub. A **hub**
-# will send all data always to all peers. A **switch** will learn addresses
-# from incoming data and only send data to all peers when the address is
-# unknown. A **router** will send data according to known subnets of the
-# peers and ignore them otherwise. The **normal** mode is switch for tap
-# devices and router for tun devices. [default: `normal`]
-mode: normal
-
-
-# The local subnets to use. This parameter should be in the form
-# `address/prefixlen` where address is an IPv4 address, an IPv6 address, or a
-# MAC address. The prefix length is the number of significant front bits that
-# distinguish the subnet from other subnets. Example: `10.1.1.0/24`.
-# Note: Several entries can be separated by spaces.
-#claims:
+claims:                     # The local subnets to use. This parameter should be in the form
+                            # `address/prefixlen` where address is an IPv4 address, an IPv6 address, or a
+                            # MAC address. The prefix length is the number of significant front bits that
+                            # distinguish the subnet from other subnets.
 #  - 10.1.1.0/24
 
-# Whether to automatically claim the configured IP on tun devices
-auto-claim: true
+ifup: ~                     # Command to setup the interface. Use $IFNAME for interface name.
+ifdown: ~                   # Command to tear down the interface. Use $IFNAME for interface name.
+
+device:                     # Device settings
+  name: "vpncloud%d"        # Name of the virtual device. Any `%d` will be filled with a free number.
+  type: tun                 # Set the type of network. There are two options: **tap** devices process
+                            # Ethernet frames **tun** devices process IP packets. [default: `tun`]
+  path: "/dev/net/tun"      # Path of the tun device
+  fix-rp-filter: false      # Whether to fix detected rp-filter problems
+
+mode: normal                # Mode to run in, "normal", "hub", "switch", or "router" (see manpage)
+
+port-forwarding: true       # Try to map a port on the router
+
+switch-timeout: 300         # Switch timeout in seconds (switch mode only)
+
+peer-timeout: 300           # Peer timeout in seconds
+keepalive: ~                # Keepalive interval in seconds
+
+beacon:                     # Beacon settings
+  store: ~                  # File or command (prefix: "|") to use for storing beacons
+  load: ~                   # File or command (prefix: "|") to use for loading beacons  
+  interval: 3600            # How often to load and store beacons (in seconds)
+  password: ~               # Password to encrypt beacon data with
+
+statsd:                     # Statsd settings
+  server: ~                 # Statsd server name:port
+  prefix: ~                 # Prefix to use for stats keys
+
+pid-file: ~                 # Store the process id in this file when running in the background
+stats-file: ~               # Periodically write statistics on peers and current traffic to the given file
+
+hook: ~                     # Hook script to run for every event
+hooks: {}                   # Multiple hook scripts to run for specific events
 
 
-# An IP address to set on the device
-#ip: "" 
 
-# A command to setup the network interface. The command will be run (as
-# parameter to `sh -c`) when the device has been created to configure it.
-# The name of the allocated device will be available via the environment
-# variable `IFNAME`.
-#ifup: ""
-
-# A command to bring down the network interface. The command will be run (as
-# parameter to `sh -c`) to remove any configuration from the device.
-# The name of the allocated device will be available via the environment
-# variable `IFNAME`.
-#ifdown: ""
-
-# Store the process id in this file when running in the background. If set,
-# the given file will be created containing the process id of the new
-# background process. This option is only used when running in background.
-#pid_file: ""
-
-# Change the user and/or group of the process once all the setup has been
-# done and before spawning the background process. This option is only used
-# when running in background.
-#user: ""
-#group: ""
-
-
-# Beacon settings
-beacon:
-
-  # File or command (prefix: "|") to use for storing beacons
-  #store: ""
-
-  # File or command (prefix: "|") to use for loading beacons
-  #load: ""
-
-  # How often to load and store beacons (in seconds)
-  interval: 3600
-
-  # Password to encrypt beacon data with
-  #password: ""
-
-
-# Statsd settings
-#statsd:
-
-  # Statsd server name:port
-  #server: ""
-
-  # Prefix to use for stats keys
-  #prefix: "" 
+# Copy this template and save it to a file named /etc/vpncloud/MYNET.net (replace MYNET with your network name)
+#
+# On systems using systemd (most common):
+#    start/stop the network:            service vpncloud@MYNET start/stop
+#    enable/disable automatic startup:  systemctl enable/disable vpncloud@MYNET
+#
+# On older systems (using sysv init):
+#    Add the network name to /etc/default/vpncloud
+#    start/stop all VpnCloud networks:  /etc/init.d/vpncloud start/stop
