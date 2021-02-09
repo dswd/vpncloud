@@ -1,0 +1,3 @@
+FROM snapcore/snapcraft:stable
+
+RUN useradd -ms /bin/bash user
