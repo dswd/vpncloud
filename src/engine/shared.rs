@@ -30,7 +30,7 @@ impl SharedPeerCrypto {
         }
     }
 
-    pub fn for_each(&mut self, mut callback: impl FnMut(SocketAddr, &mut PeerCrypto<NodeInfo>) -> Result<(), Error>) -> Result<(), Error> {
+    pub fn for_each(&mut self, mut callback: impl FnMut(SocketAddr, &mut CryptoCore) -> Result<(), Error>) -> Result<(), Error> {
         let mut peers = self.peers.lock();
         for (k, v) in peers.iter_mut() {
             callback(*k, v)?

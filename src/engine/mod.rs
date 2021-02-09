@@ -80,7 +80,7 @@ pub struct GenericCloud<D: Device, P: Protocol, S: Socket, TS: TimeSource> {
     peers: HashMap<SocketAddr, PeerData, Hash>,
     reconnect_peers: SmallVec<[ReconnectEntry; 3]>,
     own_addresses: AddrList,
-    pending_inits: HashMap<SocketAddr, PeerCrypto<NodeInfo>, Hash>,
+    pending_inits: HashMap<SocketAddr, InitState<NodeInfo>, Hash>,
     table: ClaimTable<TS>,
     socket: S,
     device: D,

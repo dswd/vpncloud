@@ -13,9 +13,9 @@ use std::{
 };
 
 pub use crate::{
-    cloud::GenericCloud,
     config::{Config, CryptoConfig},
     device::{MockDevice, Type},
+    engine::GenericCloud,
     net::MockSocket,
     payload::{Frame, Packet, Protocol},
     types::Range,
@@ -44,8 +44,8 @@ impl DebugLogger {
 
 impl log::Log for DebugLogger {
     #[inline]
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
-        log::max_level() > metadata.level()
+    fn enabled(&self, _metadata: &log::Metadata) -> bool {
+        true
     }
 
     #[inline]
@@ -79,7 +79,7 @@ impl<P: Protocol> Simulator<P> {
     pub fn new() -> Self {
         init_debug_logger();
         MockTimeSource::set_time(0);
-        Self { next_port: 1, nodes: HashMap::default(), messages: VecDeque::with_capacity(10) }
+        Self { next_port: 1, nodes: HashMap::default(), messages: VecDeque::default() }
     }
 
     pub fn add_node(&mut self, nat: bool, config: &Config) -> SocketAddr {

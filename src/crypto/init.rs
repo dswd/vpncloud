@@ -58,8 +58,8 @@
 use super::{
     core::{CryptoCore, EXTRA_LEN},
     rotate::RotationState,
-    Algorithms, EcdhPrivateKey, EcdhPublicKey, Ed25519PublicKey, Error, MsgBuffer, Payload, PeerCrypto,
-    MESSAGE_TYPE_ROTATION
+    Algorithms, EcdhPrivateKey, EcdhPublicKey, Ed25519PublicKey, Payload, PeerCrypto,
+    common::MESSAGE_TYPE_ROTATION
 };
 use crate::{error::Error, types::NodeId, util::MsgBuffer};
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
@@ -679,16 +679,22 @@ impl<P: Payload> InitState<P> {
 
     pub fn finish(self, buffer: &mut MsgBuffer) -> PeerCrypto {
         assert!(buffer.is_empty());
-        let rotation = if self.crypto.is_some() { Some(RotationState::new(!self.is_initiator, buffer)) } else { None };
-        if !buffer.is_empty() {
-            buffer.prepend_byte(MESSAGE_TYPE_ROTATION);
-        }
-        PeerCrypto {
-            algorithm: self.crypto.map(|c| c.algorithm()),
-            core: self.crypto,
-            rotation,
-            rotate_counter: 0,
-            last_init_message: self.last_message
+        if let Some(crypto) = self.crypto {
+            let rotation = RotationState::new(!self.is_initiator, buffer);
+            if !buffer.is_empty() {
+                buffer.prepend_byte(MESSAGE_TYPE_ROTATION);
+            }
+            PeerCrypto::Encrypted {
+                algorithm: crypto.algorithm(),
+                core: crypto,
+                rotation,
+                rotate_counter: 0,
+                last_init_message: self.last_message.unwrap()
+            }
+        } else {
+            PeerCrypto::Unencrypted {
+                last_init_message: self.last_message.unwrap()
+            }
         }
     }
 }
