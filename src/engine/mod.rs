@@ -26,7 +26,7 @@ use smallvec::{smallvec, SmallVec};
 use crate::{
     beacon::BeaconSerializer,
     config::{Config, DEFAULT_PEER_TIMEOUT, DEFAULT_PORT},
-    crypto::{is_init_message, Crypto, MessageResult, PeerCrypto},
+    crypto::{is_init_message, Crypto, MessageResult, PeerCrypto, InitState, InitResult},
     device::{Device, Type},
     error::Error,
     messages::{
@@ -58,7 +58,7 @@ struct PeerData {
     timeout: Time,
     peer_timeout: u16,
     node_id: NodeId,
-    crypto: PeerCrypto<NodeInfo>
+    crypto: PeerCrypto
 }
 
 #[derive(Clone)]
@@ -190,7 +190,8 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             msg_data.set_start(msg.get_start());
             msg_data.set_length(msg.len());
             msg_data.message_mut().clone_from_slice(msg.message());
-            peer.crypto.send_message(type_, &mut msg_data)?;
+            msg_data.prepend_byte(type_);
+            peer.crypto.encrypt_message(&mut msg_data);
             self.traffic.count_out_traffic(*addr, msg_data.len());
             match self.socket.send(msg_data.message(), *addr) {
                 Ok(written) if written == msg_data.len() => Ok(()),
@@ -221,7 +222,8 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             Some(peer) => peer,
             None => return Err(Error::Message("Sending to node that is not a peer"))
         };
-        peer.crypto.send_message(type_, msg)?;
+        msg.prepend_byte(type_);
+        peer.crypto.encrypt_message(msg);
         self.send_to(addr, msg)
     }
 
@@ -330,7 +332,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         let payload = self.create_node_info();
         let mut peer_crypto = self.crypto.peer_instance(payload);
         let mut msg = MsgBuffer::new(SPACE_BEFORE);
-        peer_crypto.initialize(&mut msg)?;
+        peer_crypto.send_ping(&mut msg);
         self.pending_inits.insert(addr, peer_crypto);
         self.send_to(addr, &mut msg)
     }

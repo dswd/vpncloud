@@ -5,7 +5,7 @@ use super::{
 
 use crate::{
     config::DEFAULT_PEER_TIMEOUT,
-    crypto::{is_init_message, MessageResult, PeerCrypto},
+    crypto::{is_init_message, MessageResult, PeerCrypto, InitState, InitResult},
     engine::{addr_nice, resolve, Hash, PeerData},
     error::Error,
     messages::{AddrList, NodeInfo, PeerInfo},
@@ -38,7 +38,7 @@ pub struct SocketThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
     device: D,
     next_housekeep: Time,
     own_addresses: AddrList,
-    pending_inits: HashMap<SocketAddr, PeerCrypto<NodeInfo>, Hash>,
+    pending_inits: HashMap<SocketAddr, InitState<NodeInfo>, Hash>,
     crypto: Crypto,
     peers: HashMap<SocketAddr, PeerData, Hash>,
     // Shared fields
@@ -48,7 +48,7 @@ pub struct SocketThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
 
 impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS> {
     #[inline]
-    fn send_to(&mut self, addr: SocketAddr, msg: &mut MsgBuffer) -> Result<(), Error> {
+    fn send_to(&mut self, addr: SocketAddr, msg: &MsgBuffer) -> Result<(), Error> {
         debug!("Sending msg with {} bytes to {}", msg.len(), addr);
         self.traffic.count_out_traffic(addr, msg.len());
         match self.socket.send(msg.message(), addr) {
@@ -68,10 +68,10 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         }
         debug!("Connecting to {:?}", addr);
         let payload = self.create_node_info();
-        let mut peer_crypto = self.crypto.peer_instance(payload);
+        let mut init = self.crypto.peer_instance(payload);
         let mut msg = MsgBuffer::new(SPACE_BEFORE);
-        peer_crypto.initialize(&mut msg)?;
-        self.pending_inits.insert(addr, peer_crypto);
+        init.send_ping(&mut msg);
+        self.pending_inits.insert(addr, init);
         self.send_to(addr, &mut msg)
     }
 
@@ -129,18 +129,23 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         Ok(())
     }
 
-    fn add_new_peer(&mut self, addr: SocketAddr, info: NodeInfo) -> Result<(), Error> {
+    fn add_new_peer(&mut self, addr: SocketAddr, info: NodeInfo, msg: &mut MsgBuffer) -> Result<(), Error> {
         info!("Added peer {}", addr_nice(addr));
         if let Some(init) = self.pending_inits.remove(&addr) {
+            msg.clear();
+            let crypto = init.finish(&mut msg);
             self.peers.insert(addr, PeerData {
                 addrs: info.addrs.clone(),
-                crypto: init,
+                crypto,
                 node_id: info.node_id,
                 peer_timeout: info.peer_timeout.unwrap_or(DEFAULT_PEER_TIMEOUT),
                 last_seen: TS::now(),
                 timeout: TS::now() + self.config.peer_timeout as Time
             });
             self.update_peer_info(addr, Some(info))?;
+            if !msg.is_empty() {
+                self.send_to(addr, msg)?;
+            }
         } else {
             error!("No init for new peer {}", addr_nice(addr));
         }
@@ -193,7 +198,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
     }
 
     fn process_message(
-        &mut self, src: SocketAddr, msg_result: MessageResult<NodeInfo>, data: &mut MsgBuffer
+        &mut self, src: SocketAddr, msg_result: MessageResult, data: &mut MsgBuffer
     ) -> Result<(), Error> {
         match msg_result {
             MessageResult::Message(type_) => {
@@ -217,11 +222,6 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
                     }
                 }
             }
-            MessageResult::Initialized(info) => self.add_new_peer(src, info)?,
-            MessageResult::InitializedWithReply(info) => {
-                self.add_new_peer(src, info)?;
-                self.send_to(src, data)?
-            }
             MessageResult::Reply => self.send_to(src, data)?,
             MessageResult::None => ()
         }
@@ -231,43 +231,48 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
     fn handle_message(&mut self, src: SocketAddr, data: &mut MsgBuffer) -> Result<(), Error> {
         let src = mapped_addr(src);
         debug!("Received {} bytes from {}", data.len(), src);
-        let msg_result = if let Some(init) = self.pending_inits.get_mut(&src) {
-            init.handle_message(data)
-        } else if is_init_message(data.message()) {
-            let mut result = None;
-            if let Some(peer) = self.peers.get_mut(&src) {
-                if peer.crypto.has_init() {
-                    result = Some(peer.crypto.handle_message(data))
-                }
-            }
-            if let Some(result) = result {
-                result
-            } else {
-                let mut init = self.crypto.peer_instance(self.create_node_info());
-                let msg_result = init.handle_message(data);
-                match msg_result {
-                    Ok(res) => {
-                        self.pending_inits.insert(src, init);
-                        Ok(res)
-                    }
-                    Err(err) => {
-                        self.traffic.count_invalid_protocol(data.len());
-                        return Err(err)
-                    }
-                }
-            }
-        } else if let Some(peer) = self.peers.get_mut(&src) {
+        if let Some(result) = self.peers.get_mut(&src).map(|peer| {
             peer.crypto.handle_message(data)
-        } else {
+        }) {
+            return self.process_message(src, result?, data)
+        }
+        let is_init = is_init_message(data.message()); 
+        if let Some(result) = self.pending_inits.get_mut(&src).map(|init| {
+            if is_init {
+                init.handle_init(data)
+            } else {
+                data.clear();
+                init.repeat_last_message(data);
+                Ok(InitResult::Continue)
+            }
+        }) {
+            match result? {
+                InitResult::Continue => {
+                    if !data.is_empty() {
+                        self.send_to(src, data)?
+                    }
+                },
+                InitResult::Success { peer_payload, is_initiator } => {
+                    self.add_new_peer(src, peer_payload, data)?
+                }
+            }
+            return Ok(())
+        }
+        if !is_init_message(data.message()) {
             info!("Ignoring non-init message from unknown peer {}", addr_nice(src));
             self.traffic.count_invalid_protocol(data.len());
             return Ok(())
-        };
+        }
+        let mut init = self.crypto.peer_instance(self.create_node_info());
+        let msg_result = init.handle_init(data);
         match msg_result {
-            Ok(val) => self.process_message(src, val, data),
+            Ok(res) => {
+                self.pending_inits.insert(src, init);
+                self.send_to(src, data)
+            }
             Err(err) => {
                 self.traffic.count_invalid_protocol(data.len());
-                Err(err)
+                return Err(err)
             }
         }
     }

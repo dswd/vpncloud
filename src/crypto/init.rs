@@ -552,7 +552,7 @@ impl<P: Payload> InitState<P> {
         out.set_length(len);
     }
 
-    fn repeat_last_message(&self, out: &mut MsgBuffer) {
+    pub fn repeat_last_message(&self, out: &mut MsgBuffer) {
         if let Some(ref bytes) = self.last_message {
             debug!("Repeating last init message");
             let buffer = out.buffer();

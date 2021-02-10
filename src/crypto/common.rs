@@ -241,7 +241,7 @@ impl PeerCrypto {
         }
     }
 
-    fn encrypt_message(&mut self, buffer: &mut MsgBuffer) {
+    pub fn encrypt_message(&mut self, buffer: &mut MsgBuffer) {
         // HOT PATH
         if let PeerCrypto::Encrypted { core, .. } = self {
             core.encrypt(buffer)
@@ -281,13 +281,6 @@ impl PeerCrypto {
                 Ok(MessageResult::Message(msg_type))
             }
         }
-    }
-
-    pub fn send_message(&mut self, type_: u8, buffer: &mut MsgBuffer) {
-        // HOT PATH
-        assert_ne!(type_, MESSAGE_TYPE_ROTATION);
-        buffer.prepend_byte(type_);
-        self.encrypt_message(buffer);
     }
 
     pub fn every_second(&mut self, out: &mut MsgBuffer) -> MessageResult {
@@ -367,7 +360,8 @@ mod tests {
         buffer.set_length(1000);
         rng.fill(buffer.message_mut()).unwrap();
         for _ in 0..1000 {
-            node1.send_message(1, &mut buffer);
+            buffer.prepend_byte(1);
+            node1.encrypt_message(&mut buffer);
             let res = node2.handle_message(&mut buffer).unwrap();
             assert_eq!(res, MessageResult::Message(1));
 

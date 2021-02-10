@@ -12,7 +12,7 @@ use parking_lot::Mutex;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 pub struct SharedPeerCrypto {
-    peers: Arc<Mutex<HashMap<SocketAddr, Arc<CryptoCore>, Hash>>>
+    peers: Arc<Mutex<HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash>>>
 }
 
 impl SharedPeerCrypto {
@@ -20,20 +20,19 @@ impl SharedPeerCrypto {
         // TODO sync if needed
     }
 
-    pub fn send_message(&mut self, peer: SocketAddr, type_: u8, data: &mut MsgBuffer) -> Result<bool, Error> {
+    pub fn encrypt_for(&mut self, peer: SocketAddr, data: &mut MsgBuffer) -> Result<(), Error> {
         let mut peers = self.peers.lock();
-        if let Some(peer) = peers.get_mut(&peer) {
-            peer.send_message(type_, data);
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        match peers.get_mut(&peer) {
+            None => Err(Error::InvalidCryptoState("No crypto found for peer")),
+            Some(None) => Ok(()),
+            Some(Some(crypto)) => Ok(crypto.encrypt(data))
+        }       
     }
 
-    pub fn for_each(&mut self, mut callback: impl FnMut(SocketAddr, &mut CryptoCore) -> Result<(), Error>) -> Result<(), Error> {
+    pub fn for_each(&mut self, mut callback: impl FnMut(SocketAddr, Option<Arc<CryptoCore>>) -> Result<(), Error>) -> Result<(), Error> {
         let mut peers = self.peers.lock();
         for (k, v) in peers.iter_mut() {
-            callback(*k, v)?
+            callback(*k, v.clone())?
         }
         Ok(())
     }

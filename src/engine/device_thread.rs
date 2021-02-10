@@ -42,11 +42,9 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
     #[inline]
     fn send_msg(&mut self, addr: SocketAddr, type_: u8, msg: &mut MsgBuffer) -> Result<(), Error> {
         debug!("Sending msg with {} bytes to {}", msg.len(), addr);
-        if self.peer_crypto.send_message(addr, type_, msg)? {
-            self.send_to(addr, msg)
-        } else {
-            Err(Error::Message("Sending to node that is not a peer"))
-        }
+        msg.prepend_byte(type_);
+        self.peer_crypto.encrypt_for(addr, msg)?;
+        self.send_to(addr, msg)
     }
 
     #[inline]
@@ -57,7 +55,10 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
             msg_data.set_start(msg.get_start());
             msg_data.set_length(msg.len());
             msg_data.message_mut().clone_from_slice(msg.message());
-            crypto.send_message(type_, &mut msg_data)?;
+            msg_data.prepend_byte(type_);
+            if let Some(crypto) = crypto {
+                crypto.encrypt(&mut msg_data);
+            }
             self.traffic.count_out_traffic(addr, msg_data.len());
             match self.socket.send(msg_data.message(), addr) {
                 Ok(written) if written == msg_data.len() => Ok(()),
