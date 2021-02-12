@@ -279,6 +279,19 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
 
     fn housekeep(&mut self) -> Result<(), Error> {
         // self.shared.sync();
+        // * = can be in different thread, ** only with caching/sync
+        //TODO: peers: timeout **
+        //TODO: table: timeout **
+        //TODO: rotate crypto keys
+        //TODO: time out pending inits
+        //TODO: extend port forwarding *
+        //TODO: reset own address **
+        //TODO: send peer lists **
+        //TODO: reconnect to peers **
+        //TODO: write to statsd **
+        //TODO: write to stats file **
+        //TODO: read beacon **
+        //TODO: write beacon **
         // TODO: sync
         unimplemented!();
     }
