@@ -69,6 +69,27 @@ pub struct Crypto {
 }
 
 impl Crypto {
+    pub fn parse_algorithms(algos: &[String]) -> Result<(bool, Vec<&'static aead::Algorithm>), Error> {
+        let algorithms = algos.iter().map(|a| a as &str).collect::<Vec<_>>();
+        let allowed = if algorithms.is_empty() { &DEFAULT_ALGORITHMS } else { &algorithms as &[&str] };
+        let mut algos = vec![];
+        let mut unencrypted = false;
+        for name in allowed {
+            let algo = match &name.to_uppercase() as &str {
+                "UNENCRYPTED" | "NONE" | "PLAIN" => {
+                    unencrypted = true;
+                    continue
+                }
+                "AES128" | "AES128_GCM" | "AES_128" | "AES_128_GCM" => &aead::AES_128_GCM,
+                "AES256" | "AES256_GCM" | "AES_256" | "AES_256_GCM" => &aead::AES_256_GCM,
+                "CHACHA" | "CHACHA20" | "CHACHA20_POLY1305" => &aead::CHACHA20_POLY1305,
+                _ => return Err(Error::InvalidConfig("Unknown crypto method"))
+            };
+            algos.push(algo)
+        }
+        Ok((unencrypted, algos))
+    }
+
     pub fn new(node_id: NodeId, config: &Config) -> Result<Self, Error> {
         let key_pair = if let Some(priv_key) = &config.private_key {
             if let Some(pub_key) = &config.public_key {
@@ -91,26 +112,17 @@ impl Crypto {
             key.clone_from_slice(key_pair.public_key().as_ref());
             trusted_keys.push(key);
         }
-        let mut algos = Algorithms { algorithm_speeds: smallvec![], allow_unencrypted: false };
-        let algorithms = config.algorithms.iter().map(|a| a as &str).collect::<Vec<_>>();
-        let allowed = if algorithms.is_empty() { &DEFAULT_ALGORITHMS } else { &algorithms as &[&str] };
+        let (unencrypted, allowed_algos) = Self::parse_algorithms(&config.algorithms)?;
+        if unencrypted {
+            warn!("Crypto settings allow unencrypted connections")
+        }
+        let mut algos = Algorithms { algorithm_speeds: smallvec![], allow_unencrypted: unencrypted };
         let duration = Duration::from_secs_f32(SPEED_TEST_TIME);
         let mut speeds = Vec::new();
-        for name in allowed {
-            let algo = match &name.to_uppercase() as &str {
-                "UNENCRYPTED" | "NONE" | "PLAIN" => {
-                    algos.allow_unencrypted = true;
-                    warn!("Crypto settings allow unencrypted connections");
-                    continue
-                }
-                "AES128" | "AES128_GCM" | "AES_128" | "AES_128_GCM" => &aead::AES_128_GCM,
-                "AES256" | "AES256_GCM" | "AES_256" | "AES_256_GCM" => &aead::AES_256_GCM,
-                "CHACHA" | "CHACHA20" | "CHACHA20_POLY1305" => &aead::CHACHA20_POLY1305,
-                _ => return Err(Error::InvalidConfig("Unknown crypto method"))
-            };
+        for algo in allowed_algos {
             let speed = test_speed(algo, &duration);
             algos.algorithm_speeds.push((algo, speed as f32));
-            speeds.push((name, speed as f32));
+            speeds.push((format!("{:?}", algo), speed as f32));
         }
         if !speeds.is_empty() {
             info!(
@@ -180,6 +192,11 @@ impl Crypto {
         Ok(result)
     }
 
+    pub fn public_key_from_private_key(privkey: &str) -> Result<String, Error> {
+        let keypair = Self::parse_private_key(privkey)?;
+        Ok(to_base62(keypair.public_key().as_ref()))
+    }
+
     pub fn peer_instance<P: Payload>(&self, payload: P) -> PeerCrypto<P> {
         PeerCrypto::new(
             self.node_id,
@@ -216,8 +233,7 @@ impl<P: Payload> PeerCrypto<P> {
     pub fn new(
         node_id: NodeId, init_payload: P, key_pair: Arc<Ed25519KeyPair>, trusted_keys: Arc<[Ed25519PublicKey]>,
         algorithms: Algorithms
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             node_id,
             init: Some(InitState::new(node_id, init_payload, key_pair, trusted_keys, algorithms)),

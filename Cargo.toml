@@ -22,15 +22,16 @@ libc = "0.2"
 rand = "0.8"
 fnv = "1"
 yaml-rust = "0.4"
-igd = { version = "0.12", optional = true }
 daemonize = "0.4"
 ring = "0.16"
 privdrop = "0.5"
 byteorder = "1.4"
 thiserror = "1.0"
 smallvec = "1.6"
+dialoguer = { version = "0.7", optional = true }
 tungstenite = { version = "0.13", optional = true, default-features = false }
 url = { version = "2.2", optional = true }
+igd = { version = "0.12", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
@@ -38,9 +39,10 @@ criterion = { version = "0.3", features = ["html_reports"] }
 iai = "0.1"
 
 [features]
-default = ["nat", "websocket"]
+default = ["nat", "websocket", "wizard"]
 nat = ["igd"]
 websocket = ["tungstenite", "url"]
+wizard = ["dialoguer"]
 
 [[bench]]
 name = "criterion"

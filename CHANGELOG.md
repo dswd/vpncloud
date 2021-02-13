@@ -2,6 +2,11 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### UNRELEASED
+
+- [added] Added interactive configuration wizard
+- [changed] Restructured example config
+
 ### v2.1.0 (2021-02-06)
 
 - [added] Support for websocket proxy mode
