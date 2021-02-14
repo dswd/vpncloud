@@ -43,6 +43,7 @@ default = ["nat", "websocket", "wizard"]
 nat = ["igd"]
 websocket = ["tungstenite", "url"]
 wizard = ["dialoguer"]
+installer = []
 
 [[bench]]
 name = "criterion"

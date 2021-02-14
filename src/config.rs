@@ -573,6 +573,14 @@ pub enum Command {
         /// Name of the network
         #[structopt(short, long)]
         name: Option<String>
+    },
+
+    /// Install required utility files
+    #[cfg(feature = "installer")]
+    Install {
+        /// Remove installed files again
+        #[structopt(long)]
+        uninstall: bool
     }
 }
 

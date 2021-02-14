@@ -3,12 +3,27 @@ linker = "arm-linux-gnueabihf-gcc"
 objcopy = { path = "arm-linux-gnueabihf-objcopy" }
 strip = { path = "arm-linux-gnueabihf-strip" }
 
+[target.armv7-unknown-linux-musleabihf]
+linker = "arm-linux-gnueabihf-gcc"
+objcopy = { path = "arm-linux-gnueabihf-objcopy" }
+strip = { path = "arm-linux-gnueabihf-strip" }
+
 [target.arm-unknown-linux-gnueabihf]
 linker = "arm-linux-gnueabihf-gcc"
 objcopy = { path = "arm-linux-gnueabihf-objcopy" }
 strip = { path = "arm-linux-gnueabihf-strip" }
 
+[target.arm-unknown-linux-musleabihf]
+linker = "arm-linux-gnueabihf-gcc"
+objcopy = { path = "arm-linux-gnueabihf-objcopy" }
+strip = { path = "arm-linux-gnueabihf-strip" }
+
 [target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
+objcopy = { path = "aarch64-linux-gnu-objcopy" }
+strip = { path = "aarch64-linux-gnu-strip" }
+
+[target.aarch64-unknown-linux-musl]
 linker = "aarch64-linux-gnu-gcc"
 objcopy = { path = "aarch64-linux-gnu-objcopy" }
 strip = { path = "aarch64-linux-gnu-strip" }
