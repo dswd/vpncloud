@@ -258,7 +258,7 @@ pub fn create_dummy_pair(algo: &'static aead::Algorithm) -> (CryptoCore, CryptoC
 pub fn test_speed(algo: &'static aead::Algorithm, max_time: &Duration) -> f64 {
     let mut buffer = MsgBuffer::new(EXTRA_LEN);
     buffer.set_length(1000);
-    let (mut sender, mut receiver) = create_dummy_pair(algo);
+    let (sender, receiver) = create_dummy_pair(algo);
     let mut iterations = 0;
     let start = Instant::now();
     while (Instant::now() - start).as_nanos() < max_time.as_nanos() {
@@ -290,7 +290,7 @@ mod tests {
     }
 
     fn test_encrypt_decrypt(algo: &'static aead::Algorithm) {
-        let (mut sender, mut receiver) = create_dummy_pair(algo);
+        let (sender, receiver) = create_dummy_pair(algo);
         let plain = random_data(1000);
         let mut buffer = MsgBuffer::new(EXTRA_LEN);
         buffer.clone_from(&plain);
@@ -318,7 +318,7 @@ mod tests {
 
 
     fn test_tampering(algo: &'static aead::Algorithm) {
-        let (mut sender, mut receiver) = create_dummy_pair(algo);
+        let (sender, receiver) = create_dummy_pair(algo);
         let plain = random_data(1000);
         let mut buffer = MsgBuffer::new(EXTRA_LEN);
         buffer.clone_from(&plain);
@@ -358,7 +358,7 @@ mod tests {
     }
 
     fn test_nonce_pinning(algo: &'static aead::Algorithm) {
-        let (mut sender, mut receiver) = create_dummy_pair(algo);
+        let (sender, receiver) = create_dummy_pair(algo);
         let plain = random_data(1000);
         let mut buffer = MsgBuffer::new(EXTRA_LEN);
         buffer.clone_from(&plain);
@@ -399,7 +399,7 @@ mod tests {
     }
 
     fn test_key_rotation(algo: &'static aead::Algorithm) {
-        let (mut sender, mut receiver) = create_dummy_pair(algo);
+        let (sender, receiver) = create_dummy_pair(algo);
         let plain = random_data(1000);
         let mut buffer = MsgBuffer::new(EXTRA_LEN);
         buffer.clone_from(&plain);

@@ -16,7 +16,7 @@ use super::{
 };
 
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct TrafficEntry {
     pub out_bytes_total: u64,
     pub out_packets_total: usize,

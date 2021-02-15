@@ -51,6 +51,8 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
     fn broadcast_msg(&mut self, type_: u8, msg: &mut MsgBuffer) -> Result<(), Error> {
         debug!("Broadcasting message type {}, {:?} bytes to {} peers", type_, msg.len(), self.peer_crypto.count());
         let mut msg_data = MsgBuffer::new(100);
+        let traffic = &mut self.traffic;
+        let socket = &mut self.socket;
         self.peer_crypto.for_each(|addr, crypto| {
             msg_data.set_start(msg.get_start());
             msg_data.set_length(msg.len());
@@ -59,8 +61,8 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
             if let Some(crypto) = crypto {
                 crypto.encrypt(&mut msg_data);
             }
-            self.traffic.count_out_traffic(addr, msg_data.len());
-            match self.socket.send(msg_data.message(), addr) {
+            traffic.count_out_traffic(addr, msg_data.len());
+            match socket.send(msg_data.message(), addr) {
                 Ok(written) if written == msg_data.len() => Ok(()),
                 Ok(_) => Err(Error::Socket("Sent out truncated packet")),
                 Err(e) => Err(Error::SocketIo("IOError when sending", e))

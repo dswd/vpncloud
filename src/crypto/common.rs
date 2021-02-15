@@ -1,7 +1,7 @@
 use super::{core::test_speed, rotate::RotationState};
 pub use super::{
     core::{CryptoCore, EXTRA_LEN, TAG_LEN},
-    init::{is_init_message, INIT_MESSAGE_FIRST_BYTE, InitState, InitResult}
+    init::{is_init_message, InitResult, InitState, INIT_MESSAGE_FIRST_BYTE}
 };
 use crate::{
     error::Error,
@@ -182,6 +182,14 @@ impl Crypto {
         Ok(keypair)
     }
 
+    pub fn public_key_from_private_key(privkey: &str) -> Result<String, Error> {
+        let privkey = from_base62(privkey).map_err(|_| Error::InvalidConfig("Failed to parse private key"))?;
+        let keypair = Ed25519KeyPair::from_seed_unchecked(&privkey)
+            .map_err(|_| Error::InvalidConfig("Key rejected by crypto library"))?;
+        let pubkey = to_base62(keypair.public_key().as_ref());
+        Ok(pubkey)
+    }
+
     fn parse_public_key(pubkey: &str) -> Result<Ed25519PublicKey, Error> {
         let pubkey = from_base62(pubkey).map_err(|_| Error::InvalidConfig("Failed to parse public key"))?;
         if pubkey.len() != ED25519_PUBLIC_KEY_LEN {
@@ -295,7 +303,7 @@ impl PeerCrypto {
         }
     }
 
-    pub fn every_second(&mut self, out: &mut MsgBuffer) -> MessageResult {
+    pub fn every_second(&mut self, out: &mut MsgBuffer) {
         out.clear();
         if let PeerCrypto::Encrypted { core, rotation, rotate_counter, algorithm, .. } = self {
             core.every_second();
@@ -309,11 +317,9 @@ impl PeerCrypto {
                 if !out.is_empty() {
                     out.prepend_byte(MESSAGE_TYPE_ROTATION);
                     self.encrypt_message(out);
-                    return MessageResult::Reply
                 }
             }
         }
-        MessageResult::None
     }
 }
 
@@ -357,9 +363,9 @@ mod tests {
         assert_eq!(res, InitResult::Success { peer_payload: vec![], is_initiator: true });
         assert!(msg.is_empty());
 
-        let node1 = node1.finish(&mut msg);
+        let mut node1 = node1.finish(&mut msg);
         assert!(msg.is_empty());
-        let node2 = node2.finish(&mut msg);
+        let mut node2 = node2.finish(&mut msg);
         assert!(msg.is_empty());
 
         debug!("Node1 <- Node2");
@@ -377,21 +383,15 @@ mod tests {
             let res = node2.handle_message(&mut buffer).unwrap();
             assert_eq!(res, MessageResult::Message(1));
 
-            match node1.every_second(&mut msg) {
-                MessageResult::None => (),
-                MessageResult::Reply => {
-                    let res = node2.handle_message(&mut msg).unwrap();
-                    assert_eq!(res, MessageResult::None);
-                }
-                other => assert_eq!(other, MessageResult::None)
+            node1.every_second(&mut msg);
+            if !msg.is_empty() {
+                let res = node2.handle_message(&mut msg).unwrap();
+                assert_eq!(res, MessageResult::None);
             }
-            match node2.every_second(&mut msg) {
-                MessageResult::None => (),
-                MessageResult::Reply => {
-                    let res = node1.handle_message(&mut msg).unwrap();
-                    assert_eq!(res, MessageResult::None);
-                }
-                other => assert_eq!(other, MessageResult::None)
+            node2.every_second(&mut msg);
+            if !msg.is_empty() {
+                let res = node1.handle_message(&mut msg).unwrap();
+                assert_eq!(res, MessageResult::None);
             }
         }
     }

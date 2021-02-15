@@ -1,15 +1,20 @@
-use crate::error::Error;
 use crate::{
     crypto::CryptoCore,
     engine::{Hash, PeerData, TimeSource},
+    error::Error,
     messages::NodeInfo,
     table::ClaimTable,
-    traffic::TrafficStats,
+    traffic::{TrafficStats, TrafficEntry},
     types::{Address, NodeId, RangeList},
     util::MsgBuffer
 };
 use parking_lot::Mutex;
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{
+    collections::HashMap,
+    io::{self, Write},
+    net::SocketAddr,
+    sync::Arc
+};
 
 pub struct SharedPeerCrypto {
     peers: Arc<Mutex<HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash>>>
@@ -26,10 +31,12 @@ impl SharedPeerCrypto {
             None => Err(Error::InvalidCryptoState("No crypto found for peer")),
             Some(None) => Ok(()),
             Some(Some(crypto)) => Ok(crypto.encrypt(data))
-        }       
+        }
     }
 
-    pub fn for_each(&mut self, mut callback: impl FnMut(SocketAddr, Option<Arc<CryptoCore>>) -> Result<(), Error>) -> Result<(), Error> {
+    pub fn for_each(
+        &mut self, mut callback: impl FnMut(SocketAddr, Option<Arc<CryptoCore>>) -> Result<(), Error>
+    ) -> Result<(), Error> {
         let mut peers = self.peers.lock();
         for (k, v) in peers.iter_mut() {
             callback(*k, v.clone())?
@@ -75,6 +82,26 @@ impl SharedTraffic {
     pub fn count_invalid_protocol(&self, bytes: usize) {
         self.traffic.lock().count_invalid_protocol(bytes);
     }
+
+    pub fn period(&mut self, cleanup_idle: Option<usize>) {
+        self.traffic.lock().period(cleanup_idle)
+    }
+
+    pub fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error> {
+        self.traffic.lock().write_out(out)
+    }
+
+    pub fn total_peer_traffic(&self) -> TrafficEntry {
+        self.traffic.lock().total_peer_traffic()
+    }
+
+    pub fn total_payload_traffic(&self) -> TrafficEntry {
+        self.traffic.lock().total_payload_traffic()
+    }
+
+    pub fn dropped(&self) -> TrafficEntry {
+        self.traffic.lock().dropped.clone()
+    }
 }
 
 
@@ -87,19 +114,35 @@ impl<TS: TimeSource> SharedTable<TS> {
         // TODO sync if needed
     }
 
-    pub fn lookup(&self, addr: Address) -> Option<SocketAddr> {
+    pub fn lookup(&mut self, addr: Address) -> Option<SocketAddr> {
         self.table.lock().lookup(addr)
     }
 
-    pub fn set_claims(&self, peer: SocketAddr, claims: RangeList) {
+    pub fn set_claims(&mut self, peer: SocketAddr, claims: RangeList) {
         self.table.lock().set_claims(peer, claims)
     }
 
-    pub fn remove_claims(&self, peer: SocketAddr) {
+    pub fn remove_claims(&mut self, peer: SocketAddr) {
         self.table.lock().remove_claims(peer)
     }
 
-    pub fn cache(&self, addr: Address, peer: SocketAddr) {
+    pub fn cache(&mut self, addr: Address, peer: SocketAddr) {
         self.table.lock().cache(addr, peer)
+    }
+
+    pub fn housekeep(&mut self) {
+        self.table.lock().housekeep()
+    }
+
+    pub fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error> {
+        self.table.lock().write_out(out)
+    }
+
+    pub fn cache_len(&self) -> usize {
+        self.table.lock().cache_len()
+    }
+
+    pub fn claim_len(&self) -> usize {
+        self.table.lock().claim_len()
     }
 }
