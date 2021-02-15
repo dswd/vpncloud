@@ -27,7 +27,9 @@ pub mod port_forwarding;
 pub mod table;
 pub mod traffic;
 pub mod types;
+#[cfg(feature = "wizard")] pub mod wizard;
 #[cfg(feature = "websocket")] pub mod wsproxy;
+#[cfg(feature = "installer")] pub mod installer;
 
 use structopt::StructOpt;
 
@@ -272,11 +274,22 @@ fn main() {
             }
             Command::Completion { shell } => {
                 Args::clap().gen_completions_to(env!("CARGO_PKG_NAME"), shell, &mut io::stdout());
-                return
             }
             #[cfg(feature = "websocket")]
             Command::WsProxy { listen } => {
                 try_fail!(wsproxy::run_proxy(&listen), "Failed to run websocket proxy: {:?}");
+            }
+            #[cfg(feature = "wizard")]
+            Command::Config { name } => {
+                try_fail!(wizard::configure(name), "Wizard failed: {}");
+            }
+            #[cfg(feature = "installer")]
+            Command::Install { uninstall } => {
+                if uninstall {
+                    try_fail!(installer::uninstall(), "Uninstall failed: {}");
+                } else {
+                    try_fail!(installer::install(), "Install failed: {}");
+                }
             }
         }
         return

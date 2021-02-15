@@ -303,6 +303,46 @@ impl Config {
         }
     }
 
+    pub fn into_config_file(self) -> ConfigFile {
+        ConfigFile {
+            auto_claim: Some(self.auto_claim),
+            claims: Some(self.claims),
+            beacon: Some(ConfigFileBeacon {
+                store: self.beacon_store,
+                load: self.beacon_load,
+                interval: Some(self.beacon_interval),
+                password: self.beacon_password
+            }),
+            device: Some(ConfigFileDevice {
+                name: Some(self.device_name),
+                path: self.device_path,
+                type_: Some(self.device_type),
+                fix_rp_filter: Some(self.fix_rp_filter)
+            }),
+            crypto: self.crypto,
+            group: self.group,
+            user: self.user,
+            ifup: self.ifup,
+            ifdown: self.ifdown,
+            ip: self.ip,
+            keepalive: self.keepalive,
+            listen: Some(self.listen),
+            mode: Some(self.mode),
+            peer_timeout: Some(self.peer_timeout),
+            peers: Some(self.peers),
+            pid_file: self.pid_file,
+            port_forwarding: Some(self.port_forwarding),
+            stats_file: self.stats_file,
+            statsd: Some(ConfigFileStatsd {
+                server: self.statsd_server,
+                prefix: self.statsd_prefix
+            }),
+            switch_timeout: Some(self.switch_timeout),
+            hook: self.hook,
+            hooks: self.hooks
+        }
+    }
+
     pub fn get_keepalive(&self) -> Duration {
         match self.keepalive {
             Some(dur) => dur,
@@ -525,6 +565,22 @@ pub enum Command {
         /// Shell to create completions for
         #[structopt(long, default_value="bash")]
         shell: Shell
+    },
+
+    /// Edit the config of a network
+    #[cfg(feature = "wizard")]
+    Config {
+        /// Name of the network
+        #[structopt(short, long)]
+        name: Option<String>
+    },
+
+    /// Install required utility files
+    #[cfg(feature = "installer")]
+    Install {
+        /// Remove installed files again
+        #[structopt(long)]
+        uninstall: bool
     }
 }
 
