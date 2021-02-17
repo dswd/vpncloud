@@ -1,0 +1,3 @@
+[record]
+command = /usr/bin/bash -l
+idle_time_limit = 2.5

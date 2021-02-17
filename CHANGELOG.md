@@ -5,7 +5,11 @@ This project follows [semantic versioning](http://semver.org).
 ### UNRELEASED
 
 - [added] Added interactive configuration wizard
+- [added] Support for (un-)installation
+- [added] Building static binaries
 - [changed] Restructured example config
+- [changed] Changed Rust version to 1.50.0
+- [changed] Updated dependencies
 
 ### v2.1.0 (2021-02-06)
 
