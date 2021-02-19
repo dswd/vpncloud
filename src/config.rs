@@ -350,6 +350,34 @@ impl Config {
         }
     }
 
+    pub fn is_learning(&self) -> bool {
+        match self.mode {
+            Mode::Normal => {
+                match self.device_type {
+                    Type::Tap => true,
+                    Type::Tun => false
+                }
+            }
+            Mode::Router => false,
+            Mode::Switch => true,
+            Mode::Hub => false
+        }
+    }
+
+    pub fn is_broadcasting(&self) -> bool {
+        match self.mode {
+            Mode::Normal => {
+                match self.device_type {
+                    Type::Tap => true,
+                    Type::Tun => false
+                }
+            }
+            Mode::Router => false,
+            Mode::Switch => true,
+            Mode::Hub => true
+        }
+    }
+
     pub fn call_hook(
         &self, event: &'static str, envs: impl IntoIterator<Item = (&'static str, impl AsRef<OsStr>)>, detach: bool
     ) {

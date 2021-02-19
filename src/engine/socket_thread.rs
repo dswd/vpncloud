@@ -24,7 +24,7 @@ use std::{
     fmt,
     fs::File,
     io,
-    io::{Write, Cursor, Seek, SeekFrom},
+    io::{Cursor, Seek, SeekFrom, Write},
     marker::PhantomData,
     net::{SocketAddr, ToSocketAddrs}
 };
@@ -615,28 +615,38 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
     pub fn run(mut self) {
         let mut buffer = MsgBuffer::new(SPACE_BEFORE);
         loop {
-            let src = try_fail!(self.socket.receive(&mut buffer), "Failed to read from network socket: {}");
-            match self.handle_message(src, &mut buffer) {
-                Err(e @ Error::CryptoInitFatal(_)) => {
-                    debug!("Fatal crypto init error from {}: {}", src, e);
-                    info!("Closing pending connection to {} due to error in crypto init", addr_nice(src));
-                    self.pending_inits.remove(&src);
+            match self.socket.receive(&mut buffer) {
+                Err(err) => {
+                    if err.kind() == io::ErrorKind::TimedOut || err.kind() == io::ErrorKind::WouldBlock {
+                        // ok, this is a normal timeout
+                    } else {
+                        fail!("Failed to read from network socket: {}", err);
+                    }
                 }
-                Err(e @ Error::CryptoInit(_)) => {
-                    debug!("Recoverable init error from {}: {}", src, e);
-                    info!("Ignoring invalid init message from peer {}", addr_nice(src));
+                Ok(src) => {
+                    match self.handle_message(src, &mut buffer) {
+                        Err(e @ Error::CryptoInitFatal(_)) => {
+                            debug!("Fatal crypto init error from {}: {}", src, e);
+                            info!("Closing pending connection to {} due to error in crypto init", addr_nice(src));
+                            self.pending_inits.remove(&src);
+                        }
+                        Err(e @ Error::CryptoInit(_)) => {
+                            debug!("Recoverable init error from {}: {}", src, e);
+                            info!("Ignoring invalid init message from peer {}", addr_nice(src));
+                        }
+                        Err(e) => {
+                            error!("{}", e);
+                        }
+                        Ok(_) => {}
+                    }
                 }
-                Err(e) => {
-                    error!("{}", e);
-                }
-                Ok(_) => {}
             }
             let now = TS::now();
             if self.next_housekeep < now {
                 if let Err(e) = self.housekeep() {
                     error!("{}", e)
                 }
-                self.next_housekeep = TS::now() + 1
+                self.next_housekeep = now + 1
             }
         }
     }

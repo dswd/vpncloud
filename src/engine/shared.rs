@@ -6,7 +6,9 @@ use crate::{
     table::ClaimTable,
     traffic::{TrafficStats, TrafficEntry},
     types::{Address, NodeId, RangeList},
-    util::MsgBuffer
+    util::MsgBuffer,
+    util::Duration,
+    config::Config
 };
 use parking_lot::Mutex;
 use std::{
@@ -16,11 +18,16 @@ use std::{
     sync::Arc
 };
 
+#[derive(Clone)]
 pub struct SharedPeerCrypto {
     peers: Arc<Mutex<HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash>>>
 }
 
 impl SharedPeerCrypto {
+    pub fn new() -> Self {
+        SharedPeerCrypto { peers: Arc::new(Mutex::new(HashMap::default())) }
+    }
+
     pub fn sync(&mut self) {
         // TODO sync if needed
     }
@@ -50,11 +57,16 @@ impl SharedPeerCrypto {
 }
 
 
+#[derive(Clone)]
 pub struct SharedTraffic {
     traffic: Arc<Mutex<TrafficStats>>
 }
 
 impl SharedTraffic {
+    pub fn new() -> Self {
+        Self { traffic: Arc::new(Mutex::new(Default::default())) }
+    }
+
     pub fn sync(&mut self) {
         // TODO sync if needed
     }
@@ -105,11 +117,17 @@ impl SharedTraffic {
 }
 
 
+#[derive(Clone)]
 pub struct SharedTable<TS: TimeSource> {
     table: Arc<Mutex<ClaimTable<TS>>>
 }
 
 impl<TS: TimeSource> SharedTable<TS> {
+    pub fn new(config: &Config) -> Self {
+        let table = ClaimTable::new(config.switch_timeout as Duration, config.peer_timeout as Duration);
+        SharedTable { table: Arc::new(Mutex::new(table)) }
+    }
+
     pub fn sync(&mut self) {
         // TODO sync if needed
     }

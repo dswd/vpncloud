@@ -2,6 +2,7 @@
 // Copyright (C) 2015-2021  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
+use parking_lot::Mutex;
 use std::{
     cmp,
     collections::VecDeque,
@@ -12,7 +13,8 @@ use std::{
     net::{Ipv4Addr, UdpSocket},
     os::unix::io::{AsRawFd, RawFd},
     str,
-    str::FromStr
+    str::FromStr,
+    sync::Arc
 };
 
 use crate::{crypto, error::Error, util::MsgBuffer};
@@ -75,7 +77,7 @@ impl FromStr for Type {
     }
 }
 
-pub trait Device: AsRawFd {
+pub trait Device: AsRawFd + Clone {
     /// Returns the type of this device
     fn get_type(&self) -> Type;
 
@@ -117,6 +119,16 @@ pub struct TunTapDevice {
     type_: Type
 }
 
+
+impl Clone for TunTapDevice {
+    fn clone(&self) -> Self {
+        Self {
+            fd: try_fail!(self.fd.try_clone(), "Failed to clone device: {}"),
+            ifname: self.ifname.clone(),
+            type_: self.type_
+        }
+    }
+}
 
 impl TunTapDevice {
     /// Creates a new tun/tap device
@@ -300,9 +312,10 @@ impl AsRawFd for TunTapDevice {
 }
 
 
+#[derive(Clone)]
 pub struct MockDevice {
-    inbound: VecDeque<Vec<u8>>,
-    outbound: VecDeque<Vec<u8>>
+    inbound: Arc<Mutex<VecDeque<Vec<u8>>>>,
+    outbound: Arc<Mutex<VecDeque<Vec<u8>>>>
 }
 
 impl MockDevice {
@@ -311,15 +324,15 @@ impl MockDevice {
     }
 
     pub fn put_inbound(&mut self, data: Vec<u8>) {
-        self.inbound.push_back(data)
+        self.inbound.lock().push_back(data)
     }
 
     pub fn pop_outbound(&mut self) -> Option<Vec<u8>> {
-        self.outbound.pop_front()
+        self.outbound.lock().pop_front()
     }
 
     pub fn has_inbound(&self) -> bool {
-        !self.inbound.is_empty()
+        !self.inbound.lock().is_empty()
     }
 }
 
@@ -333,7 +346,7 @@ impl Device for MockDevice {
     }
 
     fn read(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
-        if let Some(data) = self.inbound.pop_front() {
+        if let Some(data) = self.inbound.lock().pop_front() {
             buffer.clear();
             buffer.set_length(data.len());
             buffer.message_mut().copy_from_slice(&data);
@@ -344,7 +357,7 @@ impl Device for MockDevice {
     }
 
     fn write(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
-        self.outbound.push_back(buffer.message().into());
+        self.outbound.lock().push_back(buffer.message().into());
         Ok(())
     }
 
@@ -355,7 +368,10 @@ impl Device for MockDevice {
 
 impl Default for MockDevice {
     fn default() -> Self {
-        Self { outbound: VecDeque::with_capacity(10), inbound: VecDeque::with_capacity(10) }
+        Self {
+            outbound: Arc::new(Mutex::new(VecDeque::with_capacity(10))),
+            inbound: Arc::new(Mutex::new(VecDeque::with_capacity(10)))
+        }
     }
 }
 

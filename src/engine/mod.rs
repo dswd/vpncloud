@@ -3,8 +3,8 @@
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 mod device_thread;
-mod socket_thread;
 mod shared;
+mod socket_thread;
 
 use std::{
     cmp::{max, min},
@@ -16,7 +16,8 @@ use std::{
     marker::PhantomData,
     net::{SocketAddr, ToSocketAddrs},
     path::Path,
-    str::FromStr
+    str::FromStr,
+    thread
 };
 
 use fnv::FnvHasher;
@@ -26,8 +27,12 @@ use smallvec::{smallvec, SmallVec};
 use crate::{
     beacon::BeaconSerializer,
     config::{Config, DEFAULT_PEER_TIMEOUT, DEFAULT_PORT},
-    crypto::{is_init_message, Crypto, MessageResult, PeerCrypto, InitState, InitResult},
+    crypto::{is_init_message, Crypto, InitResult, InitState, MessageResult, PeerCrypto},
     device::{Device, Type},
+    engine::{
+        device_thread::DeviceThread,
+        shared::{SharedPeerCrypto, SharedTable, SharedTraffic}
+    },
     error::Error,
     messages::{
         AddrList, NodeInfo, PeerInfo, MESSAGE_TYPE_CLOSE, MESSAGE_TYPE_DATA, MESSAGE_TYPE_KEEPALIVE,
@@ -53,7 +58,7 @@ const SPACE_BEFORE: usize = 100;
 
 struct PeerData {
     addrs: AddrList,
-    #[allow(dead_code)] //TODO: export in status
+    #[allow(dead_code)] // TODO: export in status
     last_seen: Time,
     timeout: Time,
     peer_timeout: u16,
@@ -104,7 +109,9 @@ pub struct GenericCloud<D: Device, P: Protocol, S: Socket, TS: TimeSource> {
 
 impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS> {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(config: &Config, socket: S, device: D, port_forwarding: Option<PortForwarding>, stats_file: Option<File>) -> Self {
+    pub fn new(
+        config: &Config, socket: S, device: D, port_forwarding: Option<PortForwarding>, stats_file: Option<File>
+    ) -> Self {
         let (learning, broadcast) = match config.mode {
             Mode::Normal => {
                 match config.device_type {
@@ -288,8 +295,26 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     }
 
     pub fn run(&mut self) {
+        let table = SharedTable::<TS>::new(&self.config);
+        let traffic = SharedTraffic::new();
+        let peer_crypto = SharedPeerCrypto::new();
+        let device_thread = DeviceThread::<S, D, P, TS>::new(
+            self.config.clone(),
+            self.device.clone(),
+            self.socket.clone(),
+            traffic.clone(),
+            peer_crypto.clone(),
+            table.clone()
+        );
+
+        // TODO: create shared data structures
+        // TODO: create and spawn threads
         let ctrlc = CtrlC::new();
-        let waiter = try_fail!(WaitImpl::new(self.socket.as_raw_fd(), self.device.as_raw_fd(), 1000), "Failed to setup poll: {}");
+        // TODO: wait for ctrl-c
+        let waiter = try_fail!(
+            WaitImpl::new(self.socket.as_raw_fd(), self.device.as_raw_fd(), 1000),
+            "Failed to setup poll: {}"
+        );
         let mut buffer = MsgBuffer::new(SPACE_BEFORE);
         let mut poll_error = false;
         self.config.call_hook("vpn_started", vec![("IFNAME", self.device.ifname())], true);

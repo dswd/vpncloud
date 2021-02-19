@@ -8,7 +8,8 @@ use crate::{
     messages::MESSAGE_TYPE_DATA,
     net::Socket,
     util::{MsgBuffer, Time, TimeSource},
-    Protocol
+    Protocol,
+    config::Config
 };
 use std::{marker::PhantomData, net::SocketAddr};
 
@@ -28,6 +29,20 @@ pub struct DeviceThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
 }
 
 impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS> {
+    pub fn new(config: Config, device: D, socket: S, traffic: SharedTraffic, peer_crypto: SharedPeerCrypto, table: SharedTable<TS>) -> Self {
+        Self {
+            _dummy_ts: PhantomData,
+            _dummy_p: PhantomData,
+            broadcast: config.is_broadcasting(),
+            socket,
+            device,
+            next_housekeep: TS::now(),
+            traffic,
+            peer_crypto,
+            table
+        }
+    }
+
     #[inline]
     fn send_to(&mut self, addr: SocketAddr, msg: &mut MsgBuffer) -> Result<(), Error> {
         debug!("Sending msg with {} bytes to {}", msg.len(), addr);
@@ -104,15 +119,16 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
         let mut buffer = MsgBuffer::new(SPACE_BEFORE);
         loop {
             try_fail!(self.device.read(&mut buffer), "Failed to read from device: {}");
+            //TODO: set and handle timeout
             if let Err(e) = self.forward_packet(&mut buffer) {
                 error!("{}", e);
             }
             let now = TS::now();
-            if self.next_housekeep < TS::now() {
+            if self.next_housekeep < now {
                 if let Err(e) = self.housekeep() {
                     error!("{}", e)
                 }
-                self.next_housekeep = TS::now() + 1
+                self.next_housekeep = now + 1
             }
         }
     }

@@ -13,6 +13,7 @@ use std::{
     io::{self, Cursor, Read, Write},
     net::{Ipv6Addr, SocketAddr, SocketAddrV6, TcpListener, TcpStream, UdpSocket},
     os::unix::io::{AsRawFd, RawFd},
+    sync::Arc,
     thread::spawn
 };
 use tungstenite::{client::AutoStream, connect, protocol::WebSocket, server::accept, Message};
@@ -108,17 +109,21 @@ pub fn run_proxy(listen: &str) -> Result<(), io::Error> {
     Ok(())
 }
 
+#[derive(Clone)]
 pub struct ProxyConnection {
     addr: SocketAddr,
-    socket: WebSocket<AutoStream>
+    socket: Arc<WebSocket<AutoStream>>
 }
 
 impl ProxyConnection {
     fn read_message(&mut self) -> Result<Vec<u8>, io::Error> {
         loop {
+            unimplemented!();
+            /*
             if let Message::Binary(data) = io_error!(self.socket.read_message(), "Failed to read from ws proxy: {}")? {
                 return Ok(data)
             }
+            */
         }
     }
 }
@@ -128,14 +133,14 @@ impl AsRawFd for ProxyConnection {
         self.socket.get_ref().as_raw_fd()
     }
 }
-
+ 
 impl Socket for ProxyConnection {
     fn listen(url: &str) -> Result<Self, io::Error> {
         let parsed_url = io_error!(Url::parse(url), "Invalid URL {}: {}", url)?;
         let (mut socket, _) = io_error!(connect(parsed_url), "Failed to connect to URL {}: {}", url)?;
         socket.get_mut().set_nodelay(true)?;
         let addr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
-        let mut con = ProxyConnection { addr, socket };
+        let mut con = ProxyConnection { addr, socket: Arc::new(socket) };
         let addr_data = con.read_message()?;
         con.addr = read_addr(Cursor::new(&addr_data))?;
         Ok(con)
@@ -153,7 +158,8 @@ impl Socket for ProxyConnection {
         let mut msg = Vec::with_capacity(data.len() + 18);
         write_addr(addr, &mut msg)?;
         msg.write_all(data)?;
-        io_error!(self.socket.write_message(Message::Binary(msg)), "Failed to write to ws proxy: {}")?;
+        unimplemented!();
+        //io_error!(self.socket.write_message(Message::Binary(msg)), "Failed to write to ws proxy: {}")?;
         Ok(data.len())
     }
 

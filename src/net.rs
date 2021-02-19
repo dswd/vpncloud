@@ -2,16 +2,20 @@
 // Copyright (C) 2015-2021  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
+use super::util::{MockTimeSource, MsgBuffer, Time, TimeSource};
+use crate::port_forwarding::PortForwarding;
+use parking_lot::Mutex;
 use std::{
     collections::{HashMap, VecDeque},
     io::{self, ErrorKind},
-    net::{IpAddr, SocketAddr, UdpSocket, Ipv6Addr},
+    net::{IpAddr, Ipv6Addr, SocketAddr, UdpSocket},
     os::unix::io::{AsRawFd, RawFd},
-    sync::atomic::{AtomicBool, Ordering}
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc
+    },
+    time::Duration
 };
-
-use super::util::{MockTimeSource, MsgBuffer, Time, TimeSource};
-use crate::port_forwarding::PortForwarding;
 
 pub fn mapped_addr(addr: SocketAddr) -> SocketAddr {
     // HOT PATH
@@ -27,7 +31,7 @@ pub fn get_ip() -> IpAddr {
     s.local_addr().unwrap().ip()
 }
 
-pub trait Socket: AsRawFd + Sized {
+pub trait Socket: AsRawFd + Sized + Clone {
     fn listen(addr: &str) -> Result<Self, io::Error>;
     fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error>;
     fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error>;
@@ -47,25 +51,42 @@ pub fn parse_listen(addr: &str) -> SocketAddr {
     }
 }
 
-impl Socket for UdpSocket {
+pub struct NetSocket(UdpSocket);
+
+impl Clone for NetSocket {
+    fn clone(&self) -> Self {
+        Self(try_fail!(self.0.try_clone(), "Failed to clone socket: {}"))
+    }
+}
+
+impl AsRawFd for NetSocket {
+    fn as_raw_fd(&self) -> RawFd {
+        self.0.as_raw_fd()
+    }
+}
+
+impl Socket for NetSocket {
     fn listen(addr: &str) -> Result<Self, io::Error> {
         let addr = parse_listen(addr);
-        UdpSocket::bind(addr)
+        Ok(NetSocket(UdpSocket::bind(addr).and_then(|s| {
+            s.set_read_timeout(Some(Duration::from_secs(1)))?;
+            Ok(s)
+        })?))
     }
 
     fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
         buffer.clear();
-        let (size, addr) = self.recv_from(buffer.buffer())?;
+        let (size, addr) = self.0.recv_from(buffer.buffer())?;
         buffer.set_length(size);
         Ok(addr)
     }
 
     fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error> {
-        self.send_to(data, addr)
+        self.0.send_to(data, addr)
     }
 
     fn address(&self) -> Result<SocketAddr, io::Error> {
-        let mut addr = self.local_addr()?;
+        let mut addr = self.0.local_addr()?;
         addr.set_ip(get_ip());
         Ok(addr)
     }
@@ -79,22 +100,24 @@ thread_local! {
     static MOCK_SOCKET_NAT: AtomicBool = AtomicBool::new(false);
 }
 
+
+#[derive(Clone)]
 pub struct MockSocket {
     nat: bool,
-    nat_peers: HashMap<SocketAddr, Time>,
+    nat_peers: Arc<Mutex<HashMap<SocketAddr, Time>>>,
     address: SocketAddr,
-    outbound: VecDeque<(SocketAddr, Vec<u8>)>,
-    inbound: VecDeque<(SocketAddr, Vec<u8>)>
+    outbound: Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>,
+    inbound: Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>
 }
 
 impl MockSocket {
     pub fn new(address: SocketAddr) -> Self {
         Self {
             nat: Self::get_nat(),
-            nat_peers: HashMap::new(),
+            nat_peers: Default::default(),
             address,
-            outbound: VecDeque::with_capacity(10),
-            inbound: VecDeque::with_capacity(10)
+            outbound: Arc::new(Mutex::new(VecDeque::with_capacity(10))),
+            inbound: Arc::new(Mutex::new(VecDeque::with_capacity(10)))
         }
     }
 
@@ -108,12 +131,12 @@ impl MockSocket {
 
     pub fn put_inbound(&mut self, from: SocketAddr, data: Vec<u8>) -> bool {
         if !self.nat {
-            self.inbound.push_back((from, data));
+            self.inbound.lock().push_back((from, data));
             return true
         }
-        if let Some(timeout) = self.nat_peers.get(&from) {
+        if let Some(timeout) = self.nat_peers.lock().get(&from) {
             if *timeout >= MockTimeSource::now() {
-                self.inbound.push_back((from, data));
+                self.inbound.lock().push_back((from, data));
                 return true
             }
         }
@@ -122,7 +145,7 @@ impl MockSocket {
     }
 
     pub fn pop_outbound(&mut self) -> Option<(SocketAddr, Vec<u8>)> {
-        self.outbound.pop_front()
+        self.outbound.lock().pop_front()
     }
 }
 
@@ -138,7 +161,7 @@ impl Socket for MockSocket {
     }
 
     fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
-        if let Some((addr, data)) = self.inbound.pop_front() {
+        if let Some((addr, data)) = self.inbound.lock().pop_front() {
             buffer.clear();
             buffer.set_length(data.len());
             buffer.message_mut().copy_from_slice(&data);
@@ -149,9 +172,9 @@ impl Socket for MockSocket {
     }
 
     fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error> {
-        self.outbound.push_back((addr, data.into()));
+        self.outbound.lock().push_back((addr, data.into()));
         if self.nat {
-            self.nat_peers.insert(addr, MockTimeSource::now() + 300);
+            self.nat_peers.lock().insert(addr, MockTimeSource::now() + 300);
         }
         Ok(data.len())
     }

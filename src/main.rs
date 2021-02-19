@@ -36,7 +36,7 @@ use structopt::StructOpt;
 use std::{
     fs::{self, File, Permissions},
     io::{self, Write},
-    net::{Ipv4Addr, UdpSocket},
+    net::{Ipv4Addr},
     os::unix::fs::PermissionsExt,
     path::Path,
     process,
@@ -50,7 +50,7 @@ use crate::{
     config::{Args, Command, Config, DEFAULT_PORT},
     crypto::Crypto,
     device::{Device, TunTapDevice, Type},
-    net::Socket,
+    net::{Socket, NetSocket},
     oldconfig::OldConfigFile,
     payload::Protocol,
     util::SystemTimeSource,
@@ -328,7 +328,7 @@ fn main() {
         }
         return        
     }
-    let socket = try_fail!(UdpSocket::listen(&config.listen), "Failed to open socket {}: {}", config.listen);
+    let socket = try_fail!(NetSocket::listen(&config.listen), "Failed to open socket {}: {}", config.listen);
     match config.device_type {
         Type::Tap => run::<payload::Frame, _>(config, socket),
         Type::Tun => run::<payload::Packet, _>(config, socket)
