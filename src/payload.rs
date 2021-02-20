@@ -5,7 +5,7 @@
 use crate::{error::Error, types::Address};
 use std::io::{Cursor, Read};
 
-pub trait Protocol: Sized {
+pub trait Protocol: Sized + Send + 'static {
     fn parse(_: &[u8]) -> Result<(Address, Address), Error>;
 }
 

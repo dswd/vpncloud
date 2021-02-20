@@ -77,7 +77,7 @@ impl FromStr for Type {
     }
 }
 
-pub trait Device: AsRawFd + Clone {
+pub trait Device: AsRawFd + Clone + Send + 'static {
     /// Returns the type of this device
     fn get_type(&self) -> Type;
 

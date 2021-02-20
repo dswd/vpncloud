@@ -1,14 +1,12 @@
 use crate::{
+    config::Config,
     crypto::CryptoCore,
-    engine::{Hash, PeerData, TimeSource},
+    engine::{Hash, TimeSource},
     error::Error,
-    messages::NodeInfo,
     table::ClaimTable,
-    traffic::{TrafficStats, TrafficEntry},
-    types::{Address, NodeId, RangeList},
-    util::MsgBuffer,
-    util::Duration,
-    config::Config
+    traffic::{TrafficEntry, TrafficStats},
+    types::{Address, RangeList},
+    util::{Duration, MsgBuffer}
 };
 use parking_lot::Mutex;
 use std::{
@@ -37,7 +35,10 @@ impl SharedPeerCrypto {
         match peers.get_mut(&peer) {
             None => Err(Error::InvalidCryptoState("No crypto found for peer")),
             Some(None) => Ok(()),
-            Some(Some(crypto)) => Ok(crypto.encrypt(data))
+            Some(Some(crypto)) => {
+                crypto.encrypt(data);
+                Ok(())
+            }
         }
     }
 

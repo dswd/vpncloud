@@ -7,12 +7,16 @@ use crate::{
     beacon::BeaconSerializer,
     config::{DEFAULT_PEER_TIMEOUT, DEFAULT_PORT},
     crypto::{is_init_message, InitResult, InitState, MessageResult},
+    device::Type,
     engine::{addr_nice, resolve, Hash, PeerData},
     error::Error,
-    messages::{AddrList, NodeInfo, PeerInfo, MESSAGE_TYPE_NODE_INFO},
+    messages::{
+        AddrList, NodeInfo, PeerInfo, MESSAGE_TYPE_CLOSE, MESSAGE_TYPE_DATA, MESSAGE_TYPE_KEEPALIVE,
+        MESSAGE_TYPE_NODE_INFO
+    },
     net::{mapped_addr, Socket},
     port_forwarding::PortForwarding,
-    types::{NodeId, RangeList},
+    types::{Address, NodeId, Range, RangeList},
     util::{MsgBuffer, StatsdMsg, Time, TimeSource},
     Config, Crypto, Device, Protocol
 };
@@ -26,7 +30,8 @@ use std::{
     io,
     io::{Cursor, Seek, SeekFrom, Write},
     marker::PhantomData,
-    net::{SocketAddr, ToSocketAddrs}
+    net::{SocketAddr, ToSocketAddrs},
+    str::FromStr
 };
 
 
@@ -81,6 +86,63 @@ pub struct SocketThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
 }
 
 impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS> {
+    pub fn new(
+        config: Config, device: D, socket: S, traffic: SharedTraffic, peer_crypto: SharedPeerCrypto,
+        table: SharedTable<TS>, port_forwarding: Option<PortForwarding>, stats_file: Option<File>
+    ) -> Self {
+        let mut claims = SmallVec::with_capacity(config.claims.len());
+        for s in &config.claims {
+            claims.push(try_fail!(Range::from_str(s), "Invalid subnet format: {} ({})", s));
+        }
+        if device.get_type() == Type::Tun && config.auto_claim {
+            match device.get_ip() {
+                Ok(ip) => {
+                    let range = Range { base: Address::from_ipv4(ip), prefix_len: 32 };
+                    info!("Auto-claiming {} due to interface address", range);
+                    claims.push(range);
+                }
+                Err(Error::DeviceIo(_, e)) if e.kind() == io::ErrorKind::AddrNotAvailable => {
+                    info!("No address set on interface.")
+                }
+                Err(e) => error!("{}", e)
+            }
+        }
+        let now = TS::now();
+        let update_freq = config.get_keepalive() as u16;
+        let node_id = random();
+        let crypto = Crypto::new(node_id, &config.crypto).unwrap();
+        let beacon_key = config.beacon_password.as_ref().map(|s| s.as_bytes()).unwrap_or(&[]);
+        Self {
+            _dummy_p: PhantomData,
+            _dummy_ts: PhantomData,
+            node_id,
+            claims,
+            device,
+            socket,
+            peer_crypto,
+            traffic,
+            table,
+            learning: config.is_learning(),
+            next_housekeep: now,
+            next_beacon: now,
+            next_peers: now,
+            next_stats_out: now + STATS_INTERVAL,
+            next_own_address_reset: now + OWN_ADDRESS_RESET_INTERVAL,
+            pending_inits: HashMap::default(),
+            reconnect_peers: SmallVec::new(),
+            own_addresses: SmallVec::new(),
+            peers: HashMap::default(),
+            peer_timeout_publish: config.peer_timeout as u16,
+            beacon_serializer: BeaconSerializer::new(beacon_key),
+            port_forwarding,
+            stats_file,
+            update_freq,
+            statsd_server: config.statsd_server.clone(),
+            crypto: Crypto::new(node_id, &config.crypto).unwrap(),
+            config
+        }
+    }
+
     #[inline]
     fn send_to(&mut self, addr: SocketAddr, msg: &MsgBuffer) -> Result<(), Error> {
         debug!("Sending msg with {} bytes to {}", msg.len(), addr);
@@ -126,7 +188,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         let mut msg = MsgBuffer::new(SPACE_BEFORE);
         init.send_ping(&mut msg);
         self.pending_inits.insert(addr, init);
-        self.send_to(addr, &mut msg)
+        self.send_to(addr, &msg)
     }
 
     pub fn connect<Addr: ToSocketAddrs + fmt::Debug + Clone>(&mut self, addr: Addr) -> Result<(), Error> {
@@ -322,7 +384,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             }
             Err(err) => {
                 self.traffic.count_invalid_protocol(data.len());
-                return Err(err)
+                Err(err)
             }
         }
     }
@@ -398,14 +460,14 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             if self.pending_inits.get_mut(&addr).unwrap().every_second(&mut msg).is_err() {
                 del.push(addr)
             } else if !msg.is_empty() {
-                self.send_to(addr, &mut msg)?
+                self.send_to(addr, &msg)?
             }
         }
         for addr in self.peers.keys().copied().collect::<SmallVec<[SocketAddr; 16]>>() {
             msg.clear();
             self.peers.get_mut(&addr).unwrap().crypto.every_second(&mut msg);
             if !msg.is_empty() {
-                self.send_to(addr, &mut msg)?
+                self.send_to(addr, &msg)?
             }
         }
         for addr in del {

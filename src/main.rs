@@ -185,6 +185,7 @@ fn run<P: Protocol, S: Socket>(config: Config, socket: S) {
             Some(file)
         }
     };
+    let ifname = device.ifname().to_string();
     let mut cloud =
         GenericCloud::<TunTapDevice, P, S, SystemTimeSource>::new(&config, socket, device, port_forwarding, stats_file);
     for mut addr in config.peers {
@@ -192,8 +193,7 @@ fn run<P: Protocol, S: Socket>(config: Config, socket: S) {
             // : not present or only in IPv6 address
             addr = format!("{}:{}", addr, DEFAULT_PORT)
         }
-        try_fail!(cloud.connect(&addr as &str), "Failed to send message to {}: {}", &addr);
-        cloud.add_reconnect_peer(addr);
+        try_fail!(cloud.add_peer(addr.clone()), "Failed to send message to {}: {}", &addr);
     }
     if config.daemonize {
         info!("Running process as daemon");
@@ -223,7 +223,7 @@ fn run<P: Protocol, S: Socket>(config: Config, socket: S) {
     }
     cloud.run();
     if let Some(script) = config.ifdown {
-        run_script(&script, cloud.ifname());
+        run_script(&script, &ifname);
     }
 }
 

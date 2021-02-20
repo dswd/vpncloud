@@ -31,7 +31,7 @@ pub fn get_ip() -> IpAddr {
     s.local_addr().unwrap().ip()
 }
 
-pub trait Socket: AsRawFd + Sized + Clone {
+pub trait Socket: AsRawFd + Sized + Clone + Send + 'static {
     fn listen(addr: &str) -> Result<Self, io::Error>;
     fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error>;
     fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error>;

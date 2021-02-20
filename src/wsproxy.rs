@@ -159,8 +159,10 @@ impl Socket for ProxyConnection {
         write_addr(addr, &mut msg)?;
         msg.write_all(data)?;
         unimplemented!();
-        //io_error!(self.socket.write_message(Message::Binary(msg)), "Failed to write to ws proxy: {}")?;
+        /*
+        io_error!(self.socket.write_message(Message::Binary(msg)), "Failed to write to ws proxy: {}")?;
         Ok(data.len())
+        */
     }
 
     fn address(&self) -> Result<SocketAddr, io::Error> {
