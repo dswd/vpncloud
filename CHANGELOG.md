@@ -7,9 +7,11 @@ This project follows [semantic versioning](http://semver.org).
 - [added] Added interactive configuration wizard
 - [added] Support for (un-)installation
 - [added] Building static binaries
+- [added] Building i686 rpm
 - [changed] Restructured example config
 - [changed] Changed Rust version to 1.50.0
 - [changed] Updated dependencies
+- [changed] Change permissions of /etc/vpncloud
 
 ### v2.1.0 (2021-02-06)
 

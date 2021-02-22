@@ -11,6 +11,7 @@ RUN apt-get update \
     libc6-dev-i386 \
     gcc-5-multilib \
     asciidoctor \
+    musl musl-dev musl-tools \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ADD entrypoint.sh /entrypoint.sh

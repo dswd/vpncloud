@@ -23,6 +23,7 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 rm -rf %{buildroot}
 mkdir -p %{buildroot}
 mkdir -p %{buildroot}/etc/vpncloud
+chmod 700 %{buildroot}/etc/vpncloud
 mkdir -p %{buildroot}/lib/systemd/system
 mkdir -p %{buildroot}/usr/share/man/man1
 cp %{buildroot}/../../../../../assets/example.net.disabled %{buildroot}/etc/vpncloud/example.net.disabled

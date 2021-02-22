@@ -1,0 +1,5 @@
+name: 'build-static'
+description: 'Create static binaries'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
