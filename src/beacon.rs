@@ -322,7 +322,7 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
 #[cfg(test)] use std::time::Duration;
 
 #[test]
-fn encode() {
+async fn encode() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let mut peers = vec![
@@ -340,7 +340,7 @@ fn encode() {
 }
 
 #[test]
-fn decode() {
+async fn decode() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let mut peers = vec![
@@ -356,7 +356,7 @@ fn decode() {
 }
 
 #[test]
-fn decode_split() {
+async fn decode_split() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let peers = vec![
@@ -374,7 +374,7 @@ fn decode_split() {
 }
 
 #[test]
-fn decode_offset() {
+async fn decode_offset() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let peers = vec![
@@ -388,7 +388,7 @@ fn decode_offset() {
 }
 
 #[test]
-fn decode_multiple() {
+async fn decode_multiple() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let peers = vec![
@@ -402,7 +402,7 @@ fn decode_multiple() {
 }
 
 #[test]
-fn decode_ttl() {
+async fn decode_ttl() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     MockTimeSource::set_time(2000 * 3600);
@@ -426,7 +426,7 @@ fn decode_ttl() {
 }
 
 #[test]
-fn decode_invalid() {
+async fn decode_invalid() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     assert_eq!(0, ser.decode("", None).len());
@@ -440,7 +440,7 @@ fn decode_invalid() {
 
 
 #[test]
-fn encode_decode() {
+async fn encode_decode() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let peers = vec![
@@ -453,7 +453,7 @@ fn encode_decode() {
 }
 
 #[test]
-fn encode_decode_file() {
+async fn encode_decode_file() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let peers = vec![
@@ -468,7 +468,7 @@ fn encode_decode_file() {
 }
 
 #[test]
-fn encode_decode_cmd() {
+async fn encode_decode_cmd() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let peers = vec![

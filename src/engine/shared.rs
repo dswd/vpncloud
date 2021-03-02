@@ -42,14 +42,8 @@ impl SharedPeerCrypto {
         }
     }
 
-    pub fn for_each(
-        &mut self, mut callback: impl FnMut(SocketAddr, Option<Arc<CryptoCore>>) -> Result<(), Error>
-    ) -> Result<(), Error> {
-        let mut peers = self.peers.lock();
-        for (k, v) in peers.iter_mut() {
-            callback(*k, v.clone())?
-        }
-        Ok(())
+    pub fn get_snapshot(&self) -> HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash> {
+        self.peers.lock().clone()
     }
 
     pub fn count(&self) -> usize {

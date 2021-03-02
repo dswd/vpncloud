@@ -82,7 +82,7 @@ impl<P: Protocol> Simulator<P> {
         Self { next_port: 1, nodes: HashMap::default(), messages: VecDeque::default() }
     }
 
-    pub fn add_node(&mut self, nat: bool, config: &Config) -> SocketAddr {
+    pub async fn add_node(&mut self, nat: bool, config: &Config) -> SocketAddr {
         let mut config = config.clone();
         MockSocket::set_nat(nat);
         config.listen = format!("[::]:{}", self.next_port);
@@ -92,7 +92,7 @@ impl<P: Protocol> Simulator<P> {
         }
         DebugLogger::set_node(self.next_port as usize);
         self.next_port += 1;
-        let node = TestNode::new(&config, MockSocket::new(addr), MockDevice::new(), None, None);
+        let node = TestNode::new(&config, MockSocket::new(addr), MockDevice::new(), None, None).await.unwrap();
         DebugLogger::set_node(0);
         self.nodes.insert(addr, node);
         addr
@@ -105,12 +105,12 @@ impl<P: Protocol> Simulator<P> {
         node
     }
 
-    pub fn simulate_next_message(&mut self) {
+    pub async fn simulate_next_message(&mut self) {
         if let Some((src, dst, data)) = self.messages.pop_front() {
             if let Some(node) = self.nodes.get_mut(&dst) {
                 if node.socket().put_inbound(src, data) {
                     DebugLogger::set_node(node.get_num());
-                    node.trigger_socket_event();
+                    node.trigger_socket_event().await;
                     DebugLogger::set_node(0);
                     let sock = node.socket();
                     let src = dst;
@@ -124,16 +124,16 @@ impl<P: Protocol> Simulator<P> {
         }
     }
 
-    pub fn simulate_all_messages(&mut self) {
+    pub async fn simulate_all_messages(&mut self) {
         while !self.messages.is_empty() {
-            self.simulate_next_message()
+            self.simulate_next_message().await
         }
     }
 
-    pub fn trigger_node_housekeep(&mut self, addr: SocketAddr) {
+    pub async fn trigger_node_housekeep(&mut self, addr: SocketAddr) {
         let node = self.nodes.get_mut(&addr).unwrap();
         DebugLogger::set_node(node.get_num());
-        node.trigger_housekeep();
+        node.trigger_housekeep().await;
         DebugLogger::set_node(0);
         let sock = node.socket();
         while let Some((dst, data)) = sock.pop_outbound() {
@@ -141,10 +141,10 @@ impl<P: Protocol> Simulator<P> {
         }
     }
 
-    pub fn trigger_housekeep(&mut self) {
+    pub async fn trigger_housekeep(&mut self) {
         for (src, node) in &mut self.nodes {
             DebugLogger::set_node(node.get_num());
-            node.trigger_housekeep();
+            node.trigger_housekeep().await;
             DebugLogger::set_node(0);
             let sock = node.socket();
             while let Some((dst, data)) = sock.pop_outbound() {
@@ -157,13 +157,13 @@ impl<P: Protocol> Simulator<P> {
         MockTimeSource::set_time(time);
     }
 
-    pub fn simulate_time(&mut self, time: Time) {
+    pub async fn simulate_time(&mut self, time: Time) {
         let mut t = MockTimeSource::now();
         while t < time {
             t += 1;
             self.set_time(t);
-            self.trigger_housekeep();
-            self.simulate_all_messages();
+            self.trigger_housekeep().await;
+            self.simulate_all_messages().await;
         }
     }
 
@@ -192,11 +192,11 @@ impl<P: Protocol> Simulator<P> {
         self.messages.len()
     }
 
-    pub fn put_payload(&mut self, addr: SocketAddr, data: Vec<u8>) {
+    pub async fn put_payload(&mut self, addr: SocketAddr, data: Vec<u8>) {
         let node = self.nodes.get_mut(&addr).unwrap();
         node.device().put_inbound(data);
         DebugLogger::set_node(node.get_num());
-        node.trigger_device_event();
+        node.trigger_device_event().await;
         DebugLogger::set_node(0);
         let sock = node.socket();
         while let Some((dst, data)) = sock.pop_outbound() {

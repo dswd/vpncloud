@@ -2,20 +2,22 @@
 // Copyright (C) 2015-2021  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
+use async_trait::async_trait;
 use parking_lot::Mutex;
 use std::{
     cmp,
     collections::VecDeque,
     convert::TryInto,
     fmt,
-    fs::{self, File},
-    io::{self, BufRead, BufReader, Cursor, Error as IoError, Read, Write},
+    io::{self, Cursor, Error as IoError},
     net::{Ipv4Addr, UdpSocket},
-    os::unix::io::{AsRawFd, RawFd},
+    os::unix::io::AsRawFd,
     str,
     str::FromStr,
-    sync::Arc
+    sync::Arc,
 };
+use tokio::fs::{self, File};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
 use crate::{crypto, error::Error, util::MsgBuffer};
 
@@ -26,13 +28,13 @@ union IfReqData {
     flags: libc::c_short,
     value: libc::c_int,
     addr: (libc::c_short, Ipv4Addr),
-    _dummy: [u8; 24]
+    _dummy: [u8; 24],
 }
 
 #[repr(C)]
 struct IfReq {
     ifr_name: [u8; libc::IF_NAMESIZE],
-    data: IfReqData
+    data: IfReqData,
 }
 
 impl IfReq {
@@ -44,7 +46,6 @@ impl IfReq {
     }
 }
 
-
 /// The type of a tun/tap device
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum Type {
@@ -53,14 +54,14 @@ pub enum Type {
     Tun,
     /// Tap interface: This interface transports Ethernet frames.
     #[serde(rename = "tap")]
-    Tap
+    Tap,
 }
 
 impl fmt::Display for Type {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
             Type::Tun => write!(formatter, "tun"),
-            Type::Tap => write!(formatter, "tap")
+            Type::Tap => write!(formatter, "tap"),
         }
     }
 }
@@ -72,12 +73,13 @@ impl FromStr for Type {
         Ok(match &text.to_lowercase() as &str {
             "tun" => Self::Tun,
             "tap" => Self::Tap,
-            _ => return Err("Unknown device type")
+            _ => return Err("Unknown device type"),
         })
     }
 }
 
-pub trait Device: AsRawFd + Clone + Send + 'static {
+#[async_trait]
+pub trait Device: Send + 'static + Sized {
     /// Returns the type of this device
     fn get_type(&self) -> Type;
 
@@ -95,7 +97,7 @@ pub trait Device: AsRawFd + Clone + Send + 'static {
     ///
     /// # Errors
     /// This method will return an error if the underlying read call fails.
-    fn read(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error>;
+    async fn read(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error>;
 
     /// Writes a packet/frame to the device
     ///
@@ -106,28 +108,18 @@ pub trait Device: AsRawFd + Clone + Send + 'static {
     ///
     /// # Errors
     /// This method will return an error if the underlying read call fails.
-    fn write(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error>;
+    async fn write(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error>;
+
+    async fn duplicate(&self) -> Result<Self, Error>;
 
     fn get_ip(&self) -> Result<Ipv4Addr, Error>;
 }
-
 
 /// Represents a tun/tap device
 pub struct TunTapDevice {
     fd: File,
     ifname: String,
-    type_: Type
-}
-
-
-impl Clone for TunTapDevice {
-    fn clone(&self) -> Self {
-        Self {
-            fd: try_fail!(self.fd.try_clone(), "Failed to clone device: {}"),
-            ifname: self.ifname.clone(),
-            type_: self.type_
-        }
-    }
+    type_: Type,
 }
 
 impl TunTapDevice {
@@ -149,12 +141,12 @@ impl TunTapDevice {
     /// # Panics
     /// This method panics if the interface name is longer than 31 bytes.
     #[allow(clippy::useless_conversion)]
-    pub fn new(ifname: &str, type_: Type, path: Option<&str>) -> io::Result<Self> {
+    pub async fn new(ifname: &str, type_: Type, path: Option<&str>) -> io::Result<Self> {
         let path = path.unwrap_or_else(|| Self::default_path(type_));
-        let fd = fs::OpenOptions::new().read(true).write(true).open(path)?;
+        let fd = fs::OpenOptions::new().read(true).write(true).open(path).await?;
         let flags = match type_ {
             Type::Tun => libc::IFF_TUN | libc::IFF_NO_PI,
-            Type::Tap => libc::IFF_TAP | libc::IFF_NO_PI
+            Type::Tap => libc::IFF_TAP | libc::IFF_NO_PI,
         };
         let mut ifreq = IfReq::new(ifname);
         ifreq.data.flags = flags as libc::c_short;
@@ -163,11 +155,11 @@ impl TunTapDevice {
             0 => {
                 let mut ifname = String::with_capacity(32);
                 let mut cursor = Cursor::new(ifreq.ifr_name);
-                cursor.read_to_string(&mut ifname)?;
+                cursor.read_to_string(&mut ifname).await?;
                 ifname = ifname.trim_end_matches('\0').to_owned();
                 Ok(Self { fd, ifname, type_ })
             }
-            _ => Err(IoError::last_os_error())
+            _ => Err(IoError::last_os_error()),
         }
     }
 
@@ -175,7 +167,7 @@ impl TunTapDevice {
     #[inline]
     pub fn default_path(type_: Type) -> &'static str {
         match type_ {
-            Type::Tun | Type::Tap => "/dev/net/tun"
+            Type::Tun | Type::Tap => "/dev/net/tun",
         }
     }
 
@@ -223,7 +215,7 @@ impl TunTapDevice {
                 // IP version
                 4 => buffer.message_mut()[0..4].copy_from_slice(&[0x00, 0x00, 0x08, 0x00]),
                 6 => buffer.message_mut()[0..4].copy_from_slice(&[0x00, 0x00, 0x86, 0xdd]),
-                _ => unreachable!()
+                _ => unreachable!(),
             }
         }
     }
@@ -239,11 +231,11 @@ impl TunTapDevice {
         }
     }
 
-    pub fn set_mtu(&self, value: Option<usize>) -> io::Result<()> {
+    pub async fn set_mtu(&self, value: Option<usize>) -> io::Result<()> {
         let value = match value {
             Some(value) => value,
             None => {
-                let default_device = get_default_device()?;
+                let default_device = get_default_device().await?;
                 get_device_mtu(&default_device)? - self.get_overhead()
             }
         };
@@ -257,23 +249,24 @@ impl TunTapDevice {
         set_device_enabled(&self.ifname, true)
     }
 
-    pub fn get_rp_filter(&self) -> io::Result<u8> {
-        Ok(cmp::max(get_rp_filter("all")?, get_rp_filter(&self.ifname)?))
+    pub async fn get_rp_filter(&self) -> io::Result<u8> {
+        Ok(cmp::max(get_rp_filter("all").await?, get_rp_filter(&self.ifname).await?))
     }
 
-    pub fn fix_rp_filter(&self) -> io::Result<()> {
-        if get_rp_filter("all")? > 1 {
+    pub async fn fix_rp_filter(&self) -> io::Result<()> {
+        if get_rp_filter("all").await? > 1 {
             info!("Setting net.ipv4.conf.all.rp_filter=1");
-            set_rp_filter("all", 1)?
+            set_rp_filter("all", 1).await?
         }
-        if get_rp_filter(&self.ifname)? != 1 {
+        if get_rp_filter(&self.ifname).await? != 1 {
             info!("Setting net.ipv4.conf.{}.rp_filter=1", self.ifname);
-            set_rp_filter(&self.ifname, 1)?
+            set_rp_filter(&self.ifname, 1).await?
         }
         Ok(())
     }
 }
 
+#[async_trait]
 impl Device for TunTapDevice {
     fn get_type(&self) -> Type {
         self.type_
@@ -283,19 +276,27 @@ impl Device for TunTapDevice {
         &self.ifname
     }
 
-    fn read(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
+    async fn duplicate(&self) -> Result<Self, Error> {
+        Ok(Self {
+            fd: self.fd.try_clone().await.map_err(|e| Error::DeviceIo("Failed to clone device", e))?,
+            ifname: self.ifname.clone(),
+            type_: self.type_,
+        })
+    }
+
+    async fn read(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
         buffer.clear();
-        let read = self.fd.read(buffer.buffer()).map_err(|e| Error::DeviceIo("Read error", e))?;
+        let read = self.fd.read(buffer.buffer()).await.map_err(|e| Error::DeviceIo("Read error", e))?;
         buffer.set_length(read);
         self.correct_data_after_read(buffer);
         Ok(())
     }
 
-    fn write(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
+    async fn write(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
         self.correct_data_before_write(buffer);
-        match self.fd.write_all(buffer.message()) {
-            Ok(_) => self.fd.flush().map_err(|e| Error::DeviceIo("Flush error", e)),
-            Err(e) => Err(Error::DeviceIo("Write error", e))
+        match self.fd.write_all(buffer.message()).await {
+            Ok(_) => self.fd.flush().await.map_err(|e| Error::DeviceIo("Flush error", e)),
+            Err(e) => Err(Error::DeviceIo("Write error", e)),
         }
     }
 
@@ -304,18 +305,10 @@ impl Device for TunTapDevice {
     }
 }
 
-impl AsRawFd for TunTapDevice {
-    #[inline]
-    fn as_raw_fd(&self) -> RawFd {
-        self.fd.as_raw_fd()
-    }
-}
-
-
 #[derive(Clone)]
 pub struct MockDevice {
     inbound: Arc<Mutex<VecDeque<Vec<u8>>>>,
-    outbound: Arc<Mutex<VecDeque<Vec<u8>>>>
+    outbound: Arc<Mutex<VecDeque<Vec<u8>>>>,
 }
 
 impl MockDevice {
@@ -336,7 +329,12 @@ impl MockDevice {
     }
 }
 
+#[async_trait]
 impl Device for MockDevice {
+    async fn duplicate(&self) -> Result<Self, Error> {
+        Ok(self.clone())
+    }
+
     fn get_type(&self) -> Type {
         Type::Tun
     }
@@ -345,7 +343,7 @@ impl Device for MockDevice {
         "mock0"
     }
 
-    fn read(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
+    async fn read(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
         if let Some(data) = self.inbound.lock().pop_front() {
             buffer.clear();
             buffer.set_length(data.len());
@@ -356,7 +354,7 @@ impl Device for MockDevice {
         }
     }
 
-    fn write(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
+    async fn write(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
         self.outbound.lock().push_back(buffer.message().into());
         Ok(())
     }
@@ -370,18 +368,10 @@ impl Default for MockDevice {
     fn default() -> Self {
         Self {
             outbound: Arc::new(Mutex::new(VecDeque::with_capacity(10))),
-            inbound: Arc::new(Mutex::new(VecDeque::with_capacity(10)))
+            inbound: Arc::new(Mutex::new(VecDeque::with_capacity(10))),
         }
     }
 }
-
-impl AsRawFd for MockDevice {
-    #[inline]
-    fn as_raw_fd(&self) -> RawFd {
-        unimplemented!()
-    }
-}
-
 
 #[allow(clippy::useless_conversion)]
 fn set_device_mtu(ifname: &str, mtu: usize) -> io::Result<()> {
@@ -391,7 +381,7 @@ fn set_device_mtu(ifname: &str, mtu: usize) -> io::Result<()> {
     let res = unsafe { libc::ioctl(sock.as_raw_fd(), libc::SIOCSIFMTU.try_into().unwrap(), &mut ifreq) };
     match res {
         0 => Ok(()),
-        _ => Err(IoError::last_os_error())
+        _ => Err(IoError::last_os_error()),
     }
 }
 
@@ -402,7 +392,7 @@ fn get_device_mtu(ifname: &str) -> io::Result<usize> {
     let res = unsafe { libc::ioctl(sock.as_raw_fd(), libc::SIOCGIFMTU.try_into().unwrap(), &mut ifreq) };
     match res {
         0 => Ok(unsafe { ifreq.data.value as usize }),
-        _ => Err(IoError::last_os_error())
+        _ => Err(IoError::last_os_error()),
     }
 }
 
@@ -415,12 +405,12 @@ fn get_device_addr(ifname: &str) -> io::Result<Ipv4Addr> {
         0 => {
             let af = unsafe { ifreq.data.addr.0 };
             if af as libc::c_int != libc::AF_INET {
-                return Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Invalid address family".to_owned()))
+                return Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Invalid address family".to_owned()));
             }
             let ip = unsafe { ifreq.data.addr.1 };
             Ok(ip)
         }
-        _ => Err(IoError::last_os_error())
+        _ => Err(IoError::last_os_error()),
     }
 }
 
@@ -432,7 +422,7 @@ fn set_device_addr(ifname: &str, addr: Ipv4Addr) -> io::Result<()> {
     let res = unsafe { libc::ioctl(sock.as_raw_fd(), libc::SIOCSIFADDR.try_into().unwrap(), &mut ifreq) };
     match res {
         0 => Ok(()),
-        _ => Err(IoError::last_os_error())
+        _ => Err(IoError::last_os_error()),
     }
 }
 
@@ -446,12 +436,12 @@ fn get_device_netmask(ifname: &str) -> io::Result<Ipv4Addr> {
         0 => {
             let af = unsafe { ifreq.data.addr.0 };
             if af as libc::c_int != libc::AF_INET {
-                return Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Invalid address family".to_owned()))
+                return Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Invalid address family".to_owned()));
             }
             let ip = unsafe { ifreq.data.addr.1 };
             Ok(ip)
         }
-        _ => Err(IoError::last_os_error())
+        _ => Err(IoError::last_os_error()),
     }
 }
 
@@ -463,7 +453,7 @@ fn set_device_netmask(ifname: &str, addr: Ipv4Addr) -> io::Result<()> {
     let res = unsafe { libc::ioctl(sock.as_raw_fd(), libc::SIOCSIFNETMASK.try_into().unwrap(), &mut ifreq) };
     match res {
         0 => Ok(()),
-        _ => Err(IoError::last_os_error())
+        _ => Err(IoError::last_os_error()),
     }
 }
 
@@ -472,7 +462,7 @@ fn set_device_enabled(ifname: &str, up: bool) -> io::Result<()> {
     let sock = UdpSocket::bind("0.0.0.0:0")?;
     let mut ifreq = IfReq::new(ifname);
     if unsafe { libc::ioctl(sock.as_raw_fd(), libc::SIOCGIFFLAGS.try_into().unwrap(), &mut ifreq) } != 0 {
-        return Err(IoError::last_os_error())
+        return Err(IoError::last_os_error());
     }
     if up {
         unsafe { ifreq.data.value |= libc::IFF_UP | libc::IFF_RUNNING }
@@ -482,20 +472,22 @@ fn set_device_enabled(ifname: &str, up: bool) -> io::Result<()> {
     let res = unsafe { libc::ioctl(sock.as_raw_fd(), libc::SIOCSIFFLAGS.try_into().unwrap(), &mut ifreq) };
     match res {
         0 => Ok(()),
-        _ => Err(IoError::last_os_error())
+        _ => Err(IoError::last_os_error()),
     }
 }
 
-
-fn get_default_device() -> io::Result<String> {
-    let fd = BufReader::new(File::open("/proc/net/route")?);
+async fn get_default_device() -> io::Result<String> {
+    let mut fd = BufReader::new(File::open("/proc/net/route").await?);
     let mut best = None;
-    for line in fd.lines() {
-        let line = line?;
+    let mut line = String::with_capacity(80);
+    while let Ok(read) = fd.read_line(&mut line).await {
+        if read == 0 {
+            break;
+        }
         let parts = line.split('\t').collect::<Vec<_>>();
         if parts[1] == "00000000" {
             best = Some(parts[0].to_string());
-            break
+            break;
         }
         if parts[2] != "00000000" {
             best = Some(parts[0].to_string())
@@ -508,14 +500,14 @@ fn get_default_device() -> io::Result<String> {
     }
 }
 
-fn get_rp_filter(device: &str) -> io::Result<u8> {
-    let mut fd = File::open(format!("/proc/sys/net/ipv4/conf/{}/rp_filter", device))?;
+async fn get_rp_filter(device: &str) -> io::Result<u8> {
+    let mut fd = File::open(format!("/proc/sys/net/ipv4/conf/{}/rp_filter", device)).await?;
     let mut contents = String::with_capacity(10);
-    fd.read_to_string(&mut contents)?;
+    fd.read_to_string(&mut contents).await?;
     u8::from_str(contents.trim()).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid rp_filter value"))
 }
 
-fn set_rp_filter(device: &str, val: u8) -> io::Result<()> {
-    let mut fd = File::create(format!("/proc/sys/net/ipv4/conf/{}/rp_filter", device))?;
-    writeln!(fd, "{}", val)
+async fn set_rp_filter(device: &str, val: u8) -> io::Result<()> {
+    let mut fd = File::create(format!("/proc/sys/net/ipv4/conf/{}/rp_filter", device)).await?;
+    fd.write_all(format!("{}", val).as_bytes()).await
 }

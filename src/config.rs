@@ -669,7 +669,7 @@ pub struct ConfigFile {
 }
 
 #[test]
-fn config_file() {
+async fn config_file() {
     let config_file = "
 device:
   type: tun
@@ -744,12 +744,12 @@ statsd:
 }
 
 #[test]
-fn parse_example_config() {
+async fn parse_example_config() {
     serde_yaml::from_str::<ConfigFile>(include_str!("../assets/example.net.disabled")).unwrap();
 }
 
 #[test]
-fn config_merge() {
+async fn config_merge() {
     let mut config = Config::default();
     config.merge_file(ConfigFile {
         device: Some(ConfigFileDevice {

@@ -4,24 +4,24 @@
 
 use super::util::{MockTimeSource, MsgBuffer, Time, TimeSource};
 use crate::port_forwarding::PortForwarding;
+use async_trait::async_trait;
 use parking_lot::Mutex;
 use std::{
     collections::{HashMap, VecDeque},
     io::{self, ErrorKind},
     net::{IpAddr, Ipv6Addr, SocketAddr, UdpSocket},
-    os::unix::io::{AsRawFd, RawFd},
+    os::unix::io::AsRawFd,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc
+        Arc,
     },
-    time::Duration
 };
 
 pub fn mapped_addr(addr: SocketAddr) -> SocketAddr {
     // HOT PATH
     match addr {
         SocketAddr::V4(addr4) => SocketAddr::new(IpAddr::V6(addr4.ip().to_ipv6_mapped()), addr4.port()),
-        _ => addr
+        _ => addr,
     }
 }
 
@@ -31,12 +31,13 @@ pub fn get_ip() -> IpAddr {
     s.local_addr().unwrap().ip()
 }
 
-pub trait Socket: AsRawFd + Sized + Clone + Send + 'static {
-    fn listen(addr: &str) -> Result<Self, io::Error>;
-    fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error>;
-    fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error>;
-    fn address(&self) -> Result<SocketAddr, io::Error>;
-    fn create_port_forwarding(&self) -> Option<PortForwarding>;
+#[async_trait]
+pub trait Socket: Sized + Clone + Send + Sync + 'static {
+    async fn listen(addr: &str) -> Result<Self, io::Error>;
+    async fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error>;
+    async fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error>;
+    async fn address(&self) -> Result<SocketAddr, io::Error>;
+    async fn create_port_forwarding(&self) -> Option<PortForwarding>;
 }
 
 pub fn parse_listen(addr: &str) -> SocketAddr {
@@ -59,40 +60,33 @@ impl Clone for NetSocket {
     }
 }
 
-impl AsRawFd for NetSocket {
-    fn as_raw_fd(&self) -> RawFd {
-        self.0.as_raw_fd()
-    }
-}
 
+#[async_trait]
 impl Socket for NetSocket {
-    fn listen(addr: &str) -> Result<Self, io::Error> {
+    async fn listen(addr: &str) -> Result<Self, io::Error> {
         let addr = parse_listen(addr);
-        Ok(NetSocket(UdpSocket::bind(addr).and_then(|s| {
-            s.set_read_timeout(Some(Duration::from_secs(1)))?;
-            Ok(s)
-        })?))
+        Ok(NetSocket(UdpSocket::bind(addr)?))
     }
 
-    fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
+    async fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
         buffer.clear();
         let (size, addr) = self.0.recv_from(buffer.buffer())?;
         buffer.set_length(size);
         Ok(addr)
     }
 
-    fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error> {
+    async fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error> {
         self.0.send_to(data, addr)
     }
 
-    fn address(&self) -> Result<SocketAddr, io::Error> {
+    async fn address(&self) -> Result<SocketAddr, io::Error> {
         let mut addr = self.0.local_addr()?;
         addr.set_ip(get_ip());
         Ok(addr)
     }
 
-    fn create_port_forwarding(&self) -> Option<PortForwarding> {
-        PortForwarding::new(self.address().unwrap().port())
+    async fn create_port_forwarding(&self) -> Option<PortForwarding> {
+        PortForwarding::new(self.address().await.unwrap().port())
     }
 }
 
@@ -100,14 +94,13 @@ thread_local! {
     static MOCK_SOCKET_NAT: AtomicBool = AtomicBool::new(false);
 }
 
-
 #[derive(Clone)]
 pub struct MockSocket {
     nat: bool,
     nat_peers: Arc<Mutex<HashMap<SocketAddr, Time>>>,
     address: SocketAddr,
     outbound: Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>,
-    inbound: Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>
+    inbound: Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>,
 }
 
 impl MockSocket {
@@ -117,7 +110,7 @@ impl MockSocket {
             nat_peers: Default::default(),
             address,
             outbound: Arc::new(Mutex::new(VecDeque::with_capacity(10))),
-            inbound: Arc::new(Mutex::new(VecDeque::with_capacity(10)))
+            inbound: Arc::new(Mutex::new(VecDeque::with_capacity(10))),
         }
     }
 
@@ -132,12 +125,12 @@ impl MockSocket {
     pub fn put_inbound(&mut self, from: SocketAddr, data: Vec<u8>) -> bool {
         if !self.nat {
             self.inbound.lock().push_back((from, data));
-            return true
+            return true;
         }
         if let Some(timeout) = self.nat_peers.lock().get(&from) {
             if *timeout >= MockTimeSource::now() {
                 self.inbound.lock().push_back((from, data));
-                return true
+                return true;
             }
         }
         warn!("Sender {:?} is filtered out by NAT", from);
@@ -149,18 +142,14 @@ impl MockSocket {
     }
 }
 
-impl AsRawFd for MockSocket {
-    fn as_raw_fd(&self) -> RawFd {
-        unimplemented!()
-    }
-}
 
+#[async_trait]
 impl Socket for MockSocket {
-    fn listen(addr: &str) -> Result<Self, io::Error> {
+    async fn listen(addr: &str) -> Result<Self, io::Error> {
         Ok(Self::new(parse_listen(addr)))
     }
 
-    fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
+    async fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
         if let Some((addr, data)) = self.inbound.lock().pop_front() {
             buffer.clear();
             buffer.set_length(data.len());
@@ -171,7 +160,7 @@ impl Socket for MockSocket {
         }
     }
 
-    fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error> {
+    async fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error> {
         self.outbound.lock().push_back((addr, data.into()));
         if self.nat {
             self.nat_peers.lock().insert(addr, MockTimeSource::now() + 300);
@@ -179,11 +168,11 @@ impl Socket for MockSocket {
         Ok(data.len())
     }
 
-    fn address(&self) -> Result<SocketAddr, io::Error> {
+    async fn address(&self) -> Result<SocketAddr, io::Error> {
         Ok(self.address)
     }
 
-    fn create_port_forwarding(&self) -> Option<PortForwarding> {
+    async fn create_port_forwarding(&self) -> Option<PortForwarding> {
         None
     }
 }

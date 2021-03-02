@@ -6,19 +6,19 @@ use super::{
     net::{get_ip, mapped_addr, parse_listen, Socket},
     poll::{WaitImpl, WaitResult},
     port_forwarding::PortForwarding,
-    util::MsgBuffer
+    util::MsgBuffer,
 };
+use async_trait::async_trait;
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
 use std::{
     io::{self, Cursor, Read, Write},
     net::{Ipv6Addr, SocketAddr, SocketAddrV6, TcpListener, TcpStream, UdpSocket},
-    os::unix::io::{AsRawFd, RawFd},
+    os::unix::io::AsRawFd,
     sync::Arc,
-    thread::spawn
+    thread::spawn,
 };
 use tungstenite::{client::AutoStream, connect, protocol::WebSocket, server::accept, Message};
 use url::Url;
-
 
 macro_rules! io_error {
     ($val:expr, $format:expr) => ( {
@@ -36,7 +36,7 @@ fn write_addr<W: Write>(addr: SocketAddr, mut out: W) -> Result<(), io::Error> {
             out.write_all(&addr.ip().octets())?;
             out.write_u16::<NetworkEndian>(addr.port())?;
         }
-        _ => unreachable!()
+        _ => unreachable!(),
     }
     Ok(())
 }
@@ -87,7 +87,7 @@ fn serve_proxy_connection(stream: TcpStream) -> Result<(), io::Error> {
             WaitResult::Timeout => {
                 io_error!(websocket.write_message(Message::Ping(vec![])), "Failed to send ping: {}")?;
             }
-            WaitResult::Error(err) => return Err(err)
+            WaitResult::Error(err) => return Err(err),
         }
     }
     Ok(())
@@ -112,7 +112,7 @@ pub fn run_proxy(listen: &str) -> Result<(), io::Error> {
 #[derive(Clone)]
 pub struct ProxyConnection {
     addr: SocketAddr,
-    socket: Arc<WebSocket<AutoStream>>
+    socket: Arc<WebSocket<AutoStream>>,
 }
 
 impl ProxyConnection {
@@ -128,14 +128,9 @@ impl ProxyConnection {
     }
 }
 
-impl AsRawFd for ProxyConnection {
-    fn as_raw_fd(&self) -> RawFd {
-        self.socket.get_ref().as_raw_fd()
-    }
-}
- 
+#[async_trait]
 impl Socket for ProxyConnection {
-    fn listen(url: &str) -> Result<Self, io::Error> {
+    async fn listen(url: &str) -> Result<Self, io::Error> {
         let parsed_url = io_error!(Url::parse(url), "Invalid URL {}: {}", url)?;
         let (mut socket, _) = io_error!(connect(parsed_url), "Failed to connect to URL {}: {}", url)?;
         socket.get_mut().set_nodelay(true)?;
@@ -146,7 +141,7 @@ impl Socket for ProxyConnection {
         Ok(con)
     }
 
-    fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
+    async fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
         buffer.clear();
         let data = self.read_message()?;
         let addr = read_addr(Cursor::new(&data))?;
@@ -154,7 +149,7 @@ impl Socket for ProxyConnection {
         Ok(addr)
     }
 
-    fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error> {
+    async fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error> {
         let mut msg = Vec::with_capacity(data.len() + 18);
         write_addr(addr, &mut msg)?;
         msg.write_all(data)?;
@@ -165,11 +160,11 @@ impl Socket for ProxyConnection {
         */
     }
 
-    fn address(&self) -> Result<SocketAddr, io::Error> {
+    async fn address(&self) -> Result<SocketAddr, io::Error> {
         Ok(self.addr)
     }
 
-    fn create_port_forwarding(&self) -> Option<PortForwarding> {
+    async fn create_port_forwarding(&self) -> Option<PortForwarding> {
         None
     }
 }
