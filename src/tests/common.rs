@@ -99,9 +99,9 @@ impl<P: Protocol> Simulator<P> {
     }
 
     #[allow(dead_code)]
-    pub fn get_node(&mut self, addr: SocketAddr) -> &mut TestNode<P> {
+    pub async fn get_node(&mut self, addr: SocketAddr) -> &mut TestNode<P> {
         let node = self.nodes.get_mut(&addr).unwrap();
-        DebugLogger::set_node(node.get_num());
+        DebugLogger::set_node(node.get_num().await);
         node
     }
 
@@ -109,7 +109,7 @@ impl<P: Protocol> Simulator<P> {
         if let Some((src, dst, data)) = self.messages.pop_front() {
             if let Some(node) = self.nodes.get_mut(&dst) {
                 if node.socket().put_inbound(src, data) {
-                    DebugLogger::set_node(node.get_num());
+                    DebugLogger::set_node(node.get_num().await);
                     node.trigger_socket_event().await;
                     DebugLogger::set_node(0);
                     let sock = node.socket();
@@ -132,7 +132,7 @@ impl<P: Protocol> Simulator<P> {
 
     pub async fn trigger_node_housekeep(&mut self, addr: SocketAddr) {
         let node = self.nodes.get_mut(&addr).unwrap();
-        DebugLogger::set_node(node.get_num());
+        DebugLogger::set_node(node.get_num().await);
         node.trigger_housekeep().await;
         DebugLogger::set_node(0);
         let sock = node.socket();
@@ -143,7 +143,7 @@ impl<P: Protocol> Simulator<P> {
 
     pub async fn trigger_housekeep(&mut self) {
         for (src, node) in &mut self.nodes {
-            DebugLogger::set_node(node.get_num());
+            DebugLogger::set_node(node.get_num().await);
             node.trigger_housekeep().await;
             DebugLogger::set_node(0);
             let sock = node.socket();
@@ -167,10 +167,10 @@ impl<P: Protocol> Simulator<P> {
         }
     }
 
-    pub fn connect(&mut self, src: SocketAddr, dst: SocketAddr) {
+    pub async fn connect(&mut self, src: SocketAddr, dst: SocketAddr) {
         let node = self.nodes.get_mut(&src).unwrap();
-        DebugLogger::set_node(node.get_num());
-        node.connect(dst).unwrap();
+        DebugLogger::set_node(node.get_num().await);
+        node.connect(dst).await.unwrap();
         DebugLogger::set_node(0);
         let sock = node.socket();
         while let Some((dst, data)) = sock.pop_outbound() {
@@ -195,7 +195,7 @@ impl<P: Protocol> Simulator<P> {
     pub async fn put_payload(&mut self, addr: SocketAddr, data: Vec<u8>) {
         let node = self.nodes.get_mut(&addr).unwrap();
         node.device().put_inbound(data);
-        DebugLogger::set_node(node.get_num());
+        DebugLogger::set_node(node.get_num().await);
         node.trigger_device_event().await;
         DebugLogger::set_node(0);
         let sock = node.socket();

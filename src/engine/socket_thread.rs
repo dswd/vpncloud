@@ -64,11 +64,11 @@ pub struct SocketThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
     pub socket: S,
     device: D,
     next_housekeep: Time,
-    own_addresses: AddrList,
+    pub own_addresses: AddrList,
     next_own_address_reset: Time,
     pending_inits: HashMap<SocketAddr, InitState<NodeInfo>, Hash>,
     crypto: Crypto,
-    peers: HashMap<SocketAddr, PeerData, Hash>,
+    pub peers: HashMap<SocketAddr, PeerData, Hash>,
     next_peers: Time,
     next_stats_out: Time,
     next_beacon: Time,
@@ -111,7 +111,6 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         let now = TS::now();
         let update_freq = config.get_keepalive() as u16;
         let node_id = random();
-        let crypto = Crypto::new(node_id, &config.crypto).unwrap();
         let beacon_key = config.beacon_password.as_ref().map(|s| s.as_bytes()).unwrap_or(&[]);
         Self {
             _dummy_p: PhantomData,
@@ -152,7 +151,10 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         debug!("Sending msg with {} bytes to {}", size, addr);
         self.traffic.count_out_traffic(addr, size);
         match self.socket.send(self.buffer.message(), addr).await {
-            Ok(written) if written == size => Ok(()),
+            Ok(written) if written == size => {
+                self.buffer.clear();
+                Ok(())
+            }
             Ok(_) => Err(Error::Socket("Sent out truncated packet")),
             Err(e) => Err(Error::SocketIo("IOError when sending", e)),
         }
@@ -174,6 +176,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
                 Err(e) => Err(Error::SocketIo("IOError when sending", e)),
             }?
         }
+        self.buffer.clear();
         Ok(())
     }
 
@@ -267,6 +270,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             if !self.buffer.is_empty() {
                 self.send_to(addr).await?;
             }
+            self.peer_crypto.store(&self.peers);
         } else {
             error!("No init for new peer {}", addr_nice(addr));
         }
@@ -299,6 +303,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         if let Some(_peer) = self.peers.remove(&addr) {
             info!("Closing connection to {}", addr_nice(addr));
             self.table.remove_claims(addr);
+            self.peer_crypto.store(&self.peers);
         }
     }
 
@@ -311,6 +316,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             error!("Failed to send via device: {}", e);
             return Err(e);
         }
+        self.buffer.clear();
         if self.learning {
             // Learn single address
             self.table.cache(src, peer);
@@ -330,17 +336,27 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
                             return Err(err);
                         }
                     };
-                    self.update_peer_info(src, Some(info)).await?
+                    self.update_peer_info(src, Some(info)).await?;
+                    self.buffer.clear();
                 }
-                MESSAGE_TYPE_KEEPALIVE => self.update_peer_info(src, None).await?,
-                MESSAGE_TYPE_CLOSE => self.remove_peer(src),
+                MESSAGE_TYPE_KEEPALIVE => {
+                    self.update_peer_info(src, None).await?;
+                    self.buffer.clear();
+                }
+                MESSAGE_TYPE_CLOSE => {
+                    self.remove_peer(src);
+                    self.buffer.clear();
+                }
                 _ => {
                     self.traffic.count_invalid_protocol(self.buffer.len());
+                    self.buffer.clear();
                     return Err(Error::Message("Unknown message type"));
                 }
             },
             MessageResult::Reply => self.send_to(src).await?,
-            MessageResult::None => (),
+            MessageResult::None => {
+                self.buffer.clear();
+            }
         }
         Ok(())
     }
@@ -362,19 +378,18 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
                 Ok(InitResult::Continue)
             }
         }) {
-            match result? {
-                InitResult::Continue => {
-                    if !buffer.is_empty() {
-                        self.send_to(src).await?
-                    }
-                }
-                InitResult::Success { peer_payload, .. } => self.add_new_peer(src, peer_payload).await?,
+            if !buffer.is_empty() {
+                self.send_to(src).await?
+            }
+            if let InitResult::Success { peer_payload, .. } = result? {
+                self.add_new_peer(src, peer_payload).await?
             }
             return Ok(());
         }
         if !is_init_message(self.buffer.message()) {
             info!("Ignoring non-init message from unknown peer {}", addr_nice(src));
             self.traffic.count_invalid_protocol(self.buffer.len());
+            self.buffer.clear();
             return Ok(());
         }
         let mut init = self.crypto.peer_instance(self.create_node_info());
@@ -447,10 +462,11 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             self.load_beacon().await?;
             self.next_beacon = now + Time::from(self.config.beacon_interval);
         }
-        // TODO: sync peer_crypto
         self.table.sync();
         self.traffic.sync();
-        unimplemented!();
+        self.peer_crypto.store(&self.peers);
+        assert!(self.buffer.is_empty());
+        Ok(())
     }
 
     async fn crypto_housekeep(&mut self) -> Result<(), Error> {
@@ -673,23 +689,28 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
     }
 
     pub async fn iteration(&mut self) {
-        if let Ok(result) = timeout(std::time::Duration::from_millis(1000), self.socket.receive(&mut self.buffer)).await {
+        if let Ok(result) = timeout(std::time::Duration::from_millis(1000), self.socket.receive(&mut self.buffer)).await
+        {
             let src = try_fail!(result, "Failed to read from network socket: {}");
             match self.handle_message(src).await {
                 Err(e @ Error::CryptoInitFatal(_)) => {
                     debug!("Fatal crypto init error from {}: {}", src, e);
                     info!("Closing pending connection to {} due to error in crypto init", addr_nice(src));
                     self.pending_inits.remove(&src);
+                    self.buffer.clear();
                 }
                 Err(e @ Error::CryptoInit(_)) => {
                     debug!("Recoverable init error from {}: {}", src, e);
                     info!("Ignoring invalid init message from peer {}", addr_nice(src));
+                    self.buffer.clear();
                 }
                 Err(e) => {
                     error!("{}", e);
+                    self.buffer.clear();
                 }
                 Ok(_) => {}
             }
+            debug_assert!(self.buffer.is_empty());
         }
         let now = TS::now();
         if self.next_housekeep < now {
@@ -698,6 +719,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             }
             self.next_housekeep = now + 1
         }
+        debug_assert!(self.buffer.is_empty());
     }
 
     pub async fn run(mut self) {

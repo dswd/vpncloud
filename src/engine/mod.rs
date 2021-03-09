@@ -34,7 +34,7 @@ pub type Hash = BuildHasherDefault<FnvHasher>;
 pub const STATS_INTERVAL: Time = 60;
 const SPACE_BEFORE: usize = 100;
 
-struct PeerData {
+pub struct PeerData {
     addrs: AddrList,
     #[allow(dead_code)] // TODO: export in status
     last_seen: Time,
@@ -122,8 +122,8 @@ impl<P: Protocol> GenericCloud<MockDevice, P, MockSocket, MockTimeSource> {
         &mut self.device_thread.device
     }
 
-    pub fn connect(&mut self, addr: SocketAddr) -> Result<(), Error> {
-        unimplemented!()
+    pub async fn connect(&mut self, addr: SocketAddr) -> Result<(), Error> {
+        self.socket_thread.connect(addr).await
     }
 
     pub async fn trigger_socket_event(&mut self) {
@@ -140,17 +140,14 @@ impl<P: Protocol> GenericCloud<MockDevice, P, MockSocket, MockTimeSource> {
     }
 
     pub fn is_connected(&self, addr: &SocketAddr) -> bool {
-        unimplemented!()
-        // self.peers.contains_key(addr)
+        self.socket_thread.peers.contains_key(addr)
     }
 
     pub fn own_addresses(&self) -> &[SocketAddr] {
-        unimplemented!()
-        //&self.own_addresses
+        &self.socket_thread.own_addresses
     }
 
-    pub fn get_num(&self) -> usize {
-        unimplemented!()
-        // self.socket.address().unwrap().port() as usize
+    pub async fn get_num(&self) -> usize {
+        self.socket_thread.socket.address().await.unwrap().port() as usize
     }
 }

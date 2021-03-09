@@ -11,7 +11,7 @@ async fn switch_delivers() {
     let node1 = sim.add_node(false, &config).await;
     let node2 = sim.add_node(false, &config).await;
 
-    sim.connect(node1, node2);
+    sim.connect(node1, node2).await;
     sim.simulate_all_messages().await;
     assert!(sim.is_connected(node1, node2));
     assert!(sim.is_connected(node2, node1));
@@ -32,9 +32,9 @@ async fn switch_learns() {
     let node2 = sim.add_node(false, &config).await;
     let node3 = sim.add_node(false, &config).await;
 
-    sim.connect(node1, node2);
-    sim.connect(node1, node3);
-    sim.connect(node2, node3);
+    sim.connect(node1, node2).await;
+    sim.connect(node1, node3).await;
+    sim.connect(node2, node3).await;
     sim.simulate_all_messages().await;
     assert!(sim.is_connected(node1, node2));
     assert!(sim.is_connected(node2, node1));
@@ -72,9 +72,9 @@ async fn switch_honours_vlans() {
     let node2 = sim.add_node(false, &config).await;
     let node3 = sim.add_node(false, &config).await;
 
-    sim.connect(node1, node2);
-    sim.connect(node1, node3);
-    sim.connect(node2, node3);
+    sim.connect(node1, node2).await;
+    sim.connect(node1, node3).await;
+    sim.connect(node2, node3).await;
     sim.simulate_all_messages().await;
     assert!(sim.is_connected(node1, node2));
     assert!(sim.is_connected(node2, node1));
@@ -139,17 +139,17 @@ async fn size() {
         let mut sim = TunSimulator::new();
         let node1 = sim.add_node(false, &config1).await;
         let node2 = sim.add_node(false, &config2).await;
-    
-        sim.connect(node1, node2);
+
+        sim.connect(node1, node2).await;
         sim.simulate_all_messages().await;
         assert!(sim.is_connected(node1, node2));
         assert!(sim.is_connected(node2, node1));
-    
+
         let payload = vec![0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2];
-    
+
         sim.put_payload(node1, payload.clone()).await;
         sim.simulate_all_messages().await;
-    
+
         assert_eq!(Some(payload), sim.pop_payload(node2));
     };
     assert_eq!(std::mem::size_of_val(&future), 100);
@@ -174,7 +174,7 @@ async fn router_delivers() {
     let node1 = sim.add_node(false, &config1).await;
     let node2 = sim.add_node(false, &config2).await;
 
-    sim.connect(node1, node2);
+    sim.connect(node1, node2).await;
     sim.simulate_all_messages().await;
     assert!(sim.is_connected(node1, node2));
     assert!(sim.is_connected(node2, node1));
@@ -205,7 +205,7 @@ async fn router_drops_unknown_dest() {
     let node1 = sim.add_node(false, &config1).await;
     let node2 = sim.add_node(false, &config2).await;
 
-    sim.connect(node1, node2);
+    sim.connect(node1, node2).await;
     sim.simulate_all_messages().await;
     assert!(sim.is_connected(node1, node2));
     assert!(sim.is_connected(node2, node1));

@@ -120,7 +120,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
     }
 
     pub async fn housekeep(&mut self) -> Result<(), Error> {
-        self.peer_crypto.sync();
+        self.peer_crypto.load();
         self.table.sync();
         self.traffic.sync();
         Ok(())

@@ -11,8 +11,8 @@ async fn connect_nat_2_peers() {
     let node1 = sim.add_node(true, &config).await;
     let node2 = sim.add_node(true, &config).await;
 
-    sim.connect(node1, node2);
-    sim.connect(node2, node1);
+    sim.connect(node1, node2).await;
+    sim.connect(node2, node1).await;
 
     sim.simulate_time(60).await;
 
@@ -28,10 +28,10 @@ async fn connect_nat_3_peers() {
     let node2 = sim.add_node(true, &config).await;
     let node3 = sim.add_node(true, &config).await;
 
-    sim.connect(node1, node2);
-    sim.connect(node2, node1);
-    sim.connect(node1, node3);
-    sim.connect(node3, node1);
+    sim.connect(node1, node2).await;
+    sim.connect(node2, node1).await;
+    sim.connect(node1, node3).await;
+    sim.connect(node3, node1).await;
 
     sim.simulate_time(300).await;
     assert!(sim.is_connected(node1, node2));
@@ -50,10 +50,10 @@ async fn nat_keepalive() {
     let node2 = sim.add_node(true, &config).await;
     let node3 = sim.add_node(true, &config).await;
 
-    sim.connect(node1, node2);
-    sim.connect(node2, node1);
-    sim.connect(node1, node3);
-    sim.connect(node3, node1);
+    sim.connect(node1, node2).await;
+    sim.connect(node2, node1).await;
+    sim.connect(node1, node3).await;
+    sim.connect(node3, node1).await;
 
     sim.simulate_time(1000).await;
     assert!(sim.is_connected(node1, node2));

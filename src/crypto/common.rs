@@ -242,6 +242,13 @@ impl PeerCrypto {
         }
     }
 
+    pub fn get_core(&self) -> Option<Arc<CryptoCore>> {
+        match self {
+            PeerCrypto::Encrypted { core, .. } => Some(core.clone()),
+            PeerCrypto::Unencrypted { .. } => None
+        }
+    }
+
     fn handle_init_message(&mut self, buffer: &mut MsgBuffer) -> Result<MessageResult, Error> {
         // TODO: parse message stage
         // TODO: depending on stage resend last message

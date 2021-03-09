@@ -16,6 +16,8 @@ use std::{
     sync::Arc
 };
 
+use super::PeerData;
+
 #[derive(Clone)]
 pub struct SharedPeerCrypto {
     peers: Arc<Mutex<HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash>>>
@@ -26,11 +28,7 @@ impl SharedPeerCrypto {
         SharedPeerCrypto { peers: Arc::new(Mutex::new(HashMap::default())) }
     }
 
-    pub fn sync(&mut self) {
-        // TODO sync if needed
-    }
-
-    pub fn encrypt_for(&mut self, peer: SocketAddr, data: &mut MsgBuffer) -> Result<(), Error> {
+    pub fn encrypt_for(&self, peer: SocketAddr, data: &mut MsgBuffer) -> Result<(), Error> {
         let mut peers = self.peers.lock();
         match peers.get_mut(&peer) {
             None => Err(Error::InvalidCryptoState("No crypto found for peer")),
@@ -42,6 +40,16 @@ impl SharedPeerCrypto {
         }
     }
 
+    pub fn store(&self, data: &HashMap<SocketAddr, PeerData, Hash>) {
+        let mut peers = self.peers.lock();
+        peers.clear();
+        peers.extend(data.iter().map(|(k, v)| (*k, v.crypto.get_core())));
+    }
+
+    pub fn load(&mut self) {
+        // TODO sync if needed
+    }
+    
     pub fn get_snapshot(&self) -> HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash> {
         self.peers.lock().clone()
     }

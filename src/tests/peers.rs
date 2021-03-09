@@ -11,7 +11,7 @@ async fn direct_connect() {
     let node1 = sim.add_node(false, &config).await;
     let node2 = sim.add_node(false, &config).await;
 
-    sim.connect(node1, node2);
+    sim.connect(node1, node2).await;
     sim.simulate_all_messages().await;
     assert!(sim.is_connected(node1, node2));
     assert!(sim.is_connected(node2, node1));
@@ -27,7 +27,7 @@ async fn direct_connect_unencrypted() {
     let node1 = sim.add_node(false, &config).await;
     let node2 = sim.add_node(false, &config).await;
 
-    sim.connect(node1, node2);
+    sim.connect(node1, node2).await;
     sim.simulate_all_messages().await;
     assert!(sim.is_connected(node1, node2));
     assert!(sim.is_connected(node2, node1));
@@ -41,8 +41,8 @@ async fn cross_connect() {
     let node2 = sim.add_node(false, &config).await;
     let node3 = sim.add_node(false, &config).await;
 
-    sim.connect(node1, node2);
-    sim.connect(node1, node3);
+    sim.connect(node1, node2).await;
+    sim.connect(node1, node3).await;
     sim.simulate_all_messages().await;
 
     sim.simulate_time(120).await;
@@ -80,7 +80,7 @@ async fn reconnect_after_timeout() {
     let node1 = sim.add_node(false, &config).await;
     let node2 = sim.add_node(false, &config).await;
 
-    sim.connect(node1, node2);
+    sim.connect(node1, node2).await;
     sim.simulate_all_messages().await;
     assert!(sim.is_connected(node1, node2));
     assert!(sim.is_connected(node2, node1));
@@ -102,7 +102,7 @@ async fn lost_init_ping() {
     let node1 = sim.add_node(false, &config).await;
     let node2 = sim.add_node(false, &config).await;
 
-    sim.connect(node1, node2);
+    sim.connect(node1, node2).await;
     sim.drop_message(); // drop init ping
 
     sim.simulate_time(120).await;
@@ -117,7 +117,7 @@ async fn lost_init_pong() {
     let node1 = sim.add_node(false, &config).await;
     let node2 = sim.add_node(false, &config).await;
 
-    sim.connect(node1, node2);
+    sim.connect(node1, node2).await;
     sim.simulate_next_message().await; // init ping
     sim.drop_message(); // drop init pong
 
@@ -133,7 +133,7 @@ async fn lost_init_peng() {
     let node1 = sim.add_node(false, &config).await;
     let node2 = sim.add_node(false, &config).await;
 
-    sim.connect(node1, node2);
+    sim.connect(node1, node2).await;
     sim.simulate_next_message().await; // init ping
     sim.simulate_next_message().await; // init pong
     sim.drop_message(); // drop init peng
