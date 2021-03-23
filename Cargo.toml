@@ -16,7 +16,7 @@ toolchain = "1.50.0"
 upx_version = "3.96"
 
 [dependencies]
-time = "=0.2.22"
+time = "=0.2.26"
 structopt = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
