@@ -122,41 +122,6 @@ async fn switch_forgets() {
 }
 
 #[test]
-async fn size() {
-    let future = async {
-        let config1 = Config {
-            device_type: Type::Tun,
-            auto_claim: false,
-            claims: vec!["1.1.1.1/32".to_string()],
-            ..Config::default()
-        };
-        let config2 = Config {
-            device_type: Type::Tun,
-            auto_claim: false,
-            claims: vec!["2.2.2.2/32".to_string()],
-            ..Config::default()
-        };
-        let mut sim = TunSimulator::new();
-        let node1 = sim.add_node(false, &config1).await;
-        let node2 = sim.add_node(false, &config2).await;
-
-        sim.connect(node1, node2).await;
-        sim.simulate_all_messages().await;
-        assert!(sim.is_connected(node1, node2));
-        assert!(sim.is_connected(node2, node1));
-
-        let payload = vec![0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2];
-
-        sim.put_payload(node1, payload.clone()).await;
-        sim.simulate_all_messages().await;
-
-        assert_eq!(Some(payload), sim.pop_payload(node2));
-    };
-    assert_eq!(std::mem::size_of_val(&future), 100);
-    future.await
-}
-
-#[test]
 async fn router_delivers() {
     let config1 = Config {
         device_type: Type::Tun,
