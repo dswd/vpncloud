@@ -23,6 +23,7 @@ pub struct Config {
     pub device_type: Type,
     pub device_name: String,
     pub device_path: Option<String>,
+    pub device_mtu: Option<usize>,
     pub fix_rp_filter: bool,
 
     pub ip: Option<String>,
@@ -61,6 +62,7 @@ impl Default for Config {
             device_type: Type::Tun,
             device_name: "vpncloud%d".to_string(),
             device_path: None,
+            device_mtu: None,
             fix_rp_filter: false,
             ip: None,
             ifup: None,
@@ -104,6 +106,9 @@ impl Config {
             }
             if let Some(val) = device.path {
                 self.device_path = Some(val);
+            }
+            if let Some(val) = device.mtu {
+                self.device_mtu = Some(val);
             }
             if let Some(val) = device.fix_rp_filter {
                 self.fix_rp_filter = val;
@@ -209,6 +214,9 @@ impl Config {
         }
         if let Some(val) = args.device_path {
             self.device_path = Some(val);
+        }
+        if let Some(val) = args.device_mtu {
+            self.device_mtu = Some(val);
         }
         if args.fix_rp_filter {
             self.fix_rp_filter = true;
@@ -316,6 +324,7 @@ impl Config {
             device: Some(ConfigFileDevice {
                 name: Some(self.device_name),
                 path: self.device_path,
+                mtu: self.device_mtu,
                 type_: Some(self.device_type),
                 fix_rp_filter: Some(self.fix_rp_filter)
             }),
@@ -416,6 +425,10 @@ pub struct Args {
     /// Set the path of the base device
     #[structopt(long)]
     pub device_path: Option<String>,
+
+    /// Set the mtu og the device
+    #[structopt(long)]
+    pub device_mtu: Option<usize>,
 
     /// Fix the rp_filter settings on the host
     #[structopt(long)]
@@ -619,6 +632,7 @@ pub struct ConfigFileDevice {
     pub type_: Option<Type>,
     pub name: Option<String>,
     pub path: Option<String>,
+    pub mtu: Option<usize>,
     pub fix_rp_filter: Option<bool>,
 }
 
@@ -675,6 +689,7 @@ device:
   type: tun
   name: vpncloud%d
   path: /dev/net/tun
+  mtu: 1400
 ip: 10.0.1.1/16
 ifup: ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up
 ifdown: 'true'
@@ -708,6 +723,7 @@ statsd:
                 type_: Some(Type::Tun),
                 name: Some("vpncloud%d".to_string()),
                 path: Some("/dev/net/tun".to_string()),
+                mtu: Some(1400),
                 fix_rp_filter: None
             }),
             ip: Some("10.0.1.1/16".to_string()),
@@ -756,6 +772,7 @@ async fn config_merge() {
             type_: Some(Type::Tun),
             name: Some("vpncloud%d".to_string()),
             path: None,
+            mtu: None,
             fix_rp_filter: None,
         }),
         ip: None,
@@ -847,6 +864,7 @@ async fn config_merge() {
         device_type: Type::Tap,
         device_name: "vpncloud0".to_string(),
         device_path: Some("/dev/null".to_string()),
+        device_mtu: None,
         fix_rp_filter: false,
         ip: None,
         ifup: Some("ifconfig $IFNAME 10.0.1.2/16 mtu 1400 up".to_string()),

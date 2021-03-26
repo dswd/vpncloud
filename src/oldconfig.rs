@@ -103,6 +103,7 @@ impl OldConfigFile {
                 fix_rp_filter: None,
                 name: self.device_name,
                 path: self.device_path,
+                mtu: None,
                 type_: self.device_type
             }),
             group: self.group,
