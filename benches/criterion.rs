@@ -1,6 +1,7 @@
 #![allow(dead_code, unused_macros, unused_imports)]
 #[macro_use] extern crate serde;
 #[macro_use] extern crate log;
+#[macro_use] extern crate tokio;
 
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 

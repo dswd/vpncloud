@@ -1,26 +1,26 @@
 use crate::{
     config::Config,
     crypto::CryptoCore,
-    engine::{Hash, TimeSource},
+    engine::common::Hash,
     error::Error,
     table::ClaimTable,
     traffic::{TrafficEntry, TrafficStats},
     types::{Address, RangeList},
-    util::{Duration, MsgBuffer}
+    util::{Duration, MsgBuffer, TimeSource},
 };
 use parking_lot::Mutex;
 use std::{
     collections::HashMap,
     io::{self, Write},
     net::SocketAddr,
-    sync::Arc
+    sync::Arc,
 };
 
-use super::PeerData;
+use super::common::PeerData;
 
 #[derive(Clone)]
 pub struct SharedPeerCrypto {
-    peers: Arc<Mutex<HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash>>>
+    peers: Arc<Mutex<HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash>>>,
 }
 
 impl SharedPeerCrypto {
@@ -49,7 +49,7 @@ impl SharedPeerCrypto {
     pub fn load(&mut self) {
         // TODO sync if needed
     }
-    
+
     pub fn get_snapshot(&self) -> HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash> {
         self.peers.lock().clone()
     }
@@ -59,10 +59,9 @@ impl SharedPeerCrypto {
     }
 }
 
-
 #[derive(Clone)]
 pub struct SharedTraffic {
-    traffic: Arc<Mutex<TrafficStats>>
+    traffic: Arc<Mutex<TrafficStats>>,
 }
 
 impl SharedTraffic {
@@ -119,10 +118,9 @@ impl SharedTraffic {
     }
 }
 
-
 #[derive(Clone)]
 pub struct SharedTable<TS: TimeSource> {
-    table: Arc<Mutex<ClaimTable<TS>>>
+    table: Arc<Mutex<ClaimTable<TS>>>,
 }
 
 impl<TS: TimeSource> SharedTable<TS> {

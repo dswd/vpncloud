@@ -15,7 +15,7 @@ use std::{
 pub use crate::{
     config::{Config, CryptoConfig},
     device::{MockDevice, Type},
-    engine::GenericCloud,
+    engine::common::GenericCloud,
     net::MockSocket,
     payload::{Frame, Packet, Protocol},
     types::Range,

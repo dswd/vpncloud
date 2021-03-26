@@ -47,7 +47,7 @@ use std::{
 };
 
 use crate::{
-    engine::GenericCloud,
+    engine::common::GenericCloud,
     config::{Args, Command, Config, DEFAULT_PORT},
     crypto::Crypto,
     device::{Device, TunTapDevice, Type},

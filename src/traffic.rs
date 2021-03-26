@@ -10,7 +10,7 @@ use std::{
 };
 
 use super::{
-    engine::{Hash, STATS_INTERVAL},
+    engine::common::{Hash, STATS_INTERVAL},
     types::Address,
     util::{addr_nice, Bytes}
 };

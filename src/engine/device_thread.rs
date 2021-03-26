@@ -1,6 +1,6 @@
 use super::{
     shared::{SharedPeerCrypto, SharedTable, SharedTraffic},
-    SPACE_BEFORE,
+    common::SPACE_BEFORE,
 };
 use crate::{
     config::Config,

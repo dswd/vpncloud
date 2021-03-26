@@ -1,6 +1,7 @@
 #![allow(dead_code, unused_macros, unused_imports)]
 #[macro_use] extern crate serde;
 #[macro_use] extern crate log;
+#[macro_use] extern crate tokio;
 
 use iai::{black_box, main};
 

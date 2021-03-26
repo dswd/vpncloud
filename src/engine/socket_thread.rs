@@ -1,14 +1,14 @@
 use super::{
     shared::{SharedPeerCrypto, SharedTable, SharedTraffic},
-    SPACE_BEFORE,
+    common::SPACE_BEFORE,
 };
 
 use crate::{
     beacon::BeaconSerializer,
     config::{DEFAULT_PEER_TIMEOUT, DEFAULT_PORT},
-    crypto::{is_init_message, InitResult, InitState, MessageResult},
-    device::Type,
-    engine::{addr_nice, resolve, Hash, PeerData},
+    crypto::{is_init_message, InitResult, InitState, MessageResult, Crypto},
+    device::{Type, Device},
+    engine::common::{Hash, PeerData},
     error::Error,
     messages::{
         AddrList, NodeInfo, PeerInfo, MESSAGE_TYPE_CLOSE, MESSAGE_TYPE_DATA, MESSAGE_TYPE_KEEPALIVE,
@@ -17,8 +17,8 @@ use crate::{
     net::{mapped_addr, Socket},
     port_forwarding::PortForwarding,
     types::{Address, NodeId, Range, RangeList},
-    util::{MsgBuffer, StatsdMsg, Time, TimeSource},
-    Config, Crypto, Device, Protocol,
+    util::{addr_nice, resolve, MsgBuffer, StatsdMsg, Time, TimeSource},
+    Config, Protocol,
 };
 use rand::{random, seq::SliceRandom, thread_rng};
 use smallvec::{smallvec, SmallVec};

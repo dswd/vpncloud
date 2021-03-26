@@ -14,8 +14,19 @@ mod types {
 mod table {
     include!("../src/table.rs");
 }
-mod cloud {
-    include!("../src/cloud.rs");
+mod engine {
+    pub mod common {
+        include!("../src/engine/common.rs");
+    }
+    mod shared {
+        include!("../src/engine/shared.rs");
+    }
+    mod device_thread {
+        include!("../src/engine/device_thread.rs");
+    }
+    mod socket_thread {
+        include!("../src/engine/socket_thread.rs");
+    }
 }
 mod config {
     include!("../src/config.rs");
