@@ -54,12 +54,11 @@
 // Once every second, both nodes check whether they have already finished the initialization. If not, they repeat their
 // last message. After 5 seconds, the initialization is aborted as failed.
 
-
 use super::{
+    common::MESSAGE_TYPE_ROTATION,
     core::{CryptoCore, EXTRA_LEN},
     rotate::RotationState,
     Algorithms, EcdhPrivateKey, EcdhPublicKey, Ed25519PublicKey, Payload, PeerCrypto,
-    common::MESSAGE_TYPE_ROTATION
 };
 use crate::{error::Error, types::NodeId, util::MsgBuffer};
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
@@ -68,14 +67,14 @@ use ring::{
     agreement::{agree_ephemeral, X25519},
     digest,
     rand::{SecureRandom, SystemRandom},
-    signature::{self, Ed25519KeyPair, KeyPair, ED25519, ED25519_PUBLIC_KEY_LEN}
+    signature::{self, Ed25519KeyPair, KeyPair, ED25519, ED25519_PUBLIC_KEY_LEN},
 };
 use smallvec::{smallvec, SmallVec};
 use std::{
     cmp, f32,
     fmt::Debug,
     io::{self, Cursor, Read, Write},
-    sync::Arc
+    sync::Arc,
 };
 
 pub const INIT_MESSAGE_FIRST_BYTE: u8 = 0xff;
@@ -91,29 +90,27 @@ pub const MAX_FAILED_RETRIES: usize = 120;
 pub const SALTED_NODE_ID_HASH_LEN: usize = 20;
 pub type SaltedNodeIdHash = [u8; SALTED_NODE_ID_HASH_LEN];
 
-
 pub fn is_init_message(msg: &[u8]) -> bool {
     !msg.is_empty() && msg[0] == INIT_MESSAGE_FIRST_BYTE
 }
-
 
 #[allow(clippy::large_enum_variant)]
 pub enum InitMsg {
     Ping {
         salted_node_id_hash: SaltedNodeIdHash,
         ecdh_public_key: EcdhPublicKey,
-        algorithms: Algorithms
+        algorithms: Algorithms,
     },
     Pong {
         salted_node_id_hash: SaltedNodeIdHash,
         ecdh_public_key: EcdhPublicKey,
         algorithms: Algorithms,
-        encrypted_payload: MsgBuffer
+        encrypted_payload: MsgBuffer,
     },
     Peng {
         salted_node_id_hash: SaltedNodeIdHash,
-        encrypted_payload: MsgBuffer
-    }
+        encrypted_payload: MsgBuffer,
+    },
 }
 
 impl InitMsg {
@@ -124,11 +121,11 @@ impl InitMsg {
     const PART_SALTED_NODE_ID_HASH: u8 = 2;
     const PART_STAGE: u8 = 1;
 
-    fn stage(&self) -> u8 {
+    pub fn stage(&self) -> u8 {
         match self {
             InitMsg::Ping { .. } => STAGE_PING,
             InitMsg::Pong { .. } => STAGE_PONG,
-            InitMsg::Peng { .. } => STAGE_PENG
+            InitMsg::Peng { .. } => STAGE_PENG,
         }
     }
 
@@ -136,7 +133,7 @@ impl InitMsg {
         match self {
             InitMsg::Ping { salted_node_id_hash, .. }
             | InitMsg::Pong { salted_node_id_hash, .. }
-            | InitMsg::Peng { salted_node_id_hash, .. } => salted_node_id_hash
+            | InitMsg::Peng { salted_node_id_hash, .. } => salted_node_id_hash,
         }
     }
 
@@ -150,11 +147,11 @@ impl InitMsg {
         short_hash
     }
 
-    fn read_from(buffer: &[u8], trusted_keys: &[Ed25519PublicKey]) -> Result<(Self, Ed25519PublicKey), Error> {
+    pub fn read_from(buffer: &[u8], trusted_keys: &[Ed25519PublicKey]) -> Result<(Self, Ed25519PublicKey), Error> {
         let mut r = Cursor::new(buffer);
 
         if r.read_u8().map_err(|_| Error::Parse("Init message too short"))? != INIT_MESSAGE_FIRST_BYTE {
-            return Err(Error::Parse("Init message has invalid first byte"))
+            return Err(Error::Parse("Init message has invalid first byte"));
         }
         let mut public_key_salt = [0; 4];
         r.read_exact(&mut public_key_salt).map_err(|_| Error::Parse("Init message too short"))?;
@@ -166,11 +163,11 @@ impl InitMsg {
             if Self::calculate_hash(tk, &public_key_salt) == public_key_hash {
                 public_key_data.clone_from_slice(tk);
                 found_key = true;
-                break
+                break;
             }
         }
         if !found_key {
-            return Err(Error::Crypto("untrusted peer"))
+            return Err(Error::Crypto("untrusted peer"));
         }
 
         let mut stage = None;
@@ -182,19 +179,19 @@ impl InitMsg {
         loop {
             let field = r.read_u8().map_err(|_| Error::Parse("Init message too short"))?;
             if field == Self::PART_END {
-                break
+                break;
             }
             let field_len = r.read_u16::<NetworkEndian>().map_err(|_| Error::Parse("Init message too short"))? as usize;
             match field {
                 Self::PART_STAGE => {
                     if field_len != 1 {
-                        return Err(Error::CryptoInit("Invalid size for stage field"))
+                        return Err(Error::CryptoInit("Invalid size for stage field"));
                     }
                     stage = Some(r.read_u8().map_err(|_| Error::Parse("Init message too short"))?)
                 }
                 Self::PART_SALTED_NODE_ID_HASH => {
                     if field_len != SALTED_NODE_ID_HASH_LEN {
-                        return Err(Error::CryptoInit("Invalid size for salted node id hash field"))
+                        return Err(Error::CryptoInit("Invalid size for salted node id hash field"));
                     }
                     let mut id = [0; SALTED_NODE_ID_HASH_LEN];
                     r.read_exact(&mut id).map_err(|_| Error::Parse("Init message too short"))?;
@@ -224,7 +221,7 @@ impl InitMsg {
                             1 => Some(&AES_128_GCM),
                             2 => Some(&AES_256_GCM),
                             3 => Some(&CHACHA20_POLY1305),
-                            _ => None
+                            _ => None,
                         };
                         let speed =
                             r.read_f32::<NetworkEndian>().map_err(|_| Error::Parse("Init message too short"))?;
@@ -250,53 +247,53 @@ impl InitMsg {
         let signed_data = &r.into_inner()[0..pos];
         let public_key = signature::UnparsedPublicKey::new(&ED25519, &public_key_data);
         if public_key.verify(&signed_data, &signature).is_err() {
-            return Err(Error::Crypto("invalid signature"))
+            return Err(Error::Crypto("invalid signature"));
         }
 
         let stage = match stage {
             Some(val) => val,
-            None => return Err(Error::CryptoInit("Init message without stage"))
+            None => return Err(Error::CryptoInit("Init message without stage")),
         };
         let salted_node_id_hash = match salted_node_id_hash {
             Some(val) => val,
-            None => return Err(Error::CryptoInit("Init message without node id"))
+            None => return Err(Error::CryptoInit("Init message without node id")),
         };
 
         let msg = match stage {
             STAGE_PING => {
                 let ecdh_public_key = match ecdh_public_key {
                     Some(val) => val,
-                    None => return Err(Error::CryptoInit("Init message without ecdh public key"))
+                    None => return Err(Error::CryptoInit("Init message without ecdh public key")),
                 };
                 let algorithms = match algorithms {
                     Some(val) => val,
-                    None => return Err(Error::CryptoInit("Init message without algorithms"))
+                    None => return Err(Error::CryptoInit("Init message without algorithms")),
                 };
                 Self::Ping { salted_node_id_hash, ecdh_public_key, algorithms }
             }
             STAGE_PONG => {
                 let ecdh_public_key = match ecdh_public_key {
                     Some(val) => val,
-                    None => return Err(Error::CryptoInit("Init message without ecdh public key"))
+                    None => return Err(Error::CryptoInit("Init message without ecdh public key")),
                 };
                 let algorithms = match algorithms {
                     Some(val) => val,
-                    None => return Err(Error::CryptoInit("Init message without algorithms"))
+                    None => return Err(Error::CryptoInit("Init message without algorithms")),
                 };
                 let encrypted_payload = match encrypted_payload {
                     Some(val) => val,
-                    None => return Err(Error::CryptoInit("Init message without payload"))
+                    None => return Err(Error::CryptoInit("Init message without payload")),
                 };
                 Self::Pong { salted_node_id_hash, ecdh_public_key, algorithms, encrypted_payload }
             }
             STAGE_PENG => {
                 let encrypted_payload = match encrypted_payload {
                     Some(val) => val,
-                    None => return Err(Error::CryptoInit("Init message without payload"))
+                    None => return Err(Error::CryptoInit("Init message without payload")),
                 };
                 Self::Peng { salted_node_id_hash, encrypted_payload }
             }
-            _ => return Err(Error::CryptoInit("Invalid stage"))
+            _ => return Err(Error::CryptoInit("Invalid stage")),
         };
 
         Ok((msg, public_key_data))
@@ -336,7 +333,7 @@ impl InitMsg {
                 w.write_u16::<NetworkEndian>(key_bytes.len() as u16)?;
                 w.write_all(&key_bytes)?;
             }
-            _ => ()
+            _ => (),
         }
 
         match &self {
@@ -364,7 +361,7 @@ impl InitMsg {
                     w.write_f32::<NetworkEndian>(*speed)?;
                 }
             }
-            _ => ()
+            _ => (),
         }
 
         match &self {
@@ -373,7 +370,7 @@ impl InitMsg {
                 w.write_u16::<NetworkEndian>(encrypted_payload.len() as u16)?;
                 w.write_all(encrypted_payload.message())?;
             }
-            _ => ()
+            _ => (),
         }
 
         w.write_u8(Self::PART_END)?;
@@ -387,11 +384,10 @@ impl InitMsg {
     }
 }
 
-
 #[derive(PartialEq, Debug)]
 pub enum InitResult<P: Payload> {
     Continue,
-    Success { peer_payload: P, is_initiator: bool }
+    Success { peer_payload: P, is_initiator: bool },
 }
 
 pub struct InitState<P: Payload> {
@@ -409,13 +405,13 @@ pub struct InitState<P: Payload> {
     algorithms: Algorithms,
     #[allow(dead_code)] // Used in tests
     selected_algorithm: Option<&'static Algorithm>,
-    failed_retries: usize
+    failed_retries: usize,
 }
 
 impl<P: Payload> InitState<P> {
     pub fn new(
         node_id: NodeId, payload: P, key_pair: Arc<Ed25519KeyPair>, trusted_keys: Arc<[Ed25519PublicKey]>,
-        algorithms: Algorithms
+        algorithms: Algorithms,
     ) -> Self {
         let mut hash = [0; SALTED_NODE_ID_HASH_LEN];
         let rng = SystemRandom::new();
@@ -437,7 +433,7 @@ impl<P: Payload> InitState<P> {
             selected_algorithm: None,
             algorithms,
             failed_retries: 0,
-            close_time: 60
+            close_time: 60,
         }
     }
 
@@ -523,28 +519,22 @@ impl<P: Payload> InitState<P> {
         let mut public_key = [0; ED25519_PUBLIC_KEY_LEN];
         public_key.clone_from_slice(self.key_pair.as_ref().public_key().as_ref());
         let msg = match stage {
-            STAGE_PING => {
-                InitMsg::Ping {
-                    salted_node_id_hash: self.salted_node_id_hash,
-                    ecdh_public_key: ecdh_public_key.unwrap(),
-                    algorithms: self.algorithms.clone()
-                }
-            }
-            STAGE_PONG => {
-                InitMsg::Pong {
-                    salted_node_id_hash: self.salted_node_id_hash,
-                    ecdh_public_key: ecdh_public_key.unwrap(),
-                    algorithms: self.algorithms.clone(),
-                    encrypted_payload: self.encrypt_payload()
-                }
-            }
-            STAGE_PENG => {
-                InitMsg::Peng {
-                    salted_node_id_hash: self.salted_node_id_hash,
-                    encrypted_payload: self.encrypt_payload()
-                }
-            }
-            _ => unreachable!()
+            STAGE_PING => InitMsg::Ping {
+                salted_node_id_hash: self.salted_node_id_hash,
+                ecdh_public_key: ecdh_public_key.unwrap(),
+                algorithms: self.algorithms.clone(),
+            },
+            STAGE_PONG => InitMsg::Pong {
+                salted_node_id_hash: self.salted_node_id_hash,
+                ecdh_public_key: ecdh_public_key.unwrap(),
+                algorithms: self.algorithms.clone(),
+                encrypted_payload: self.encrypt_payload(),
+            },
+            STAGE_PENG => InitMsg::Peng {
+                salted_node_id_hash: self.salted_node_id_hash,
+                encrypted_payload: self.encrypt_payload(),
+            },
+            _ => unreachable!(),
         };
         let mut bytes = out.buffer();
         let len = msg.write_to(&mut bytes, &self.key_pair).expect("Buffer too small");
@@ -563,7 +553,7 @@ impl<P: Payload> InitState<P> {
 
     fn select_algorithm(&self, peer_algos: &Algorithms) -> Result<Option<(&'static Algorithm, f32)>, Error> {
         if self.algorithms.allow_unencrypted && peer_algos.allow_unencrypted {
-            return Ok(None)
+            return Ok(None);
         }
         // For each supported algorithm, find the algorithm in the list of the peer (ignore algorithm if not found).
         // Take the minimal speed reported by either us or the peer.
@@ -597,7 +587,7 @@ impl<P: Payload> InitState<P> {
         if self.salted_node_id_hash == salted_node_id_hash
             || self.check_salted_node_id_hash(&salted_node_id_hash, self.node_id)
         {
-            return Err(Error::CryptoInitFatal("Connected to self"))
+            return Err(Error::CryptoInitFatal("Connected to self"));
         }
         if stage != self.next_stage {
             if self.next_stage == STAGE_PONG && stage == STAGE_PING {
@@ -610,15 +600,15 @@ impl<P: Payload> InitState<P> {
                     self.last_message = None;
                     self.ecdh_private_key = None;
                 } else {
-                    return Ok(InitResult::Continue)
+                    return Ok(InitResult::Continue);
                 }
             } else if self.next_stage == CLOSING {
-                return Ok(InitResult::Continue)
+                return Ok(InitResult::Continue);
             } else if self.last_message.is_some() {
                 self.repeat_last_message(out);
-                return Ok(InitResult::Continue)
+                return Ok(InitResult::Continue);
             } else {
-                return Err(Error::CryptoInitFatal("Received invalid stage as first message"))
+                return Err(Error::CryptoInitFatal("Received invalid stage as first message"));
             }
         }
         self.failed_retries = 0;
@@ -683,22 +673,24 @@ impl<P: Payload> InitState<P> {
             let rotation = RotationState::new(!self.is_initiator, buffer);
             if !buffer.is_empty() {
                 buffer.prepend_byte(MESSAGE_TYPE_ROTATION);
+                crypto.encrypt(buffer);
             }
             PeerCrypto::Encrypted {
                 algorithm: crypto.algorithm(),
+                trusted_keys: self.trusted_keys.clone(),
                 core: crypto,
                 rotation,
                 rotate_counter: 0,
-                last_init_message: self.last_message.unwrap()
+                last_init_message: self.last_message.unwrap(),
             }
         } else {
             PeerCrypto::Unencrypted {
-                last_init_message: self.last_message.unwrap()
+                last_init_message: self.last_message.unwrap(),
+                trusted_keys: self.trusted_keys.clone(),
             }
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -731,7 +723,7 @@ mod tests {
         rng.fill(&mut node2).unwrap();
         let algorithms = Algorithms {
             algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
-            allow_unencrypted: false
+            allow_unencrypted: false,
         };
         let sender = InitState::new(node1, vec![1], key_pair.clone(), trusted_nodes.clone(), algorithms.clone());
         let receiver = InitState::new(node2, vec![2], key_pair, trusted_nodes, algorithms);
@@ -751,12 +743,12 @@ mod tests {
         assert_eq!(sender.stage(), WAITING_TO_CLOSE);
         let result = match result {
             InitResult::Success { .. } => receiver.handle_init(&mut out).unwrap(),
-            InitResult::Continue => unreachable!()
+            InitResult::Continue => unreachable!(),
         };
         assert_eq!(receiver.stage(), CLOSING);
         match result {
             InitResult::Success { .. } => assert!(out.is_empty()),
-            InitResult::Continue => unreachable!()
+            InitResult::Continue => unreachable!(),
         }
     }
 
@@ -782,14 +774,14 @@ mod tests {
                 // lost peng, sender recovers
                 out.clear();
             }
-            InitResult::Continue => unreachable!()
+            InitResult::Continue => unreachable!(),
         };
         sender.every_second(&mut out).unwrap();
         let result = receiver.handle_init(&mut out).unwrap();
         assert_eq!(receiver.stage(), CLOSING);
         match result {
             InitResult::Success { .. } => assert!(out.is_empty()),
-            InitResult::Continue => unreachable!()
+            InitResult::Continue => unreachable!(),
         }
     }
 
@@ -813,7 +805,7 @@ mod tests {
                 // lost peng, sender recovers
                 out.clear();
             }
-            InitResult::Continue => unreachable!()
+            InitResult::Continue => unreachable!(),
         };
         receiver.every_second(&mut out).unwrap();
         sender.handle_init(&mut out).unwrap();
@@ -821,7 +813,7 @@ mod tests {
         assert_eq!(receiver.stage(), CLOSING);
         match result {
             InitResult::Success { .. } => assert!(out.is_empty()),
-            InitResult::Continue => unreachable!()
+            InitResult::Continue => unreachable!(),
         }
     }
 
@@ -870,7 +862,7 @@ mod tests {
     }
 
     fn test_algorithm_negotiation(
-        algos1: Algorithms, algos2: Algorithms, success: bool, selected: Option<&'static Algorithm>
+        algos1: Algorithms, algos2: Algorithms, success: bool, selected: Option<&'static Algorithm>,
     ) {
         let (mut sender, mut receiver) = create_pair();
         sender.algorithms = algos1;
@@ -880,7 +872,7 @@ mod tests {
         let res = receiver.handle_init(&mut out);
         assert_eq!(res.is_ok(), success);
         if !success {
-            return
+            return;
         }
         sender.handle_init(&mut out).unwrap();
         receiver.handle_init(&mut out).unwrap();
@@ -894,70 +886,70 @@ mod tests {
         test_algorithm_negotiation(
             Algorithms {
                 algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
-                allow_unencrypted: false
+                allow_unencrypted: false,
             },
             Algorithms {
                 algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
-                allow_unencrypted: false
+                allow_unencrypted: false,
             },
             true,
-            Some(&AES_128_GCM)
+            Some(&AES_128_GCM),
         );
 
         // Overlapping but different
         test_algorithm_negotiation(
             Algorithms {
                 algorithm_speeds: smallvec![(&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
-                allow_unencrypted: false
+                allow_unencrypted: false,
             },
             Algorithms {
                 algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0)],
-                allow_unencrypted: false
+                allow_unencrypted: false,
             },
             true,
-            Some(&AES_256_GCM)
+            Some(&AES_256_GCM),
         );
 
         // Select fastest pair
         test_algorithm_negotiation(
             Algorithms {
                 algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
-                allow_unencrypted: false
+                allow_unencrypted: false,
             },
             Algorithms {
                 algorithm_speeds: smallvec![(&AES_128_GCM, 40.0), (&AES_256_GCM, 50.0), (&CHACHA20_POLY1305, 60.0)],
-                allow_unencrypted: false
+                allow_unencrypted: false,
             },
             true,
-            Some(&CHACHA20_POLY1305)
+            Some(&CHACHA20_POLY1305),
         );
 
         // Select unencrypted if supported by both
         test_algorithm_negotiation(
             Algorithms {
                 algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
-                allow_unencrypted: true
+                allow_unencrypted: true,
             },
             Algorithms {
                 algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
-                allow_unencrypted: true
+                allow_unencrypted: true,
             },
             true,
-            None
+            None,
         );
 
         // Do not select unencrypted if only supported by one
         test_algorithm_negotiation(
             Algorithms {
                 algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
-                allow_unencrypted: true
+                allow_unencrypted: true,
             },
             Algorithms {
                 algorithm_speeds: smallvec![(&AES_128_GCM, 600.0), (&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
-                allow_unencrypted: false
+                allow_unencrypted: false,
             },
             true,
-            Some(&AES_128_GCM)
+            Some(&AES_128_GCM),
         );
 
         // Fail if no match
@@ -965,10 +957,10 @@ mod tests {
             Algorithms { algorithm_speeds: smallvec![(&AES_128_GCM, 600.0)], allow_unencrypted: true },
             Algorithms {
                 algorithm_speeds: smallvec![(&AES_256_GCM, 500.0), (&CHACHA20_POLY1305, 400.0)],
-                allow_unencrypted: false
+                allow_unencrypted: false,
             },
             false,
-            Some(&AES_128_GCM)
+            Some(&AES_128_GCM),
         );
     }
 }

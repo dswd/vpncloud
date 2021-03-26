@@ -1,23 +1,23 @@
 use super::{core::test_speed, rotate::RotationState};
 pub use super::{
     core::{CryptoCore, EXTRA_LEN, TAG_LEN},
-    init::{is_init_message, InitResult, InitState, INIT_MESSAGE_FIRST_BYTE}
+    init::{is_init_message, InitMsg, InitResult, InitState, INIT_MESSAGE_FIRST_BYTE, STAGE_PONG},
 };
 use crate::{
     error::Error,
     types::NodeId,
-    util::{from_base62, to_base62, MsgBuffer}
+    util::{from_base62, to_base62, MsgBuffer},
 };
+use libc::BPF_FS_MAGIC;
 use ring::{
     aead::{self, Algorithm, LessSafeKey, UnboundKey},
     agreement::{EphemeralPrivateKey, UnparsedPublicKey},
     pbkdf2,
     rand::{SecureRandom, SystemRandom},
-    signature::{Ed25519KeyPair, KeyPair, ED25519_PUBLIC_KEY_LEN}
+    signature::{Ed25519KeyPair, KeyPair, ED25519_PUBLIC_KEY_LEN},
 };
 use smallvec::{smallvec, SmallVec};
 use std::{fmt::Debug, io::Read, num::NonZeroU32, sync::Arc, time::Duration};
-
 
 const SALT: &[u8; 32] = b"vpncloudVPNCLOUDvpncl0udVpnCloud";
 
@@ -28,7 +28,6 @@ pub type EcdhPublicKey = UnparsedPublicKey<SmallVec<[u8; 96]>>;
 pub type EcdhPrivateKey = EphemeralPrivateKey;
 pub type Key = SmallVec<[u8; 32]>;
 
-
 const DEFAULT_ALGORITHMS: [&str; 3] = ["AES128", "AES256", "CHACHA20"];
 
 #[cfg(test)]
@@ -38,17 +37,15 @@ const SPEED_TEST_TIME: f32 = 0.1;
 
 const ROTATE_INTERVAL: usize = 120;
 
-
 pub trait Payload: Debug + PartialEq + Sized {
     fn write_to(&self, buffer: &mut MsgBuffer);
     fn read_from<R: Read>(r: R) -> Result<Self, Error>;
 }
 
-
 #[derive(Clone)]
 pub struct Algorithms {
     pub algorithm_speeds: SmallVec<[(&'static Algorithm, f32); 3]>,
-    pub allow_unencrypted: bool
+    pub allow_unencrypted: bool,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize, Clone, PartialEq)]
@@ -58,14 +55,14 @@ pub struct Config {
     pub private_key: Option<String>,
     pub public_key: Option<String>,
     pub trusted_keys: Vec<String>,
-    pub algorithms: Vec<String>
+    pub algorithms: Vec<String>,
 }
 
 pub struct Crypto {
     node_id: NodeId,
     key_pair: Arc<Ed25519KeyPair>,
     trusted_keys: Arc<[Ed25519PublicKey]>,
-    algorithms: Algorithms
+    algorithms: Algorithms,
 }
 
 impl Crypto {
@@ -78,12 +75,12 @@ impl Crypto {
             let algo = match &name.to_uppercase() as &str {
                 "UNENCRYPTED" | "NONE" | "PLAIN" => {
                     unencrypted = true;
-                    continue
+                    continue;
                 }
                 "AES128" | "AES128_GCM" | "AES_128" | "AES_128_GCM" => &aead::AES_128_GCM,
                 "AES256" | "AES256_GCM" | "AES_256" | "AES_256_GCM" => &aead::AES_256_GCM,
                 "CHACHA" | "CHACHA20" | "CHACHA20_POLY1305" => &aead::CHACHA20_POLY1305,
-                _ => return Err(Error::InvalidConfig("Unknown crypto method"))
+                _ => return Err(Error::InvalidConfig("Unknown crypto method")),
             };
             algos.push(algo)
         }
@@ -100,7 +97,7 @@ impl Crypto {
         } else if let Some(password) = &config.password {
             Self::keypair_from_password(password)
         } else {
-            return Err(Error::InvalidConfig("Either private_key or password must be set"))
+            return Err(Error::InvalidConfig("Either private_key or password must be set"));
         };
         let mut trusted_keys = vec![];
         for tn in &config.trusted_keys {
@@ -134,7 +131,7 @@ impl Crypto {
             node_id,
             key_pair: Arc::new(key_pair),
             trusted_keys: trusted_keys.into_boxed_slice().into(),
-            algorithms: algos
+            algorithms: algos,
         })
     }
 
@@ -151,7 +148,7 @@ impl Crypto {
                     NonZeroU32::new(4096).unwrap(),
                     SALT,
                     password.as_bytes(),
-                    &mut bytes
+                    &mut bytes,
                 );
             }
         }
@@ -193,7 +190,7 @@ impl Crypto {
     fn parse_public_key(pubkey: &str) -> Result<Ed25519PublicKey, Error> {
         let pubkey = from_base62(pubkey).map_err(|_| Error::InvalidConfig("Failed to parse public key"))?;
         if pubkey.len() != ED25519_PUBLIC_KEY_LEN {
-            return Err(Error::InvalidConfig("Failed to parse public key"))
+            return Err(Error::InvalidConfig("Failed to parse public key"));
         }
         let mut result = [0; ED25519_PUBLIC_KEY_LEN];
         result.clone_from_slice(&pubkey);
@@ -205,53 +202,61 @@ impl Crypto {
     }
 }
 
-
 #[derive(Debug, PartialEq)]
 pub enum MessageResult {
     Message(u8),
     Reply,
-    None
+    None,
 }
-
 
 pub enum PeerCrypto {
     Encrypted {
         last_init_message: Vec<u8>,
+        trusted_keys: Arc<[Ed25519PublicKey]>,
         algorithm: &'static Algorithm,
         rotation: RotationState,
         core: Arc<CryptoCore>,
-        rotate_counter: usize
+        rotate_counter: usize,
     },
     Unencrypted {
-        last_init_message: Vec<u8>
-    }
+        last_init_message: Vec<u8>,
+        trusted_keys: Arc<[Ed25519PublicKey]>,
+    },
 }
 
 impl PeerCrypto {
     pub fn algorithm_name(&self) -> &'static str {
         match self {
-            PeerCrypto::Encrypted { algorithm, .. } => {
-                match *algorithm {
-                    x if x == &aead::CHACHA20_POLY1305 => "CHACHA20",
-                    x if x == &aead::AES_128_GCM => "AES128",
-                    x if x == &aead::AES_256_GCM => "AES256",
-                    _ => unreachable!()
-                }
-            }
-            PeerCrypto::Unencrypted { .. } => "PLAIN"
+            PeerCrypto::Encrypted { algorithm, .. } => match *algorithm {
+                x if x == &aead::CHACHA20_POLY1305 => "CHACHA20",
+                x if x == &aead::AES_128_GCM => "AES128",
+                x if x == &aead::AES_256_GCM => "AES256",
+                _ => unreachable!(),
+            },
+            PeerCrypto::Unencrypted { .. } => "PLAIN",
         }
     }
 
     pub fn get_core(&self) -> Option<Arc<CryptoCore>> {
         match self {
             PeerCrypto::Encrypted { core, .. } => Some(core.clone()),
-            PeerCrypto::Unencrypted { .. } => None
+            PeerCrypto::Unencrypted { .. } => None,
         }
     }
 
     fn handle_init_message(&mut self, buffer: &mut MsgBuffer) -> Result<MessageResult, Error> {
-        // TODO: parse message stage
-        // TODO: depending on stage resend last message
+        match self {
+            PeerCrypto::Encrypted { trusted_keys, last_init_message, .. }
+            | PeerCrypto::Unencrypted { trusted_keys, last_init_message, .. } => {
+                let (msg, _) = InitMsg::read_from(buffer.buffer(), &trusted_keys)?;
+                buffer.clear();
+                if msg.stage() == STAGE_PONG {
+                    buffer.set_length(last_init_message.len());
+                    buffer.message_mut().copy_from_slice(last_init_message);
+                }
+                return Ok(MessageResult::Reply)
+            }
+        }
         Ok(MessageResult::None)
     }
 
@@ -264,7 +269,7 @@ impl PeerCrypto {
                 }
                 Ok(())
             }
-            PeerCrypto::Unencrypted { .. } => Err(Error::Crypto("Rotation when unencrypted"))
+            PeerCrypto::Unencrypted { .. } => Err(Error::Crypto("Rotation when unencrypted")),
         }
     }
 
@@ -287,7 +292,7 @@ impl PeerCrypto {
     pub fn handle_message(&mut self, buffer: &mut MsgBuffer) -> Result<MessageResult, Error> {
         // HOT PATH
         if buffer.is_empty() {
-            return Err(Error::InvalidCryptoState("No message in buffer"))
+            return Err(Error::InvalidCryptoState("No message in buffer"));
         }
         if is_init_message(buffer.buffer()) {
             // COLD PATH
@@ -330,7 +335,6 @@ impl PeerCrypto {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -362,18 +366,18 @@ mod tests {
 
         debug!("Node1 <- Node2");
         let res = node1.handle_init(&mut msg).unwrap();
-        assert_eq!(res, InitResult::Success { peer_payload: vec![], is_initiator: false });
+        assert_eq!(res, InitResult::Success { peer_payload: vec![], is_initiator: true });
         assert!(!msg.is_empty());
 
         debug!("Node1 -> Node2");
         let res = node2.handle_init(&mut msg).unwrap();
-        assert_eq!(res, InitResult::Success { peer_payload: vec![], is_initiator: true });
+        assert_eq!(res, InitResult::Success { peer_payload: vec![], is_initiator: false });
         assert!(msg.is_empty());
 
         let mut node1 = node1.finish(&mut msg);
         assert!(msg.is_empty());
         let mut node2 = node2.finish(&mut msg);
-        assert!(msg.is_empty());
+        assert!(!msg.is_empty());
 
         debug!("Node1 <- Node2");
         let res = node1.handle_message(&mut msg).unwrap();

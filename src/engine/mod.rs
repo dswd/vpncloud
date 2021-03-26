@@ -75,7 +75,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             peer_crypto.clone(),
             table.clone(),
         );
-        let socket_thread = SocketThread::<S, D, P, TS>::new(
+        let mut socket_thread = SocketThread::<S, D, P, TS>::new(
             config.clone(),
             device,
             socket,
@@ -85,6 +85,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             port_forwarding,
             stats_file,
         );
+        socket_thread.housekeep().await?;
         Ok(Self { socket_thread, device_thread })
     }
 

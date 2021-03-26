@@ -127,7 +127,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             next_beacon: now,
             next_peers: now,
             next_stats_out: now + STATS_INTERVAL,
-            next_own_address_reset: now + OWN_ADDRESS_RESET_INTERVAL,
+            next_own_address_reset: now,
             pending_inits: HashMap::default(),
             reconnect_peers: SmallVec::new(),
             own_addresses: SmallVec::new(),
@@ -336,20 +336,20 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
                             return Err(err);
                         }
                     };
-                    self.update_peer_info(src, Some(info)).await?;
                     self.buffer.clear();
+                    self.update_peer_info(src, Some(info)).await?;
                 }
                 MESSAGE_TYPE_KEEPALIVE => {
-                    self.update_peer_info(src, None).await?;
                     self.buffer.clear();
+                    self.update_peer_info(src, None).await?;
                 }
                 MESSAGE_TYPE_CLOSE => {
-                    self.remove_peer(src);
                     self.buffer.clear();
+                    self.remove_peer(src);
                 }
                 _ => {
-                    self.traffic.count_invalid_protocol(self.buffer.len());
                     self.buffer.clear();
+                    self.traffic.count_invalid_protocol(self.buffer.len());
                     return Err(Error::Message("Unknown message type"));
                 }
             },

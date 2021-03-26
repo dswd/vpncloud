@@ -93,6 +93,7 @@ impl<P: Protocol> Simulator<P> {
         DebugLogger::set_node(self.next_port as usize);
         self.next_port += 1;
         let node = TestNode::new(&config, MockSocket::new(addr), MockDevice::new(), None, None).await.unwrap();
+
         DebugLogger::set_node(0);
         self.nodes.insert(addr, node);
         addr
