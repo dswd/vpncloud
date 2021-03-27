@@ -1,27 +1,30 @@
 #![allow(dead_code, unused_macros, unused_imports)]
-#[macro_use] extern crate serde;
-#[macro_use] extern crate log;
-#[macro_use] extern crate tokio;
+#[macro_use]
+extern crate serde;
+#[macro_use]
+extern crate log;
+#[macro_use]
+extern crate tokio;
 
 use iai::{black_box, main};
 
-use smallvec::smallvec;
 use ring::aead;
+use smallvec::smallvec;
 
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket};
 use std::str::FromStr;
-use std::net::{SocketAddr, Ipv4Addr, SocketAddrV4, UdpSocket};
 
 include!(".code.rs");
 
-pub use error::Error;
-use util::{MockTimeSource, MsgBuffer};
 use config::Config;
-use types::{Address, Range};
-use device::Type;
-use table::{ClaimTable};
-use payload::{Packet, Frame, Protocol};
 use crypto::core::{create_dummy_pair, EXTRA_LEN};
-use tests::common::{TunSimulator, TapSimulator};
+use device::Type;
+pub use error::Error;
+use payload::{Frame, Packet, Protocol};
+use table::ClaimTable;
+use tests::common::{TapSimulator, TunSimulator};
+use types::{Address, Range};
+use util::{MockTimeSource, MsgBuffer};
 
 fn udp_send() {
     let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -38,7 +41,7 @@ fn decode_ipv4() {
 fn decode_ipv6() {
     let data = [
         0x60, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 6, 5,
-        4, 3, 2, 1
+        4, 3, 2, 1,
     ];
     Packet::parse(&black_box(data)).unwrap();
 }
@@ -75,7 +78,7 @@ fn lookup_cold() {
 fn crypto_bench(algo: &'static aead::Algorithm) {
     let mut buffer = MsgBuffer::new(EXTRA_LEN);
     buffer.set_length(1400);
-    let (mut sender, mut receiver) = create_dummy_pair(algo);
+    let (sender, receiver) = create_dummy_pair(algo);
     for _ in 0..1000 {
         sender.encrypt(black_box(&mut buffer));
         receiver.decrypt(&mut buffer).unwrap();
@@ -95,6 +98,7 @@ fn crypto_aes256() {
 }
 
 fn full_communication_tun_router() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
     log::set_max_level(log::LevelFilter::Error);
     let config1 = Config {
         device_type: Type::Tun,
@@ -109,48 +113,69 @@ fn full_communication_tun_router() {
         ..Config::default()
     };
     let mut sim = TunSimulator::new();
-    let node1 = sim.add_node(false, &config1);
-    let node2 = sim.add_node(false, &config2);
+    let (node1, node2) = runtime.block_on(async {
+        log::set_max_level(log::LevelFilter::Error);
+        let node1 = sim.add_node(false, &config1).await;
+        let node2 = sim.add_node(false, &config2).await;
 
-    sim.connect(node1, node2);
-    sim.simulate_all_messages();
-    assert!(sim.is_connected(node1, node2));
-    assert!(sim.is_connected(node2, node1));
+        sim.connect(node1, node2).await;
+        sim.simulate_all_messages().await;
+        assert!(sim.is_connected(node1, node2));
+        assert!(sim.is_connected(node2, node1));
+        (node1, node2)
+    });
 
     let mut payload = vec![0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2];
     payload.append(&mut vec![0; 1400]);
     for _ in 0..1000 {
-        sim.put_payload(node1, payload.clone());
-        sim.simulate_all_messages();
-        assert_eq!(Some(&payload), black_box(sim.pop_payload(node2).as_ref()));
+        runtime.block_on(async {
+            sim.put_payload(node1, payload.clone()).await;
+            sim.simulate_all_messages().await;
+            assert_eq!(Some(&payload), black_box(sim.pop_payload(node2).as_ref()));
+        });
     }
 }
 
 fn full_communication_tap_switch() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
     log::set_max_level(log::LevelFilter::Error);
     let config = Config { device_type: Type::Tap, ..Config::default() };
     let mut sim = TapSimulator::new();
-    let node1 = sim.add_node(false, &config);
-    let node2 = sim.add_node(false, &config);
 
-    sim.connect(node1, node2);
-    sim.simulate_all_messages();
-    assert!(sim.is_connected(node1, node2));
-    assert!(sim.is_connected(node2, node1));
+    let (node1, node2) = runtime.block_on(async {
+        log::set_max_level(log::LevelFilter::Error);
+        let node1 = sim.add_node(false, &config).await;
+        let node2 = sim.add_node(false, &config).await;
+
+        sim.connect(node1, node2).await;
+        sim.simulate_all_messages().await;
+        assert!(sim.is_connected(node1, node2));
+        assert!(sim.is_connected(node2, node1));
+        (node1, node2)
+    });
 
     let mut payload = vec![2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5];
     payload.append(&mut vec![0; 1400]);
     for _ in 0..1000 {
-        sim.put_payload(node1, payload.clone());
-        sim.simulate_all_messages();
-        assert_eq!(Some(&payload), black_box(sim.pop_payload(node2).as_ref()));
+        runtime.block_on(async {
+            sim.put_payload(node1, payload.clone()).await;
+            sim.simulate_all_messages().await;
+            assert_eq!(Some(&payload), black_box(sim.pop_payload(node2).as_ref()));
+        });
     }
 }
 
 iai::main!(
-    udp_send, 
-    decode_ipv4, decode_ipv6, decode_ethernet, decode_ethernet_with_vlan, 
-    lookup_cold, lookup_warm, 
-    crypto_chacha20, crypto_aes128, crypto_aes256,
-    full_communication_tun_router, full_communication_tap_switch
+    udp_send,
+    decode_ipv4,
+    decode_ipv6,
+    decode_ethernet,
+    decode_ethernet_with_vlan,
+    lookup_cold,
+    lookup_warm,
+    crypto_chacha20,
+    crypto_aes128,
+    crypto_aes256,
+    full_communication_tun_router,
+    full_communication_tap_switch
 );
