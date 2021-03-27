@@ -236,6 +236,7 @@ impl TunTapDevice {
             Some(value) => value,
             None => {
                 let default_device = get_default_device().await?;
+                info!("Deriving MTU from default device {}", default_device);
                 get_device_mtu(&default_device)? - self.get_overhead()
             }
         };
@@ -480,6 +481,8 @@ async fn get_default_device() -> io::Result<String> {
     let mut fd = BufReader::new(File::open("/proc/net/route").await?);
     let mut best = None;
     let mut line = String::with_capacity(80);
+    fd.read_line(&mut line).await?;
+    line.clear();
     while let Ok(read) = fd.read_line(&mut line).await {
         if read == 0 {
             break;
@@ -492,6 +495,7 @@ async fn get_default_device() -> io::Result<String> {
         if parts[2] != "00000000" {
             best = Some(parts[0].to_string())
         }
+        line.clear();
     }
     if let Some(ifname) = best {
         Ok(ifname)

@@ -3,23 +3,11 @@ use tokio;
 
 use fnv::FnvHasher;
 
-use crate::{
-    config::Config,
-    crypto::PeerCrypto,
-    device::Device,
-    engine::{
+use crate::{config::Config, crypto::PeerCrypto, device::Device, engine::{
         device_thread::DeviceThread,
         shared::{SharedPeerCrypto, SharedTable, SharedTraffic},
-        socket_thread::SocketThread,
-    },
-    error::Error,
-    messages::AddrList,
-    net::Socket,
-    payload::Protocol,
-    port_forwarding::PortForwarding,
-    types::NodeId,
-    util::{CtrlC, Time, TimeSource},
-};
+        socket_thread::{SocketThread, ReconnectEntry},
+    }, error::Error, messages::AddrList, net::Socket, payload::Protocol, port_forwarding::PortForwarding, types::NodeId, util::{CtrlC, Time, TimeSource, resolve}};
 
 pub type Hash = BuildHasherDefault<FnvHasher>;
 
@@ -34,16 +22,6 @@ pub struct PeerData {
     pub peer_timeout: u16,
     pub node_id: NodeId,
     pub crypto: PeerCrypto,
-}
-
-#[derive(Clone)]
-pub struct ReconnectEntry {
-    address: Option<(String, Time)>,
-    resolved: AddrList,
-    tries: u16,
-    timeout: u16,
-    next: Time,
-    final_timeout: Option<Time>,
 }
 
 pub struct GenericCloud<D: Device, P: Protocol, S: Socket, TS: TimeSource> {
@@ -82,7 +60,16 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     }
 
     pub fn add_peer(&mut self, addr: String) -> Result<(), Error> {
-        unimplemented!()
+        let resolved = resolve(addr.clone())?;
+        self.socket_thread.reconnect_peers.push(ReconnectEntry{
+            address: Some((addr, TS::now())),
+            resolved,
+            tries: 0,
+            timeout: 1,
+            next: TS::now(),
+            final_timeout: None
+        });
+        Ok(())
     }
 
     pub async fn run(self) {

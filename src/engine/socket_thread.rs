@@ -42,12 +42,12 @@ pub const STATS_INTERVAL: Time = 60;
 
 #[derive(Clone)]
 pub struct ReconnectEntry {
-    address: Option<(String, Time)>,
-    resolved: AddrList,
-    tries: u16,
-    timeout: u16,
-    next: Time,
-    final_timeout: Option<Time>,
+    pub address: Option<(String, Time)>,
+    pub resolved: AddrList,
+    pub tries: u16,
+    pub timeout: u16,
+    pub next: Time,
+    pub final_timeout: Option<Time>,
 }
 
 pub struct SocketThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
@@ -75,7 +75,7 @@ pub struct SocketThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
     beacon_serializer: BeaconSerializer<TS>,
     stats_file: Option<File>,
     statsd_server: Option<String>,
-    reconnect_peers: SmallVec<[ReconnectEntry; 3]>,
+    pub reconnect_peers: SmallVec<[ReconnectEntry; 3]>,
     buffer: MsgBuffer,
     broadcast_buffer: MsgBuffer,
     // Shared fields
