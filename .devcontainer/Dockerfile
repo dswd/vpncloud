@@ -7,4 +7,4 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
 
 RUN rm /etc/localtime && ln -s /usr/share/zoneinfo/Europe/Berlin /etc/localtime
 
-RUN cargo install cargo-outdated
+RUN cargo install cargo-outdated cargo-cache
