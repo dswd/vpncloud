@@ -2,6 +2,7 @@
 Description=VpnCloud network '%I'
 After=network-online.target
 Wants=network-online.target
+PartOf=vpncloud.target
 Documentation=man:vpncloud(1)
 
 [Service]

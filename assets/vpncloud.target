@@ -1,0 +1,2 @@
+[Unit]
+Description=VpnCloud target allowing to start/stop all vpncloud@.service instances at once
