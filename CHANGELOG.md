@@ -4,6 +4,7 @@ This project follows [semantic versioning](http://semver.org).
 
 ### UNRELEASED
 
+- [added] Service target file (thanks to mnhauke)
 - [added] Added interactive configuration wizard
 - [added] Support for (un-)installation
 - [added] Building static binaries

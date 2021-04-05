@@ -9,6 +9,7 @@ use std::{
 
 const MANPAGE: &[u8] = include_bytes!("../target/vpncloud.1.gz");
 const SERVICE_FILE: &[u8] = include_bytes!("../assets/vpncloud@.service");
+const TARGET_FILE: &[u8] = include_bytes!("../assets/vpncloud.target");
 const WS_PROXY_SERVICE_FILE: &[u8] = include_bytes!("../assets/vpncloud-wsproxy.service");
 const EXAMPLE_CONFIG: &[u8] = include_bytes!("../assets/example.net.disabled");
 
@@ -36,6 +37,9 @@ pub fn install() -> Result<(), Error> {
     File::create("/lib/systemd/system/vpncloud@.service")
         .and_then(|mut f| f.write_all(SERVICE_FILE))
         .map_err(|e| Error::FileIo("Failed to create service file", e))?;
+    File::create("/lib/systemd/system/vpncloud.target")
+        .and_then(|mut f| f.write_all(TARGET_FILE))
+        .map_err(|e| Error::FileIo("Failed to create service target file", e))?;
     File::create("/lib/systemd/system/vpncloud-wsproxy.service")
         .and_then(|mut f| f.write_all(WS_PROXY_SERVICE_FILE))
         .map_err(|e| Error::FileIo("Failed to create wsporxy service file", e))?;
@@ -49,6 +53,8 @@ pub fn uninstall() -> Result<(), Error> {
     fs::remove_file("/usr/share/man/man1/vpncloud.1.gz").map_err(|e| Error::FileIo("Failed to remove manpage", e))?;
     fs::remove_file("/lib/systemd/system/vpncloud@.service")
         .map_err(|e| Error::FileIo("Failed to remove service file", e))?;
+    fs::remove_file("/lib/systemd/system/vpncloud.target")
+        .map_err(|e| Error::FileIo("Failed to remove service target file", e))?;
     fs::remove_file("/lib/systemd/system/vpncloud-wsproxy.service")
         .map_err(|e| Error::FileIo("Failed to remove wsproxy service file", e))?;
     fs::remove_file("/usr/bin/vpncloud").map_err(|e| Error::FileIo("Failed to remove binary", e))?;

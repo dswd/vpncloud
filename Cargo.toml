@@ -83,6 +83,7 @@ assets = [
   ["target/release/vpncloud", "/usr/bin/vpncloud", "755"],
   ["assets/example.net.disabled", "/etc/vpncloud/example.net.disabled", "600"],
   ["assets/vpncloud@.service", "/lib/systemd/system/vpncloud@.service", "644"],
+  ["assets/vpncloud.target", "/lib/systemd/system/vpncloud.target", "644"],
   ["assets/vpncloud-wsproxy.service", "/lib/systemd/system/vpncloud-wsproxy.service", "644"],
   ["target/vpncloud.1.gz", "/usr/share/man/man1/vpncloud.1.gz", "644"]
 ]
