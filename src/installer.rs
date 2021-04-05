@@ -23,10 +23,10 @@ pub fn install() -> Result<(), Error> {
     env::current_exe()
         .and_then(|p| fs::copy(p, "/usr/bin/vpncloud"))
         .map_err(|e| Error::FileIo("Failed to copy binary", e))?;
-    fs::set_permissions("/usr/bin/vpncloud", fs::Permissions::from_mode(755))
+    fs::set_permissions("/usr/bin/vpncloud", fs::Permissions::from_mode(0o755))
         .map_err(|e| Error::FileIo("Failed to set permissions for binary", e))?;
     fs::create_dir_all("/etc/vpncloud").map_err(|e| Error::FileIo("Failed to create config folder", e))?;
-    fs::set_permissions("/etc/vpncloud", fs::Permissions::from_mode(700))
+    fs::set_permissions("/etc/vpncloud", fs::Permissions::from_mode(0o700))
         .map_err(|e| Error::FileIo("Failed to set permissions for config folder", e))?;
     File::create("/etc/vpncloud/example.net.disabled")
         .and_then(|mut f| f.write_all(EXAMPLE_CONFIG))

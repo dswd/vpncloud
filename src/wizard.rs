@@ -498,7 +498,7 @@ pub fn configure(name: Option<String>) -> Result<(), io::Error> {
         let f = fs::File::create(&file)?;
         serde_yaml::to_writer(f, &config_file)
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Failed to parse config file"))?;
-        fs::set_permissions(file, fs::Permissions::from_mode(600))?;
+        fs::set_permissions(file, fs::Permissions::from_mode(0o600))?;
         println!();
         println!("Use the following commands to control your VPN:");
         println!("  start the VPN:   sudo service vpncloud@{0} start", name);
