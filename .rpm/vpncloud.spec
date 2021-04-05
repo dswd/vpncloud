@@ -41,6 +41,7 @@ rm -rf %{buildroot}
 /etc/vpncloud/example.net.disabled
 /usr/bin/vpncloud
 /lib/systemd/system/vpncloud@.service
+/lib/systemd/system/vpncloud.target
 /lib/systemd/system/vpncloud-wsproxy.service
 /usr/share/man/man1/vpncloud.1.gz
 
