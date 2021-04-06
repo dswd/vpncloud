@@ -32,7 +32,7 @@ fn configure_connectivity(config: &mut Config, mode: usize, theme: &ColorfulThem
         Input::with_theme(theme)
             .with_prompt("Peer addresses (comma separated)")
             .default(config.peers.join(","))
-            .interact_text()?
+            .interact_text()?,
     );
     if mode >= MODE_ADVANCED {
         config.port_forwarding = Confirm::with_theme(theme)
@@ -54,12 +54,11 @@ fn configure_connectivity(config: &mut Config, mode: usize, theme: &ColorfulThem
     Ok(())
 }
 
-
 fn configure_crypto(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), io::Error> {
     if (config.crypto.password.is_some() || config.crypto.private_key.is_some())
         && !Confirm::with_theme(theme).with_prompt("Create new crypto config?").default(false).interact()?
     {
-        return Ok(())
+        return Ok(());
     }
     let mut use_password = true;
     if mode >= MODE_ADVANCED {
@@ -75,7 +74,7 @@ fn configure_crypto(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> 
             Password::with_theme(theme)
                 .with_prompt("Password")
                 .with_confirmation("Confirm password", "Passwords do not match")
-                .interact()?
+                .interact()?,
         );
         config.crypto.private_key = None;
         config.crypto.public_key = None;
@@ -113,13 +112,13 @@ fn configure_crypto(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> 
                 info!("Public key: {}", pub_key);
                 (priv_key, pub_key)
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         };
         config.crypto.trusted_keys = str_list(
             Input::with_theme(theme)
                 .with_prompt("Trusted keys (public keys, comma separated)")
                 .default(pub_key.clone())
-                .interact_text()?
+                .interact_text()?,
         );
         config.crypto.private_key = Some(priv_key);
         config.crypto.public_key = Some(pub_key);
@@ -133,7 +132,7 @@ fn configure_crypto(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> 
                 ("Unencrypted (dangerous)", unencrypted),
                 ("AES-128 in GCM mode", allowed_algos.contains(&&aead::AES_128_GCM)),
                 ("AES-256 in GCM mode", allowed_algos.contains(&&aead::AES_256_GCM)),
-                ("ChaCha20-Poly1305 (RFC 7539)", allowed_algos.contains(&&aead::CHACHA20_POLY1305))
+                ("ChaCha20-Poly1305 (RFC 7539)", allowed_algos.contains(&&aead::CHACHA20_POLY1305)),
             ])
             .interact()?;
         config.crypto.algorithms = vec![];
@@ -156,7 +155,7 @@ fn configure_device(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> 
         {
             0 => device::Type::Tun,
             1 => device::Type::Tap,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
     if mode == MODE_EXPERT {
@@ -166,7 +165,7 @@ fn configure_device(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> 
             Input::with_theme(theme)
                 .with_prompt("Device path (empty for default)")
                 .default(config.device_path.as_ref().cloned().unwrap_or_default())
-                .interact_text()?
+                .interact_text()?,
         );
         config.fix_rp_filter = Confirm::with_theme(theme)
             .with_prompt("Automatically fix insecure rp_filter settings")
@@ -179,7 +178,7 @@ fn configure_device(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> 
                 Mode::Normal => 0,
                 Mode::Router => 1,
                 Mode::Switch => 2,
-                Mode::Hub => 3
+                Mode::Hub => 3,
             })
             .interact()?
         {
@@ -187,7 +186,7 @@ fn configure_device(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> 
             1 => Mode::Router,
             2 => Mode::Switch,
             3 => Mode::Hub,
-            _ => unreachable!()
+            _ => unreachable!(),
         };
         if config.mode == Mode::Switch {
             config.switch_timeout = Input::with_theme(theme)
@@ -205,7 +204,7 @@ fn configure_addresses(config: &mut Config, mode: usize, theme: &ColorfulTheme) 
             .with_prompt("Virtual IP address (e.g. 10.0.0.1, leave empty for none)")
             .allow_empty(true)
             .default(config.ip.as_ref().cloned().unwrap_or_default())
-            .interact_text()?
+            .interact_text()?,
     );
     if config.device_type == device::Type::Tun {
         if mode >= MODE_ADVANCED {
@@ -220,7 +219,7 @@ fn configure_addresses(config: &mut Config, mode: usize, theme: &ColorfulTheme) 
                     .with_prompt("Claim additional addresses (e.g. 10.0.0.0/24, comma separated, leave empty for none)")
                     .allow_empty(true)
                     .default(config.claims.join(","))
-                    .interact_text()?
+                    .interact_text()?,
             );
         }
     } else {
@@ -232,14 +231,14 @@ fn configure_addresses(config: &mut Config, mode: usize, theme: &ColorfulTheme) 
                 .with_prompt("Interface setup command (leave empty for none)")
                 .allow_empty(true)
                 .default(config.ifup.as_ref().cloned().unwrap_or_default())
-                .interact_text()?
+                .interact_text()?,
         );
         config.ifdown = str_opt(
             Input::with_theme(theme)
                 .with_prompt("Interface tear down command (leave empty for none)")
                 .allow_empty(true)
                 .default(config.ifdown.as_ref().cloned().unwrap_or_default())
-                .interact_text()?
+                .interact_text()?,
         );
     }
     Ok(())
@@ -267,24 +266,20 @@ fn configure_beacon(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> 
             .interact()?
         {
             0 => None,
-            1 => {
-                Some(
-                    Input::with_theme(theme)
-                        .with_prompt("File path")
-                        .default(config.beacon_store.clone().unwrap_or_default())
-                        .interact_text()?
-                )
-            }
-            2 => {
-                Some(format!(
-                    "|{}",
-                    Input::<String>::with_theme(theme)
-                        .with_prompt("Command")
-                        .default(config.beacon_store.clone().unwrap_or_default().trim_start_matches('|').to_string())
-                        .interact_text()?
-                ))
-            }
-            _ => unreachable!()
+            1 => Some(
+                Input::with_theme(theme)
+                    .with_prompt("File path")
+                    .default(config.beacon_store.clone().unwrap_or_default())
+                    .interact_text()?,
+            ),
+            2 => Some(format!(
+                "|{}",
+                Input::<String>::with_theme(theme)
+                    .with_prompt("Command")
+                    .default(config.beacon_store.clone().unwrap_or_default().trim_start_matches('|').to_string())
+                    .interact_text()?
+            )),
+            _ => unreachable!(),
         };
         config.beacon_load = match Select::with_theme(theme)
             .with_prompt("How to load beacons")
@@ -301,24 +296,20 @@ fn configure_beacon(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> 
             .interact()?
         {
             0 => None,
-            1 => {
-                Some(
-                    Input::with_theme(theme)
-                        .with_prompt("File path")
-                        .default(config.beacon_load.clone().unwrap_or_default())
-                        .interact_text()?
-                )
-            }
-            2 => {
-                Some(format!(
-                    "|{}",
-                    Input::<String>::with_theme(theme)
-                        .with_prompt("Command")
-                        .default(config.beacon_load.clone().unwrap_or_default().trim_start_matches('|').to_string())
-                        .interact_text()?
-                ))
-            }
-            _ => unreachable!()
+            1 => Some(
+                Input::with_theme(theme)
+                    .with_prompt("File path")
+                    .default(config.beacon_load.clone().unwrap_or_default())
+                    .interact_text()?,
+            ),
+            2 => Some(format!(
+                "|{}",
+                Input::<String>::with_theme(theme)
+                    .with_prompt("Command")
+                    .default(config.beacon_load.clone().unwrap_or_default().trim_start_matches('|').to_string())
+                    .interact_text()?
+            )),
+            _ => unreachable!(),
         };
         config.beacon_interval = Input::with_theme(theme)
             .with_prompt("Beacon interval (in seconds)")
@@ -329,7 +320,7 @@ fn configure_beacon(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> 
                 .with_prompt("Beacon password (leave empty for none)")
                 .with_confirmation("Confirm password", "Passwords do not match")
                 .allow_empty_password(true)
-                .interact()?
+                .interact()?,
         );
     }
     Ok(())
@@ -342,7 +333,7 @@ fn configure_stats(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> R
                 .with_prompt("Write stats to file (empty to disable)")
                 .default(config.stats_file.clone().unwrap_or_default())
                 .allow_empty(true)
-                .interact_text()?
+                .interact_text()?,
         );
     }
     if mode == MODE_EXPERT {
@@ -356,14 +347,14 @@ fn configure_stats(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> R
                     .with_prompt("Statsd server URL")
                     .default(config.statsd_server.clone().unwrap_or_default())
                     .allow_empty(true)
-                    .interact_text()?
+                    .interact_text()?,
             );
             config.statsd_prefix = str_opt(
                 Input::with_theme(theme)
                     .with_prompt("Statsd prefix")
                     .default(config.statsd_prefix.clone().unwrap_or_default())
                     .allow_empty(true)
-                    .interact_text()?
+                    .interact_text()?,
             );
         } else {
             config.statsd_server = None;
@@ -379,21 +370,21 @@ fn configure_process(config: &mut Config, mode: usize, theme: &ColorfulTheme) ->
                 .with_prompt("Run as different user (empty to disable)")
                 .default(config.user.clone().unwrap_or_default())
                 .allow_empty(true)
-                .interact_text()?
+                .interact_text()?,
         );
         config.group = str_opt(
             Input::with_theme(theme)
                 .with_prompt("Run as different group (empty to disable)")
                 .default(config.group.clone().unwrap_or_default())
                 .allow_empty(true)
-                .interact_text()?
+                .interact_text()?,
         );
         config.pid_file = str_opt(
             Input::with_theme(theme)
                 .with_prompt("Write process id to file (empty to disable)")
                 .default(config.pid_file.clone().unwrap_or_default())
                 .allow_empty(true)
-                .interact_text()?
+                .interact_text()?,
         );
     }
     Ok(())
@@ -411,7 +402,7 @@ fn configure_hooks(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> R
                     .with_prompt("Command to execute for all events (empty to disable)")
                     .default(config.hook.clone().unwrap_or_default())
                     .allow_empty(true)
-                    .interact_text()?
+                    .interact_text()?,
             );
             let mut hooks: HashMap<String, String> = Default::default();
             for event in &[
@@ -421,14 +412,14 @@ fn configure_hooks(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> R
                 "device_setup",
                 "device_configured",
                 "vpn_started",
-                "vpn_shutdown"
+                "vpn_shutdown",
             ] {
                 if let Some(cmd) = str_opt(
                     Input::with_theme(theme)
                         .with_prompt(format!("Command to execute for event '{}' (empty to disable)", event))
                         .default(config.hooks.get(*event).cloned().unwrap_or_default())
                         .allow_empty(true)
-                        .interact_text()?
+                        .interact_text()?,
                 ) {
                     hooks.insert(event.to_string(), cmd);
                 }
@@ -470,7 +461,7 @@ pub fn configure(name: Option<String>) -> Result<(), io::Error> {
         config.merge_file(config_file);
     }
     if file.parent().unwrap().metadata()?.permissions().readonly() {
-        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "Config file not writable"))
+        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "Config file not writable"));
     }
 
     loop {
@@ -489,7 +480,7 @@ pub fn configure(name: Option<String>) -> Result<(), io::Error> {
         configure_process(&mut config, mode, &theme)?;
         configure_hooks(&mut config, mode, &theme)?;
         if Confirm::with_theme(&theme).with_prompt("Finish configuration?").default(true).interact()? {
-            break
+            break;
         }
     }
 

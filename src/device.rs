@@ -12,7 +12,7 @@ use std::{
     net::{Ipv4Addr, UdpSocket},
     os::unix::io::{AsRawFd, RawFd},
     str,
-    str::FromStr
+    str::FromStr,
 };
 
 use crate::{crypto, error::Error, util::MsgBuffer};
@@ -24,13 +24,13 @@ union IfReqData {
     flags: libc::c_short,
     value: libc::c_int,
     addr: (libc::c_short, Ipv4Addr),
-    _dummy: [u8; 24]
+    _dummy: [u8; 24],
 }
 
 #[repr(C)]
 struct IfReq {
     ifr_name: [u8; libc::IF_NAMESIZE],
-    data: IfReqData
+    data: IfReqData,
 }
 
 impl IfReq {
@@ -42,7 +42,6 @@ impl IfReq {
     }
 }
 
-
 /// The type of a tun/tap device
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum Type {
@@ -51,14 +50,14 @@ pub enum Type {
     Tun,
     /// Tap interface: This interface transports Ethernet frames.
     #[serde(rename = "tap")]
-    Tap
+    Tap,
 }
 
 impl fmt::Display for Type {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
             Type::Tun => write!(formatter, "tun"),
-            Type::Tap => write!(formatter, "tap")
+            Type::Tap => write!(formatter, "tap"),
         }
     }
 }
@@ -70,7 +69,7 @@ impl FromStr for Type {
         Ok(match &text.to_lowercase() as &str {
             "tun" => Self::Tun,
             "tap" => Self::Tap,
-            _ => return Err("Unknown device type")
+            _ => return Err("Unknown device type"),
         })
     }
 }
@@ -109,14 +108,12 @@ pub trait Device: AsRawFd {
     fn get_ip(&self) -> Result<Ipv4Addr, Error>;
 }
 
-
 /// Represents a tun/tap device
 pub struct TunTapDevice {
     fd: File,
     ifname: String,
-    type_: Type
+    type_: Type,
 }
-
 
 impl TunTapDevice {
     /// Creates a new tun/tap device
@@ -142,7 +139,7 @@ impl TunTapDevice {
         let fd = fs::OpenOptions::new().read(true).write(true).open(path)?;
         let flags = match type_ {
             Type::Tun => libc::IFF_TUN | libc::IFF_NO_PI,
-            Type::Tap => libc::IFF_TAP | libc::IFF_NO_PI
+            Type::Tap => libc::IFF_TAP | libc::IFF_NO_PI,
         };
         let mut ifreq = IfReq::new(ifname);
         ifreq.data.flags = flags as libc::c_short;
@@ -155,7 +152,7 @@ impl TunTapDevice {
                 ifname = ifname.trim_end_matches('\0').to_owned();
                 Ok(Self { fd, ifname, type_ })
             }
-            _ => Err(IoError::last_os_error())
+            _ => Err(IoError::last_os_error()),
         }
     }
 
@@ -163,7 +160,7 @@ impl TunTapDevice {
     #[inline]
     pub fn default_path(type_: Type) -> &'static str {
         match type_ {
-            Type::Tun | Type::Tap => "/dev/net/tun"
+            Type::Tun | Type::Tap => "/dev/net/tun",
         }
     }
 
@@ -211,7 +208,7 @@ impl TunTapDevice {
                 // IP version
                 4 => buffer.message_mut()[0..4].copy_from_slice(&[0x00, 0x00, 0x08, 0x00]),
                 6 => buffer.message_mut()[0..4].copy_from_slice(&[0x00, 0x00, 0x86, 0xdd]),
-                _ => unreachable!()
+                _ => unreachable!(),
             }
         }
     }
@@ -283,7 +280,7 @@ impl Device for TunTapDevice {
         self.correct_data_before_write(buffer);
         match self.fd.write_all(buffer.message()) {
             Ok(_) => self.fd.flush().map_err(|e| Error::DeviceIo("Flush error", e)),
-            Err(e) => Err(Error::DeviceIo("Write error", e))
+            Err(e) => Err(Error::DeviceIo("Write error", e)),
         }
     }
 
@@ -299,10 +296,9 @@ impl AsRawFd for TunTapDevice {
     }
 }
 
-
 pub struct MockDevice {
     inbound: VecDeque<Vec<u8>>,
-    outbound: VecDeque<Vec<u8>>
+    outbound: VecDeque<Vec<u8>>,
 }
 
 impl MockDevice {
@@ -366,7 +362,6 @@ impl AsRawFd for MockDevice {
     }
 }
 
-
 #[allow(clippy::useless_conversion)]
 fn set_device_mtu(ifname: &str, mtu: usize) -> io::Result<()> {
     let sock = UdpSocket::bind("0.0.0.0:0")?;
@@ -375,7 +370,7 @@ fn set_device_mtu(ifname: &str, mtu: usize) -> io::Result<()> {
     let res = unsafe { libc::ioctl(sock.as_raw_fd(), libc::SIOCSIFMTU.try_into().unwrap(), &mut ifreq) };
     match res {
         0 => Ok(()),
-        _ => Err(IoError::last_os_error())
+        _ => Err(IoError::last_os_error()),
     }
 }
 
@@ -386,7 +381,7 @@ fn get_device_mtu(ifname: &str) -> io::Result<usize> {
     let res = unsafe { libc::ioctl(sock.as_raw_fd(), libc::SIOCGIFMTU.try_into().unwrap(), &mut ifreq) };
     match res {
         0 => Ok(unsafe { ifreq.data.value as usize }),
-        _ => Err(IoError::last_os_error())
+        _ => Err(IoError::last_os_error()),
     }
 }
 
@@ -399,12 +394,12 @@ fn get_device_addr(ifname: &str) -> io::Result<Ipv4Addr> {
         0 => {
             let af = unsafe { ifreq.data.addr.0 };
             if af as libc::c_int != libc::AF_INET {
-                return Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Invalid address family".to_owned()))
+                return Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Invalid address family".to_owned()));
             }
             let ip = unsafe { ifreq.data.addr.1 };
             Ok(ip)
         }
-        _ => Err(IoError::last_os_error())
+        _ => Err(IoError::last_os_error()),
     }
 }
 
@@ -416,7 +411,7 @@ fn set_device_addr(ifname: &str, addr: Ipv4Addr) -> io::Result<()> {
     let res = unsafe { libc::ioctl(sock.as_raw_fd(), libc::SIOCSIFADDR.try_into().unwrap(), &mut ifreq) };
     match res {
         0 => Ok(()),
-        _ => Err(IoError::last_os_error())
+        _ => Err(IoError::last_os_error()),
     }
 }
 
@@ -430,12 +425,12 @@ fn get_device_netmask(ifname: &str) -> io::Result<Ipv4Addr> {
         0 => {
             let af = unsafe { ifreq.data.addr.0 };
             if af as libc::c_int != libc::AF_INET {
-                return Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Invalid address family".to_owned()))
+                return Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Invalid address family".to_owned()));
             }
             let ip = unsafe { ifreq.data.addr.1 };
             Ok(ip)
         }
-        _ => Err(IoError::last_os_error())
+        _ => Err(IoError::last_os_error()),
     }
 }
 
@@ -447,7 +442,7 @@ fn set_device_netmask(ifname: &str, addr: Ipv4Addr) -> io::Result<()> {
     let res = unsafe { libc::ioctl(sock.as_raw_fd(), libc::SIOCSIFNETMASK.try_into().unwrap(), &mut ifreq) };
     match res {
         0 => Ok(()),
-        _ => Err(IoError::last_os_error())
+        _ => Err(IoError::last_os_error()),
     }
 }
 
@@ -456,7 +451,7 @@ fn set_device_enabled(ifname: &str, up: bool) -> io::Result<()> {
     let sock = UdpSocket::bind("0.0.0.0:0")?;
     let mut ifreq = IfReq::new(ifname);
     if unsafe { libc::ioctl(sock.as_raw_fd(), libc::SIOCGIFFLAGS.try_into().unwrap(), &mut ifreq) } != 0 {
-        return Err(IoError::last_os_error())
+        return Err(IoError::last_os_error());
     }
     if up {
         unsafe { ifreq.data.value |= libc::IFF_UP | libc::IFF_RUNNING }
@@ -466,10 +461,9 @@ fn set_device_enabled(ifname: &str, up: bool) -> io::Result<()> {
     let res = unsafe { libc::ioctl(sock.as_raw_fd(), libc::SIOCSIFFLAGS.try_into().unwrap(), &mut ifreq) };
     match res {
         0 => Ok(()),
-        _ => Err(IoError::last_os_error())
+        _ => Err(IoError::last_os_error()),
     }
 }
-
 
 fn get_default_device() -> io::Result<String> {
     let fd = BufReader::new(File::open("/proc/net/route")?);
@@ -479,7 +473,7 @@ fn get_default_device() -> io::Result<String> {
         let parts = line.split('\t').collect::<Vec<_>>();
         if parts[1] == "00000000" {
             best = Some(parts[0].to_string());
-            break
+            break;
         }
         if parts[2] != "00000000" {
             best = Some(parts[0].to_string())

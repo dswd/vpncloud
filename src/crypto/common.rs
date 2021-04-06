@@ -1,23 +1,22 @@
 use super::{
     core::{test_speed, CryptoCore},
     init::{self, InitResult, InitState, CLOSING},
-    rotate::RotationState
+    rotate::RotationState,
 };
 use crate::{
     error::Error,
     types::NodeId,
-    util::{from_base62, to_base62, MsgBuffer}
+    util::{from_base62, to_base62, MsgBuffer},
 };
 use ring::{
     aead::{self, Algorithm, LessSafeKey, UnboundKey},
     agreement::{EphemeralPrivateKey, UnparsedPublicKey},
     pbkdf2,
     rand::{SecureRandom, SystemRandom},
-    signature::{Ed25519KeyPair, KeyPair, ED25519_PUBLIC_KEY_LEN}
+    signature::{Ed25519KeyPair, KeyPair, ED25519_PUBLIC_KEY_LEN},
 };
 use smallvec::{smallvec, SmallVec};
 use std::{fmt::Debug, io::Read, num::NonZeroU32, sync::Arc, time::Duration};
-
 
 const SALT: &[u8; 32] = b"vpncloudVPNCLOUDvpncl0udVpnCloud";
 const INIT_MESSAGE_FIRST_BYTE: u8 = 0xff;
@@ -28,7 +27,6 @@ pub type EcdhPublicKey = UnparsedPublicKey<SmallVec<[u8; 96]>>;
 pub type EcdhPrivateKey = EphemeralPrivateKey;
 pub type Key = SmallVec<[u8; 32]>;
 
-
 const DEFAULT_ALGORITHMS: [&str; 3] = ["AES128", "AES256", "CHACHA20"];
 
 #[cfg(test)]
@@ -38,17 +36,15 @@ const SPEED_TEST_TIME: f32 = 0.1;
 
 const ROTATE_INTERVAL: usize = 120;
 
-
 pub trait Payload: Debug + PartialEq + Sized {
     fn write_to(&self, buffer: &mut MsgBuffer);
     fn read_from<R: Read>(r: R) -> Result<Self, Error>;
 }
 
-
 #[derive(Clone)]
 pub struct Algorithms {
     pub algorithm_speeds: SmallVec<[(&'static Algorithm, f32); 3]>,
-    pub allow_unencrypted: bool
+    pub allow_unencrypted: bool,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize, Clone, PartialEq)]
@@ -58,14 +54,14 @@ pub struct Config {
     pub private_key: Option<String>,
     pub public_key: Option<String>,
     pub trusted_keys: Vec<String>,
-    pub algorithms: Vec<String>
+    pub algorithms: Vec<String>,
 }
 
 pub struct Crypto {
     node_id: NodeId,
     key_pair: Arc<Ed25519KeyPair>,
     trusted_keys: Arc<[Ed25519PublicKey]>,
-    algorithms: Algorithms
+    algorithms: Algorithms,
 }
 
 impl Crypto {
@@ -78,12 +74,12 @@ impl Crypto {
             let algo = match &name.to_uppercase() as &str {
                 "UNENCRYPTED" | "NONE" | "PLAIN" => {
                     unencrypted = true;
-                    continue
+                    continue;
                 }
                 "AES128" | "AES128_GCM" | "AES_128" | "AES_128_GCM" => &aead::AES_128_GCM,
                 "AES256" | "AES256_GCM" | "AES_256" | "AES_256_GCM" => &aead::AES_256_GCM,
                 "CHACHA" | "CHACHA20" | "CHACHA20_POLY1305" => &aead::CHACHA20_POLY1305,
-                _ => return Err(Error::InvalidConfig("Unknown crypto method"))
+                _ => return Err(Error::InvalidConfig("Unknown crypto method")),
             };
             algos.push(algo)
         }
@@ -100,7 +96,7 @@ impl Crypto {
         } else if let Some(password) = &config.password {
             Self::keypair_from_password(password)
         } else {
-            return Err(Error::InvalidConfig("Either private_key or password must be set"))
+            return Err(Error::InvalidConfig("Either private_key or password must be set"));
         };
         let mut trusted_keys = vec![];
         for tn in &config.trusted_keys {
@@ -134,7 +130,7 @@ impl Crypto {
             node_id,
             key_pair: Arc::new(key_pair),
             trusted_keys: trusted_keys.into_boxed_slice().into(),
-            algorithms: algos
+            algorithms: algos,
         })
     }
 
@@ -151,7 +147,7 @@ impl Crypto {
                     NonZeroU32::new(4096).unwrap(),
                     SALT,
                     password.as_bytes(),
-                    &mut bytes
+                    &mut bytes,
                 );
             }
         }
@@ -185,7 +181,7 @@ impl Crypto {
     fn parse_public_key(pubkey: &str) -> Result<Ed25519PublicKey, Error> {
         let pubkey = from_base62(pubkey).map_err(|_| Error::InvalidConfig("Failed to parse public key"))?;
         if pubkey.len() != ED25519_PUBLIC_KEY_LEN {
-            return Err(Error::InvalidConfig("Failed to parse public key"))
+            return Err(Error::InvalidConfig("Failed to parse public key"));
         }
         let mut result = [0; ED25519_PUBLIC_KEY_LEN];
         result.clone_from_slice(&pubkey);
@@ -203,11 +199,10 @@ impl Crypto {
             payload,
             self.key_pair.clone(),
             self.trusted_keys.clone(),
-            self.algorithms.clone()
+            self.algorithms.clone(),
         )
     }
 }
-
 
 #[derive(Debug, PartialEq)]
 pub enum MessageResult<P: Payload> {
@@ -215,9 +210,8 @@ pub enum MessageResult<P: Payload> {
     Initialized(P),
     InitializedWithReply(P),
     Reply,
-    None
+    None,
 }
-
 
 pub struct PeerCrypto<P: Payload> {
     #[allow(dead_code)]
@@ -226,13 +220,13 @@ pub struct PeerCrypto<P: Payload> {
     rotation: Option<RotationState>,
     unencrypted: bool,
     core: Option<CryptoCore>,
-    rotate_counter: usize
+    rotate_counter: usize,
 }
 
 impl<P: Payload> PeerCrypto<P> {
     pub fn new(
         node_id: NodeId, init_payload: P, key_pair: Arc<Ed25519KeyPair>, trusted_keys: Arc<[Ed25519PublicKey]>,
-        algorithms: Algorithms
+        algorithms: Algorithms,
     ) -> Self {
         Self {
             node_id,
@@ -240,7 +234,7 @@ impl<P: Payload> PeerCrypto<P> {
             rotation: None,
             unencrypted: false,
             core: None,
-            rotate_counter: 0
+            rotate_counter: 0,
         }
     }
 
@@ -324,7 +318,7 @@ impl<P: Payload> PeerCrypto<P> {
                 }
                 if !is_initiator {
                     if self.unencrypted {
-                        return Ok(MessageResult::Initialized(peer_payload))
+                        return Ok(MessageResult::Initialized(peer_payload));
                     }
                     assert!(!buffer.is_empty());
                     buffer.prepend_byte(MESSAGE_TYPE_ROTATION);
@@ -337,7 +331,7 @@ impl<P: Payload> PeerCrypto<P> {
 
     fn handle_rotate_message(&mut self, data: &[u8]) -> Result<(), Error> {
         if self.unencrypted {
-            return Ok(())
+            return Ok(());
         }
         if let Some(rot) = self.get_rotation()?.handle_message(data)? {
             let core = self.get_core()?;
@@ -350,7 +344,7 @@ impl<P: Payload> PeerCrypto<P> {
 
     fn encrypt_message(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
         if self.unencrypted {
-            return Ok(())
+            return Ok(());
         }
         self.get_core()?.encrypt(buffer);
         Ok(())
@@ -359,7 +353,7 @@ impl<P: Payload> PeerCrypto<P> {
     fn decrypt_message(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
         // HOT PATH
         if self.unencrypted {
-            return Ok(())
+            return Ok(());
         }
         self.get_core()?.decrypt(buffer)
     }
@@ -367,7 +361,7 @@ impl<P: Payload> PeerCrypto<P> {
     pub fn handle_message(&mut self, buffer: &mut MsgBuffer) -> Result<MessageResult<P>, Error> {
         // HOT PATH
         if buffer.is_empty() {
-            return Err(Error::InvalidCryptoState("No message in buffer"))
+            return Err(Error::InvalidCryptoState("No message in buffer"));
         }
         if is_init_message(buffer.buffer()) {
             // COLD PATH
@@ -411,7 +405,7 @@ impl<P: Payload> PeerCrypto<P> {
         }
         if !out.is_empty() {
             out.prepend_byte(INIT_MESSAGE_FIRST_BYTE);
-            return Ok(MessageResult::Reply)
+            return Ok(MessageResult::Reply);
         }
         if let Some(ref mut rotate) = self.rotation {
             self.rotate_counter += 1;
@@ -426,7 +420,7 @@ impl<P: Payload> PeerCrypto<P> {
                 if !out.is_empty() {
                     out.prepend_byte(MESSAGE_TYPE_ROTATION);
                     self.encrypt_message(out)?;
-                    return Ok(MessageResult::Reply)
+                    return Ok(MessageResult::Reply);
                 }
             }
         }
@@ -438,7 +432,6 @@ pub fn is_init_message(msg: &[u8]) -> bool {
     // HOT PATH
     !msg.is_empty() && msg[0] == INIT_MESSAGE_FIRST_BYTE
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -499,7 +492,7 @@ mod tests {
                     let res = node2.handle_message(&mut msg).unwrap();
                     assert_eq!(res, MessageResult::None);
                 }
-                other => assert_eq!(other, MessageResult::None)
+                other => assert_eq!(other, MessageResult::None),
             }
             match node2.every_second(&mut msg).unwrap() {
                 MessageResult::None => (),
@@ -507,7 +500,7 @@ mod tests {
                     let res = node1.handle_message(&mut msg).unwrap();
                     assert_eq!(res, MessageResult::None);
                 }
-                other => assert_eq!(other, MessageResult::None)
+                other => assert_eq!(other, MessageResult::None),
             }
         }
     }

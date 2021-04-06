@@ -4,7 +4,7 @@ use std::{
     fs::{self, File},
     io::Write,
     os::unix::fs::PermissionsExt,
-    process::Command
+    process::Command,
 };
 
 const MANPAGE: &[u8] = include_bytes!("../target/vpncloud.1.gz");

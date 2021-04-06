@@ -6,18 +6,17 @@ use super::{
     net::{get_ip, mapped_addr, parse_listen, Socket},
     poll::{WaitImpl, WaitResult},
     port_forwarding::PortForwarding,
-    util::MsgBuffer
+    util::MsgBuffer,
 };
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
 use std::{
     io::{self, Cursor, Read, Write},
     net::{Ipv6Addr, SocketAddr, SocketAddrV6, TcpListener, TcpStream, UdpSocket},
     os::unix::io::{AsRawFd, RawFd},
-    thread::spawn
+    thread::spawn,
 };
 use tungstenite::{client::AutoStream, connect, protocol::WebSocket, server::accept, Message};
 use url::Url;
-
 
 macro_rules! io_error {
     ($val:expr, $format:expr) => ( {
@@ -35,7 +34,7 @@ fn write_addr<W: Write>(addr: SocketAddr, mut out: W) -> Result<(), io::Error> {
             out.write_all(&addr.ip().octets())?;
             out.write_u16::<NetworkEndian>(addr.port())?;
         }
-        _ => unreachable!()
+        _ => unreachable!(),
     }
     Ok(())
 }
@@ -86,7 +85,7 @@ fn serve_proxy_connection(stream: TcpStream) -> Result<(), io::Error> {
             WaitResult::Timeout => {
                 io_error!(websocket.write_message(Message::Ping(vec![])), "Failed to send ping: {}")?;
             }
-            WaitResult::Error(err) => return Err(err)
+            WaitResult::Error(err) => return Err(err),
         }
     }
     Ok(())
@@ -110,14 +109,14 @@ pub fn run_proxy(listen: &str) -> Result<(), io::Error> {
 
 pub struct ProxyConnection {
     addr: SocketAddr,
-    socket: WebSocket<AutoStream>
+    socket: WebSocket<AutoStream>,
 }
 
 impl ProxyConnection {
     fn read_message(&mut self) -> Result<Vec<u8>, io::Error> {
         loop {
             if let Message::Binary(data) = io_error!(self.socket.read_message(), "Failed to read from ws proxy: {}")? {
-                return Ok(data)
+                return Ok(data);
             }
         }
     }

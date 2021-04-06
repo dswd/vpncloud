@@ -34,20 +34,18 @@ use crate::{error::Error, util::MsgBuffer};
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
 use ring::{
     agreement::{agree_ephemeral, EphemeralPrivateKey, UnparsedPublicKey, X25519},
-    rand::SystemRandom
+    rand::SystemRandom,
 };
 use smallvec::{smallvec, SmallVec};
 use std::io::{self, Cursor, Read, Write};
 
-
 type EcdhPublicKey = UnparsedPublicKey<SmallVec<[u8; 96]>>;
 type EcdhPrivateKey = EphemeralPrivateKey;
-
 
 pub struct RotationMessage {
     message_id: u64,
     propose: EcdhPublicKey,
-    confirm: Option<EcdhPublicKey>
+    confirm: Option<EcdhPublicKey>,
 }
 
 impl RotationMessage {
@@ -91,13 +89,13 @@ pub struct RotationState {
     pending: Option<(Key, EcdhPublicKey)>,   // sent by remote, to be confirmed
     proposed: Option<EcdhPrivateKey>,        // my own, proposed but not confirmed
     message_id: u64,
-    timeout: bool
+    timeout: bool,
 }
 
 pub struct RotatedKey {
     pub key: Key,
     pub id: u64,
-    pub use_for_sending: bool
+    pub use_for_sending: bool,
 }
 
 impl RotationState {
@@ -155,7 +153,7 @@ impl RotationState {
 
     pub fn process_message(&mut self, msg: RotationMessage) -> Option<RotatedKey> {
         if msg.message_id <= self.message_id {
-            return None
+            return None;
         }
         debug!("Received rotation message with id {}", msg.message_id);
         self.timeout = false;
@@ -167,7 +165,7 @@ impl RotationState {
         if let Some(peer_key) = msg.confirm {
             if let Some(private_key) = self.proposed.take() {
                 let key = Self::derive_key(private_key, peer_key);
-                return Some(RotatedKey { key, id: msg.message_id, use_for_sending: true })
+                return Some(RotatedKey { key, id: msg.message_id, use_for_sending: true });
             }
         }
         None
@@ -183,7 +181,7 @@ impl RotationState {
                     // Reconfirm last confirmed key
                     Self::send(
                         &RotationMessage { confirm: Some(confirmed_key.clone()), propose: proposed_key, message_id },
-                        out
+                        out,
                     );
                 } else {
                     // First message has been lost
@@ -202,7 +200,7 @@ impl RotationState {
                 self.proposed = Some(private_key);
                 self.confirmed = Some((confirm_key.clone(), message_id));
                 Self::send(&RotationMessage { confirm: Some(confirm_key), propose: propose_key, message_id }, out);
-                return Some(RotatedKey { key, id: message_id, use_for_sending: false })
+                return Some(RotatedKey { key, id: message_id, use_for_sending: false });
             } else {
                 // Nothing pending nor proposed, still waiting to receive message 1
                 // Do nothing, peer will retry
@@ -221,7 +219,7 @@ mod tests {
     impl MsgBuffer {
         fn msg(&mut self) -> Option<RotationMessage> {
             if self.is_empty() {
-                return None
+                return None;
             }
             let msg = RotationMessage::read_from(Cursor::new(self.message())).unwrap();
             self.set_length(0);

@@ -19,7 +19,7 @@ peers:
   - REMOTE_HOST:PORT
 ```
 
-For more information, please see the [Website](https://vpncloud.ddswd.de) or the [Forum](https://groups.google.com/forum/#!forum/vpncloud).
+For more information, please see the [Website](https://vpncloud.ddswd.de) or the [Discussions group](https://github.com/dswd/vpncloud/discussions).
 
 
 ### Project Status

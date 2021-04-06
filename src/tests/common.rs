@@ -8,8 +8,8 @@ use std::{
     net::SocketAddr,
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Once
-    }
+        Once,
+    },
 };
 
 pub use crate::{
@@ -19,9 +19,8 @@ pub use crate::{
     net::MockSocket,
     payload::{Frame, Packet, Protocol},
     types::Range,
-    util::{MockTimeSource, Time, TimeSource}
+    util::{MockTimeSource, Time, TimeSource},
 };
-
 
 static INIT_LOGGER: Once = Once::new();
 
@@ -61,19 +60,17 @@ impl log::Log for DebugLogger {
     }
 }
 
-
 type TestNode<P> = GenericCloud<MockDevice, P, MockSocket, MockTimeSource>;
 
 pub struct Simulator<P: Protocol> {
     next_port: u16,
     nodes: HashMap<SocketAddr, TestNode<P>>,
-    messages: VecDeque<(SocketAddr, SocketAddr, Vec<u8>)>
+    messages: VecDeque<(SocketAddr, SocketAddr, Vec<u8>)>,
 }
 
 pub type TapSimulator = Simulator<Frame>;
 #[allow(dead_code)]
 pub type TunSimulator = Simulator<Packet>;
-
 
 impl<P: Protocol> Simulator<P> {
     pub fn new() -> Self {

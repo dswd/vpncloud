@@ -19,7 +19,7 @@ mod internal {
         pub internal_addr: SocketAddrV4,
         pub external_addr: SocketAddrV4,
         gateway: Gateway,
-        pub next_extension: Option<Time>
+        pub next_extension: Option<Time>,
     }
 
     impl PortForwarding {
@@ -32,11 +32,11 @@ mod internal {
                         if err.kind() == io::ErrorKind::WouldBlock {
                             // Why this code?
                             info!("Port-forwarding: no router found");
-                            return None
+                            return None;
                         }
                     }
                     error!("Port-forwarding: failed to find router: {}", err);
-                    return None
+                    return None;
                 }
             };
             debug!("Port-forwarding: found router at {}", gateway.addr);
@@ -46,7 +46,7 @@ mod internal {
                 Ok(ip) => ip,
                 Err(err) => {
                     error!("Port-forwarding: failed to obtain external IP: {}", err);
-                    return None
+                    return None;
                 }
             };
             if let Ok((port, timeout)) = Self::get_any_forwarding(&gateway, internal_addr, port) {
@@ -64,19 +64,19 @@ mod internal {
 
         fn get_any_forwarding(gateway: &Gateway, addr: SocketAddrV4, port: u16) -> Result<(u16, u32), ()> {
             if let Ok(a) = Self::get_forwarding(gateway, addr, port) {
-                return Ok(a)
+                return Ok(a);
             }
             if let Ok(a) = Self::get_forwarding(gateway, addr, 0) {
-                return Ok(a)
+                return Ok(a);
             }
             for i in 1..5 {
                 if let Ok(a) = Self::get_forwarding(gateway, addr, port + i) {
-                    return Ok(a)
+                    return Ok(a);
                 }
             }
             for _ in 0..5 {
                 if let Ok(a) = Self::get_forwarding(gateway, addr, rand::random()) {
-                    return Ok(a)
+                    return Ok(a);
                 }
             }
             warn!("Failed to activate port forwarding");
@@ -125,20 +125,20 @@ mod internal {
         pub fn check_extend(&mut self) {
             if let Some(deadline) = self.next_extension {
                 if deadline > SystemTimeSource::now() {
-                    return
+                    return;
                 }
             } else {
-                return
+                return;
             }
             match self.gateway.add_port(
                 PortMappingProtocol::UDP,
                 self.external_addr.port(),
                 self.internal_addr,
                 LEASE_TIME,
-                DESCRIPTION
+                DESCRIPTION,
             ) {
                 Ok(()) => debug!("Port-forwarding: extended port forwarding"),
-                Err(err) => debug!("Port-forwarding: failed to extend port forwarding: {}", err)
+                Err(err) => debug!("Port-forwarding: failed to extend port forwarding: {}", err),
             };
             self.next_extension = Some(SystemTimeSource::now() + Time::from(LEASE_TIME) - 60);
         }
@@ -146,7 +146,7 @@ mod internal {
         fn deactivate(&self) {
             match self.gateway.remove_port(PortMappingProtocol::UDP, self.external_addr.port()) {
                 Ok(()) => info!("Port-forwarding: successfully deactivated port forwarding"),
-                Err(err) => debug!("Port-forwarding: failed to deactivate port forwarding: {}", err)
+                Err(err) => debug!("Port-forwarding: failed to deactivate port forwarding: {}", err),
             }
         }
 

@@ -11,7 +11,7 @@ pub struct EpollWait {
     event: libc::epoll_event,
     socket: RawFd,
     device: RawFd,
-    timeout: u32
+    timeout: u32,
 }
 
 impl EpollWait {
@@ -27,14 +27,14 @@ impl EpollWait {
         let mut event = libc::epoll_event { u64: 0, events: 0 };
         let poll_fd = unsafe { libc::epoll_create(3) };
         if poll_fd == -1 {
-            return Err(io::Error::last_os_error())
+            return Err(io::Error::last_os_error());
         }
         for fd in &[socket, device] {
             event.u64 = *fd as u64;
             event.events = flags;
             let res = unsafe { libc::epoll_ctl(poll_fd, libc::EPOLL_CTL_ADD, *fd, &mut event) };
             if res == -1 {
-                return Err(io::Error::last_os_error())
+                return Err(io::Error::last_os_error());
             }
         }
         Ok(Self { poll_fd, event, socket, device, timeout })
@@ -63,7 +63,7 @@ impl Iterator for EpollWait {
                     unreachable!()
                 }
             }
-            _ => unreachable!()
+            _ => unreachable!(),
         })
     }
 }

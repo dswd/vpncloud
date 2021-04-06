@@ -5,9 +5,9 @@
 use std::{
     collections::{HashMap, VecDeque},
     io::{self, ErrorKind},
-    net::{IpAddr, SocketAddr, UdpSocket, Ipv6Addr},
+    net::{IpAddr, Ipv6Addr, SocketAddr, UdpSocket},
     os::unix::io::{AsRawFd, RawFd},
-    sync::atomic::{AtomicBool, Ordering}
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use super::util::{MockTimeSource, MsgBuffer, Time, TimeSource};
@@ -17,7 +17,7 @@ pub fn mapped_addr(addr: SocketAddr) -> SocketAddr {
     // HOT PATH
     match addr {
         SocketAddr::V4(addr4) => SocketAddr::new(IpAddr::V6(addr4.ip().to_ipv6_mapped()), addr4.port()),
-        _ => addr
+        _ => addr,
     }
 }
 
@@ -84,7 +84,7 @@ pub struct MockSocket {
     nat_peers: HashMap<SocketAddr, Time>,
     address: SocketAddr,
     outbound: VecDeque<(SocketAddr, Vec<u8>)>,
-    inbound: VecDeque<(SocketAddr, Vec<u8>)>
+    inbound: VecDeque<(SocketAddr, Vec<u8>)>,
 }
 
 impl MockSocket {
@@ -94,7 +94,7 @@ impl MockSocket {
             nat_peers: HashMap::new(),
             address,
             outbound: VecDeque::with_capacity(10),
-            inbound: VecDeque::with_capacity(10)
+            inbound: VecDeque::with_capacity(10),
         }
     }
 
@@ -109,12 +109,12 @@ impl MockSocket {
     pub fn put_inbound(&mut self, from: SocketAddr, data: Vec<u8>) -> bool {
         if !self.nat {
             self.inbound.push_back((from, data));
-            return true
+            return true;
         }
         if let Some(timeout) = self.nat_peers.get(&from) {
             if *timeout >= MockTimeSource::now() {
                 self.inbound.push_back((from, data));
-                return true
+                return true;
             }
         }
         warn!("Sender {:?} is filtered out by NAT", from);

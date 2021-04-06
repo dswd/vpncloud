@@ -2,7 +2,7 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### UNRELEASED
+### v2.2.0 (2021-04-06)
 
 - [added] Service target file (thanks to mnhauke)
 - [added] Added interactive configuration wizard
@@ -10,7 +10,7 @@ This project follows [semantic versioning](http://semver.org).
 - [added] Building static binaries
 - [added] Building i686 rpm
 - [changed] Restructured example config
-- [changed] Changed Rust version to 1.50.0
+- [changed] Changed Rust version to 1.51.0
 - [changed] Updated dependencies
 - [changed] Change permissions of /etc/vpncloud
 

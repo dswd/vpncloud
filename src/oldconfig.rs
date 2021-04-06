@@ -13,7 +13,7 @@ pub enum OldCryptoMethod {
     #[serde(rename = "aes256")]
     AES256,
     #[serde(rename = "aes128")]
-    AES128
+    AES128,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
@@ -57,7 +57,7 @@ pub struct OldConfigFile {
     #[serde(alias = "statsd-prefix")]
     pub statsd_prefix: Option<String>,
     pub user: Option<String>,
-    pub group: Option<String>
+    pub group: Option<String>,
 }
 
 impl OldConfigFile {
@@ -89,7 +89,7 @@ impl OldConfigFile {
                 interval: self.beacon_interval,
                 load: self.beacon_load,
                 store: self.beacon_store,
-                password: self.shared_key.clone()
+                password: self.shared_key.clone(),
             }),
             claims: self.subnets,
             crypto: CryptoConfig {
@@ -97,13 +97,13 @@ impl OldConfigFile {
                 password: Some(self.shared_key.unwrap_or_else(|| "none".to_string())),
                 private_key: None,
                 public_key: None,
-                trusted_keys: vec![]
+                trusted_keys: vec![],
             },
             device: Some(ConfigFileDevice {
                 fix_rp_filter: None,
                 name: self.device_name,
                 path: self.device_path,
-                type_: self.device_type
+                type_: self.device_type,
             }),
             group: self.group,
             ifdown: self.ifdown,
@@ -121,7 +121,7 @@ impl OldConfigFile {
             switch_timeout: self.dst_timeout,
             user: self.user,
             hook: None,
-            hooks: HashMap::new()
+            hooks: HashMap::new(),
         }
     }
 }

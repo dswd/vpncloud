@@ -15,15 +15,14 @@ use std::{
     process::{Command, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex
+        Arc, Mutex,
     },
-    thread
+    thread,
 };
 
 use super::util::{from_base62, to_base62, Encoder, TimeSource};
 use smallvec::SmallVec;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
-
 
 const TYPE_BEGIN: u8 = 0;
 const TYPE_END: u8 = 1;
@@ -40,14 +39,14 @@ fn sha512(data: &[u8]) -> SmallVec<[u8; 64]> {
 
 struct FutureResult<T> {
     has_result: AtomicBool,
-    result: Mutex<T>
+    result: Mutex<T>,
 }
 
 #[derive(Clone)]
 pub struct BeaconSerializer<TS> {
     shared_key: Vec<u8>,
     future_peers: Arc<FutureResult<Vec<SocketAddr>>>,
-    _dummy_ts: PhantomData<TS>
+    _dummy_ts: PhantomData<TS>,
 }
 
 impl<TS: TimeSource> BeaconSerializer<TS> {
@@ -55,7 +54,7 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
         Self {
             shared_key: shared_key.to_owned(),
             future_peers: Arc::new(FutureResult { has_result: AtomicBool::new(false), result: Mutex::new(Vec::new()) }),
-            _dummy_ts: PhantomData
+            _dummy_ts: PhantomData,
         }
     }
 
@@ -105,7 +104,7 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
 
     fn decrypt_data(&self, data: &mut Vec<u8>) -> bool {
         if data.is_empty() {
-            return false
+            return false;
         }
         let seed = data.pop().unwrap() ^ self.get_keystream(TYPE_SEED, 0, 0)[0];
         self.mask_with_keystream(data as &mut [u8], TYPE_DATA, seed);
@@ -122,7 +121,7 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
         for p in peers {
             match *p {
                 SocketAddr::V4(addr) => v4addrs.push(addr),
-                SocketAddr::V6(addr) => v6addrs.push(addr)
+                SocketAddr::V6(addr) => v6addrs.push(addr),
             }
         }
         // Add count of v4 addresses
@@ -158,23 +157,23 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
         let mut peers = Vec::new();
         let mut pos = 0;
         if data.len() < 4 {
-            return peers
+            return peers;
         }
         if !self.decrypt_data(&mut data) {
-            return peers
+            return peers;
         }
         let then = Wrapping(Encoder::read_u16(&data[pos..=pos + 1]));
         if let Some(ttl) = ttl_hours {
             let now = Wrapping(Self::now_hour_16());
             if now - then > Wrapping(ttl) && then - now > Wrapping(ttl) {
-                return peers
+                return peers;
             }
         }
         pos += 2;
         let v4count = data[pos] as usize;
         pos += 1;
         if v4count * 6 > data.len() - pos || (data.len() - pos - v4count * 6) % 18 > 0 {
-            return peers
+            return peers;
         }
         for _ in 0..v4count {
             assert!(data.len() >= pos + 6);
@@ -198,7 +197,7 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
                 Ipv6Addr::new(ip[0], ip[1], ip[2], ip[3], ip[4], ip[5], ip[6], ip[7]),
                 port,
                 0,
-                0
+                0,
             ));
             peers.push(addr);
         }
@@ -262,14 +261,14 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
                 peers.append(&mut self.peerlist_decode(&data[start_pos..end_pos], ttl_hours));
                 pos = start_pos
             } else {
-                break
+                break;
             }
         }
         peers
     }
 
     pub fn read_from_file<P: AsRef<Path>>(
-        &self, path: P, ttl_hours: Option<u16>
+        &self, path: P, ttl_hours: Option<u16>,
     ) -> Result<Vec<SocketAddr>, io::Error> {
         let mut f = File::open(&path)?;
         let mut contents = String::new();
@@ -316,26 +315,22 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
     }
 }
 
-
-#[cfg(test)] use crate::util::MockTimeSource;
-#[cfg(test)] use std::str::FromStr;
-#[cfg(test)] use std::time::Duration;
+#[cfg(test)]
+use crate::util::MockTimeSource;
+#[cfg(test)]
+use std::str::FromStr;
+#[cfg(test)]
+use std::time::Duration;
 
 #[test]
 fn encode() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let mut peers = vec![
-        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
-        SocketAddr::from_str("6.6.6.6:53").unwrap()
-    ];
+    let mut peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:53").unwrap()];
     assert_eq!("WsHI31EWDMBYxvITiILIrm2k9gEik22E", ser.encode(&peers));
     peers.push(SocketAddr::from_str("[::1]:5678").unwrap());
     assert_eq!("WsHI3GXKaXCveo6uejmZizZ72kR6Y0L9T7h49TXONp1ugfKvvvEik22E", ser.encode(&peers));
-    let peers = vec![
-        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
-        SocketAddr::from_str("6.6.6.6:54").unwrap()
-    ];
+    let peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:54").unwrap()];
     assert_eq!("WsHI32gm9eMSHP3Lm1GXcdP7rD3ik22E", ser.encode(&peers));
 }
 
@@ -343,10 +338,7 @@ fn encode() {
 fn decode() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let mut peers = vec![
-        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
-        SocketAddr::from_str("6.6.6.6:53").unwrap()
-    ];
+    let mut peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:53").unwrap()];
     assert_eq!(format!("{:?}", peers), format!("{:?}", ser.decode("WsHI31EWDMBYxvITiILIrm2k9gEik22E", None)));
     peers.push(SocketAddr::from_str("[::1]:5678").unwrap());
     assert_eq!(
@@ -359,10 +351,7 @@ fn decode() {
 fn decode_split() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let peers = vec![
-        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
-        SocketAddr::from_str("6.6.6.6:53").unwrap()
-    ];
+    let peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:53").unwrap()];
     assert_eq!(
         format!("{:?}", peers),
         format!("{:?}", ser.decode("WsHI3-1E.WD:MB Yx\tvI\nTi(IL)Ir[m2]k9ügEäik22E", None))
@@ -377,10 +366,7 @@ fn decode_split() {
 fn decode_offset() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let peers = vec![
-        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
-        SocketAddr::from_str("6.6.6.6:53").unwrap()
-    ];
+    let peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:53").unwrap()];
     assert_eq!(
         format!("{:?}", peers),
         format!("{:?}", ser.decode("Hello World: WsHI31EWDMBYxvITiILIrm2k9gEik22E! End of the World", None))
@@ -391,10 +377,7 @@ fn decode_offset() {
 fn decode_multiple() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let peers = vec![
-        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
-        SocketAddr::from_str("6.6.6.6:53").unwrap()
-    ];
+    let peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:53").unwrap()];
     assert_eq!(
         format!("{:?}", peers),
         format!("{:?}", ser.decode("WsHI31HVpqxFNMNSPrvik22E WsHI34yOBcZIulKdtn2ik22E", None))
@@ -438,15 +421,11 @@ fn decode_invalid() {
     assert_eq!(2, ser.decode("WsHI3WsHI31EWDMBYxvITiILIrm2k9gEik22Eik22E", None).len());
 }
 
-
 #[test]
 fn encode_decode() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let peers = vec![
-        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
-        SocketAddr::from_str("6.6.6.6:53").unwrap()
-    ];
+    let peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:53").unwrap()];
     let data = ser.encode(&peers);
     let peers2 = ser.decode(&data, None);
     assert_eq!(format!("{:?}", peers), format!("{:?}", peers2));
@@ -456,10 +435,7 @@ fn encode_decode() {
 fn encode_decode_file() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let peers = vec![
-        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
-        SocketAddr::from_str("6.6.6.6:53").unwrap()
-    ];
+    let peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:53").unwrap()];
     let file = tempfile::NamedTempFile::new().expect("Failed to create temp file");
     assert!(ser.write_to_file(&peers, file.path()).is_ok());
     let peers2 = ser.read_from_file(file.path(), None);
@@ -471,10 +447,7 @@ fn encode_decode_file() {
 fn encode_decode_cmd() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
-    let peers = vec![
-        SocketAddr::from_str("1.2.3.4:5678").unwrap(),
-        SocketAddr::from_str("6.6.6.6:53").unwrap()
-    ];
+    let peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:53").unwrap()];
     let file = tempfile::NamedTempFile::new().expect("Failed to create temp file");
     assert!(ser.write_to_cmd(&peers, &format!("echo $beacon > {}", file.path().display())).is_ok());
     thread::sleep(Duration::from_millis(100));
