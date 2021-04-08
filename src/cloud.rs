@@ -222,11 +222,23 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
 
     pub fn reset_own_addresses(&mut self) -> io::Result<()> {
         self.own_addresses.clear();
-        self.own_addresses.push(self.socket.address().map(mapped_addr)?);
-        if let Some(ref pfw) = self.port_forwarding {
-            self.own_addresses.push(pfw.get_internal_ip().into());
-            self.own_addresses.push(pfw.get_external_ip().into());
-        }
+        if self.config.advertise_addresses.len() > 0 &&
+            !self.config.listen.starts_with("ws://") {
+                // Force advertised addresses based on configuration istead
+                // of discovery. Note: Disables port forwarding
+                let port: u16 =
+                    try_fail!(self.config.listen.parse(), "Invalid port {}");
+                for address in &self.config.advertise_addresses {
+                    let sockaddr = try_fail!(SocketAddr::from_str(&format!("{}:{}", address, port)), "Invalid IP Address or port {}");
+                    self.own_addresses.push(sockaddr);
+                }
+            } else {
+                self.own_addresses.push(self.socket.address().map(mapped_addr)?);
+                if let Some(ref pfw) = self.port_forwarding {
+                    self.own_addresses.push(pfw.get_internal_ip().into());
+                    self.own_addresses.push(pfw.get_external_ip().into());
+                }
+            }
         debug!("Own addresses: {:?}", self.own_addresses);
         // TODO: detect address changes and call event
         Ok(())

@@ -19,6 +19,7 @@ pub struct Config {
     pub fix_rp_filter: bool,
 
     pub ip: Option<String>,
+    pub advertise_addresses: Vec<String>,
     pub ifup: Option<String>,
     pub ifdown: Option<String>,
 
@@ -56,6 +57,7 @@ impl Default for Config {
             device_path: None,
             fix_rp_filter: false,
             ip: None,
+            advertise_addresses: vec![],
             ifup: None,
             ifdown: None,
             crypto: CryptoConfig::default(),
@@ -104,6 +106,9 @@ impl Config {
         }
         if let Some(val) = file.ip {
             self.ip = Some(val);
+        }
+        if let Some(mut val) = file.advertise_addresses {
+            self.advertise_addresses.append(&mut val);
         }
         if let Some(val) = file.ifup {
             self.ifup = Some(val);
@@ -318,6 +323,7 @@ impl Config {
             ifup: self.ifup,
             ifdown: self.ifdown,
             ip: self.ip,
+            advertise_addresses: Some(self.advertise_addresses),
             keepalive: self.keepalive,
             listen: Some(self.listen),
             mode: Some(self.mode),
@@ -606,6 +612,7 @@ pub struct ConfigFile {
     pub device: Option<ConfigFileDevice>,
 
     pub ip: Option<String>,
+    pub advertise_addresses: Option<Vec<String>>,
     pub ifup: Option<String>,
     pub ifdown: Option<String>,
 
@@ -638,6 +645,9 @@ device:
   name: vpncloud%d
   path: /dev/net/tun
 ip: 10.0.1.1/16
+advertise-addresses:
+  - 192.168.0.1
+  - 192.168.1.1
 ifup: ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up
 ifdown: 'true'
 peers:
@@ -673,6 +683,7 @@ statsd:
                 fix_rp_filter: None
             }),
             ip: Some("10.0.1.1/16".to_string()),
+            advertise_addresses: Some(vec!["192.168.0.1".to_string(), "192.168.1.1".to_string()]),
             ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
             ifdown: Some("true".to_string()),
             crypto: CryptoConfig::default(),
@@ -721,6 +732,7 @@ fn config_merge() {
             fix_rp_filter: None,
         }),
         ip: None,
+        advertise_addresses: Some(vec![]),
         ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
         ifdown: Some("true".to_string()),
         crypto: CryptoConfig::default(),
@@ -757,6 +769,7 @@ fn config_merge() {
             device_name: "vpncloud%d".to_string(),
             device_path: None,
             ip: None,
+            advertise_addresses: vec![],
             ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
             ifdown: Some("true".to_string()),
             listen: "3210".to_string(),
@@ -816,6 +829,8 @@ fn config_merge() {
             device_path: Some("/dev/null".to_string()),
             fix_rp_filter: false,
             ip: None,
+            advertise_addresses: vec![],
+
             ifup: Some("ifconfig $IFNAME 10.0.1.2/16 mtu 1400 up".to_string()),
             ifdown: Some("ifconfig $IFNAME down".to_string()),
             crypto: CryptoConfig { password: Some("anothersecret".to_string()), ..CryptoConfig::default() },
