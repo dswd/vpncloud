@@ -41,6 +41,12 @@ fn configure_connectivity(config: &mut Config, mode: usize, theme: &ColorfulThem
             .interact()?;
     }
     if mode == MODE_EXPERT {
+        config.advertise_addresses = str_list(
+            Input::with_theme(theme)
+                .with_prompt("Advertise addresses (comma separated)")
+                .default(config.advertise_addresses.join(","))
+                .interact_text()?,
+        );
         config.peer_timeout = Input::with_theme(theme)
             .with_prompt("Peer timeout (in seconds)")
             .default(config.peer_timeout)

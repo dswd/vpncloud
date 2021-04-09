@@ -11,7 +11,7 @@ use std::{
 };
 
 use super::util::{MockTimeSource, MsgBuffer, Time, TimeSource};
-use crate::port_forwarding::PortForwarding;
+use crate::{config::DEFAULT_PORT, port_forwarding::PortForwarding};
 
 pub fn mapped_addr(addr: SocketAddr) -> SocketAddr {
     // HOT PATH
@@ -35,21 +35,23 @@ pub trait Socket: AsRawFd + Sized {
     fn create_port_forwarding(&self) -> Option<PortForwarding>;
 }
 
-pub fn parse_listen(addr: &str) -> SocketAddr {
+pub fn parse_listen(addr: &str, default_port: u16) -> SocketAddr {
     if let Some(addr) = addr.strip_prefix("*:") {
         let port = try_fail!(addr.parse::<u16>(), "Invalid port: {}");
         SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
     } else if addr.contains(':') {
         try_fail!(addr.parse::<SocketAddr>(), "Invalid address: {}: {}", addr)
-    } else {
-        let port = try_fail!(addr.parse::<u16>(), "Invalid port: {}");
+    } else if let Ok(port) = addr.parse::<u16>() {
         SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
+    } else {
+        let ip = try_fail!(addr.parse::<IpAddr>(), "Invalid addr: {}");
+        SocketAddr::new(ip, default_port)
     }
 }
 
 impl Socket for UdpSocket {
     fn listen(addr: &str) -> Result<Self, io::Error> {
-        let addr = parse_listen(addr);
+        let addr = parse_listen(addr, DEFAULT_PORT);
         UdpSocket::bind(addr)
     }
 
@@ -134,7 +136,7 @@ impl AsRawFd for MockSocket {
 
 impl Socket for MockSocket {
     fn listen(addr: &str) -> Result<Self, io::Error> {
-        Ok(Self::new(parse_listen(addr)))
+        Ok(Self::new(parse_listen(addr, DEFAULT_PORT)))
     }
 
     fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {

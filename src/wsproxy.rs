@@ -92,7 +92,7 @@ fn serve_proxy_connection(stream: TcpStream) -> Result<(), io::Error> {
 }
 
 pub fn run_proxy(listen: &str) -> Result<(), io::Error> {
-    let addr = parse_listen(listen);
+    let addr = parse_listen(listen, 8080);
     let server = TcpListener::bind(addr)?;
     info!("Listening on ws://{}", server.local_addr()?);
     for stream in server.incoming() {
