@@ -109,6 +109,7 @@ impl OldConfigFile {
             ifdown: self.ifdown,
             ifup: self.ifup,
             ip: None,
+            advertise_addresses: None,
             keepalive: self.keepalive,
             listen: self.listen.or(self.port.map(|p| format!("{}", p))),
             mode: self.mode,
