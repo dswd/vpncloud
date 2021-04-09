@@ -217,6 +217,7 @@ impl Config {
         if let Some(val) = args.ifup {
             self.ifup = Some(val);
         }
+        self.advertise_addresses.append(&mut args.advertise_addresses);
         if let Some(val) = args.ifdown {
             self.ifdown = Some(val);
         }
@@ -472,6 +473,10 @@ pub struct Args {
     /// An IP address (plus optional prefix length) for the interface
     #[structopt(long)]
     pub ip: Option<String>,
+
+    /// A list of IP Addresses to advertise as our external address(s)
+    #[structopt(long = "advertise_addresses", use_delimiter = true)]
+    pub advertise_addresses: Vec<String>,
 
     /// A command to setup the network interface
     #[structopt(long)]
