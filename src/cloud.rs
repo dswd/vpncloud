@@ -29,7 +29,7 @@ use crate::{
         AddrList, NodeInfo, PeerInfo, MESSAGE_TYPE_CLOSE, MESSAGE_TYPE_DATA, MESSAGE_TYPE_KEEPALIVE,
         MESSAGE_TYPE_NODE_INFO,
     },
-    net::{mapped_addr, Socket},
+    net::{mapped_addr, parse_listen, Socket},
     payload::Protocol,
     poll::{WaitImpl, WaitResult},
     port_forwarding::PortForwarding,
@@ -222,11 +222,26 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
 
     pub fn reset_own_addresses(&mut self) -> io::Result<()> {
         self.own_addresses.clear();
-        self.own_addresses.push(self.socket.address().map(mapped_addr)?);
-        if let Some(ref pfw) = self.port_forwarding {
-            self.own_addresses.push(pfw.get_internal_ip().into());
-            self.own_addresses.push(pfw.get_external_ip().into());
-        }
+        if self.config.advertise_addresses.len() > 0 &&
+            !self.config.listen.starts_with("ws://") {
+                // Force advertised addresses based on configuration instead
+                // of discovery. Note: Disables port forwarding
+                // Because the listen config may contain a color (aka
+                // both address and port are specified) we parse it and
+                // then extract just the port.
+                let sockaddr = parse_listen(&self.config.listen);
+                let port = sockaddr.port();
+                for address in &self.config.advertise_addresses {
+                    let sockaddr = try_fail!(SocketAddr::from_str(&format!("{}:{}", address, port)), "Invalid IP Address or port {}");
+                    self.own_addresses.push(sockaddr);
+                }
+            } else {
+                self.own_addresses.push(self.socket.address().map(mapped_addr)?);
+                if let Some(ref pfw) = self.port_forwarding {
+                    self.own_addresses.push(pfw.get_internal_ip().into());
+                    self.own_addresses.push(pfw.get_external_ip().into());
+                }
+            }
         debug!("Own addresses: {:?}", self.own_addresses);
         // TODO: detect address changes and call event
         Ok(())
