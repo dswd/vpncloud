@@ -1,3 +1,17 @@
+vpncloud (2.2.0) stable; urgency=medium
+
+ * [added] Service target file (thanks to mnhauke)
+ * [added] Added interactive configuration wizard
+ * [added] Support for (un-)installation
+ * [added] Building static binaries
+ * [added] Building i686 rpm
+ * [changed] Restructured example config
+ * [changed] Changed Rust version to 1.51.0
+ * [changed] Updated dependencies
+ * [changed] Change permissions of /etc/vpncloud
+
+ -- Dennis Schwerdel <schwerdel+vpncloud@googlemail.com>  Tue, 06 Apr 2021 12:27:00 +0200
+
 vpncloud (2.1.0) stable; urgency=medium
 
   * [added] Support for websocket proxy mode
@@ -9,7 +23,7 @@ vpncloud (2.1.0) stable; urgency=medium
   * [fixed] Added missing peer address propagation
   * [fixed] Fixed problem with peer addresses without port
 
- -- Dennis Schwerdel <schwerdel@googlemail.com>  Sat, 06 Feb 2020 13:13:00 +0100
+ -- Dennis Schwerdel <schwerdel@googlemail.com>  Sat, 06 Feb 2021 13:13:00 +0100
 
 vpncloud (2.0.1) stable; urgency=medium
 

@@ -6,7 +6,6 @@ use thiserror::Error;
 
 use std::io;
 
-
 #[derive(Error, Debug)]
 pub enum Error {
     /// Crypto init error, this is recoverable
@@ -52,5 +51,5 @@ pub enum Error {
     Parse(&'static str),
 
     #[error("Name can not be resolved: {0}")]
-    NameUnresolvable(String)
+    NameUnresolvable(String),
 }

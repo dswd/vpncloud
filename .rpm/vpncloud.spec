@@ -28,6 +28,7 @@ mkdir -p %{buildroot}/lib/systemd/system
 mkdir -p %{buildroot}/usr/share/man/man1
 cp %{buildroot}/../../../../../assets/example.net.disabled %{buildroot}/etc/vpncloud/example.net.disabled
 cp %{buildroot}/../../../../../assets/vpncloud@.service %{buildroot}/lib/systemd/system/vpncloud@.service
+cp %{buildroot}/../../../../../assets/vpncloud.target %{buildroot}/lib/systemd/system/vpncloud.target
 cp %{buildroot}/../../../../../assets/vpncloud-wsproxy.service %{buildroot}/lib/systemd/system/vpncloud-wsproxy.service
 cp %{buildroot}/../../../../../target/vpncloud.1.gz %{buildroot}/usr/share/man/man1/vpncloud.1.gz
 cp -a * %{buildroot}
@@ -40,6 +41,7 @@ rm -rf %{buildroot}
 /etc/vpncloud/example.net.disabled
 /usr/bin/vpncloud
 /lib/systemd/system/vpncloud@.service
+/lib/systemd/system/vpncloud.target
 /lib/systemd/system/vpncloud-wsproxy.service
 /usr/share/man/man1/vpncloud.1.gz
 

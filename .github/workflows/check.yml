@@ -18,6 +18,9 @@ jobs:
     name: Test Suite
     runs-on: ubuntu-latest
     steps:
+      - uses: szenius/set-timezone@v1.0
+        with:
+          timezoneLinux: Europe/Berlin
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:

@@ -40,15 +40,17 @@ pub trait Socket: Sized + Clone + Send + Sync + 'static {
     async fn create_port_forwarding(&self) -> Option<PortForwarding>;
 }
 
-pub fn parse_listen(addr: &str) -> SocketAddr {
+pub fn parse_listen(addr: &str, default_port: u16) -> SocketAddr {
     if let Some(addr) = addr.strip_prefix("*:") {
         let port = try_fail!(addr.parse::<u16>(), "Invalid port: {}");
         SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
     } else if addr.contains(':') {
         try_fail!(addr.parse::<SocketAddr>(), "Invalid address: {}: {}", addr)
-    } else {
-        let port = try_fail!(addr.parse::<u16>(), "Invalid port: {}");
+    } else if let Ok(port) = addr.parse::<u16>() {
         SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
+    } else {
+        let ip = try_fail!(addr.parse::<IpAddr>(), "Invalid addr: {}");
+        SocketAddr::new(ip, default_port)
     }
 }
 

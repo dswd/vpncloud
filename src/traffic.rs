@@ -6,13 +6,13 @@ use std::{
     collections::HashMap,
     io::{self, Write},
     net::SocketAddr,
-    ops::AddAssign
+    ops::AddAssign,
 };
 
 use super::{
     engine::common::{Hash, STATS_INTERVAL},
     types::Address,
-    util::{addr_nice, Bytes}
+    util::{addr_nice, Bytes},
 };
 
 
@@ -26,7 +26,7 @@ pub struct TrafficEntry {
     pub in_packets_total: usize,
     pub in_bytes: u64,
     pub in_packets: usize,
-    pub idle_periods: usize
+    pub idle_periods: usize,
 }
 
 impl AddAssign<&TrafficEntry> for TrafficEntry {
@@ -72,12 +72,11 @@ impl TrafficEntry {
     }
 }
 
-
 #[derive(Default)]
 pub struct TrafficStats {
     peers: HashMap<SocketAddr, TrafficEntry, Hash>,
     payload: HashMap<(Address, Address), TrafficEntry, Hash>,
-    pub dropped: TrafficEntry
+    pub dropped: TrafficEntry,
 }
 
 impl TrafficStats {

@@ -7,5 +7,6 @@ mod core;
 mod init;
 mod rotate;
 
+pub use self::core::{EXTRA_LEN, TAG_LEN};
 pub use common::*;
 pub use self::core::{EXTRA_LEN, TAG_LEN};

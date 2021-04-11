@@ -2,21 +2,14 @@
 // Copyright (C) 2015-2021  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use super::{device::Type, types::Mode, util::Duration, util::run_cmd};
+use super::{device::Type, types::Mode, util::run_cmd, util::Duration};
 pub use crate::crypto::Config as CryptoConfig;
 
-use std::{
-    cmp::max,
-    collections::HashMap,
-    ffi::OsStr,
-    process,
-    thread
-};
+use std::{cmp::max, collections::HashMap, ffi::OsStr, process, thread};
 use structopt::{clap::Shell, StructOpt};
 
 pub const DEFAULT_PEER_TIMEOUT: u16 = 300;
 pub const DEFAULT_PORT: u16 = 3210;
-
 
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Config {
@@ -27,6 +20,7 @@ pub struct Config {
     pub fix_rp_filter: bool,
 
     pub ip: Option<String>,
+    pub advertise_addresses: Vec<String>,
     pub ifup: Option<String>,
     pub ifdown: Option<String>,
 
@@ -53,7 +47,7 @@ pub struct Config {
     pub user: Option<String>,
     pub group: Option<String>,
     pub hook: Option<String>,
-    pub hooks: HashMap<String, String>
+    pub hooks: HashMap<String, String>,
 }
 
 impl Default for Config {
@@ -65,6 +59,7 @@ impl Default for Config {
             device_mtu: None,
             fix_rp_filter: false,
             ip: None,
+            advertise_addresses: vec![],
             ifup: None,
             ifdown: None,
             crypto: CryptoConfig::default(),
@@ -89,7 +84,7 @@ impl Default for Config {
             user: None,
             group: None,
             hook: None,
-            hooks: HashMap::new()
+            hooks: HashMap::new(),
         }
     }
 }
@@ -116,6 +111,9 @@ impl Config {
         }
         if let Some(val) = file.ip {
             self.ip = Some(val);
+        }
+        if let Some(mut val) = file.advertise_addresses {
+            self.advertise_addresses.append(&mut val);
         }
         if let Some(val) = file.ifup {
             self.ifup = Some(val);
@@ -227,6 +225,7 @@ impl Config {
         if let Some(val) = args.ifup {
             self.ifup = Some(val);
         }
+        self.advertise_addresses.append(&mut args.advertise_addresses);
         if let Some(val) = args.ifdown {
             self.ifdown = Some(val);
         }
@@ -303,7 +302,7 @@ impl Config {
             if s.contains(':') {
                 let pos = s.find(':').unwrap();
                 let name = &s[..pos];
-                let hook = &s[pos+1..];
+                let hook = &s[pos + 1..];
                 self.hooks.insert(name.to_string(), hook.to_string());
             } else {
                 self.hook = Some(s);
@@ -319,14 +318,14 @@ impl Config {
                 store: self.beacon_store,
                 load: self.beacon_load,
                 interval: Some(self.beacon_interval),
-                password: self.beacon_password
+                password: self.beacon_password,
             }),
             device: Some(ConfigFileDevice {
                 name: Some(self.device_name),
                 path: self.device_path,
                 mtu: self.device_mtu,
                 type_: Some(self.device_type),
-                fix_rp_filter: Some(self.fix_rp_filter)
+                fix_rp_filter: Some(self.fix_rp_filter),
             }),
             crypto: self.crypto,
             group: self.group,
@@ -334,6 +333,7 @@ impl Config {
             ifup: self.ifup,
             ifdown: self.ifdown,
             ip: self.ip,
+            advertise_addresses: Some(self.advertise_addresses),
             keepalive: self.keepalive,
             listen: Some(self.listen),
             mode: Some(self.mode),
@@ -342,13 +342,10 @@ impl Config {
             pid_file: self.pid_file,
             port_forwarding: Some(self.port_forwarding),
             stats_file: self.stats_file,
-            statsd: Some(ConfigFileStatsd {
-                server: self.statsd_server,
-                prefix: self.statsd_prefix
-            }),
+            statsd: Some(ConfigFileStatsd { server: self.statsd_server, prefix: self.statsd_prefix }),
             switch_timeout: Some(self.switch_timeout),
             hook: self.hook,
-            hooks: self.hooks
+            hooks: self.hooks,
         }
     }
 
@@ -388,7 +385,7 @@ impl Config {
     }
 
     pub fn call_hook(
-        &self, event: &'static str, envs: impl IntoIterator<Item = (&'static str, impl AsRef<OsStr>)>, detach: bool
+        &self, event: &'static str, envs: impl IntoIterator<Item = (&'static str, impl AsRef<OsStr>)>, detach: bool,
     ) {
         let mut script = None;
         if let Some(ref s) = self.hook {
@@ -398,7 +395,7 @@ impl Config {
             script = Some(s);
         }
         if script.is_none() {
-            return
+            return;
         }
         let script = script.unwrap();
         let mut cmd = process::Command::new("sh");
@@ -518,6 +515,10 @@ pub struct Args {
     #[structopt(long)]
     pub ip: Option<String>,
 
+    /// A list of IP Addresses to advertise as our external address(s)
+    #[structopt(long = "advertise_addresses", use_delimiter = true)]
+    pub advertise_addresses: Vec<String>,
+
     /// A command to setup the network interface
     #[structopt(long)]
     pub ifup: Option<String>,
@@ -589,8 +590,8 @@ pub enum Command {
     #[structopt(alias = "wsproxy")]
     WsProxy {
         /// Websocket listen address IP:PORT
-        #[structopt(long, short, default_value="3210")]
-        listen: String
+        #[structopt(long, short, default_value = "3210")]
+        listen: String,
     },
 
     /// Migrate an old config file
@@ -604,8 +605,8 @@ pub enum Command {
     /// Generate shell completions
     Completion {
         /// Shell to create completions for
-        #[structopt(long, default_value="bash")]
-        shell: Shell
+        #[structopt(long, default_value = "bash")]
+        shell: Shell,
     },
 
     /// Edit the config of a network
@@ -613,7 +614,7 @@ pub enum Command {
     Config {
         /// Name of the network
         #[structopt(short, long)]
-        name: Option<String>
+        name: Option<String>,
     },
 
     /// Install required utility files
@@ -621,8 +622,8 @@ pub enum Command {
     Install {
         /// Remove installed files again
         #[structopt(long)]
-        uninstall: bool
-    }
+        uninstall: bool,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
@@ -658,6 +659,7 @@ pub struct ConfigFile {
     pub device: Option<ConfigFileDevice>,
 
     pub ip: Option<String>,
+    pub advertise_addresses: Option<Vec<String>>,
     pub ifup: Option<String>,
     pub ifdown: Option<String>,
 
@@ -679,7 +681,7 @@ pub struct ConfigFile {
     pub user: Option<String>,
     pub group: Option<String>,
     pub hook: Option<String>,
-    pub hooks: HashMap<String, String>
+    pub hooks: HashMap<String, String>,
 }
 
 #[test]
@@ -691,6 +693,9 @@ device:
   path: /dev/net/tun
   mtu: 1400
 ip: 10.0.1.1/16
+advertise-addresses:
+  - 192.168.0.1
+  - 192.168.1.1
 ifup: ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up
 ifdown: 'true'
 peers:
@@ -727,6 +732,7 @@ statsd:
                 fix_rp_filter: None
             }),
             ip: Some("10.0.1.1/16".to_string()),
+            advertise_addresses: Some(vec!["192.168.0.1".to_string(), "192.168.1.1".to_string()]),
             ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
             ifdown: Some("true".to_string()),
             crypto: CryptoConfig::default(),
@@ -776,6 +782,7 @@ async fn config_merge() {
             fix_rp_filter: None,
         }),
         ip: None,
+        advertise_addresses: Some(vec![]),
         ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
         ifdown: Some("true".to_string()),
         crypto: CryptoConfig::default(),
@@ -803,35 +810,39 @@ async fn config_merge() {
             prefix: Some("prefix".to_string()),
         }),
         hook: None,
-        hooks: HashMap::new()
+        hooks: HashMap::new(),
     });
-    assert_eq!(config, Config {
-        device_type: Type::Tun,
-        device_name: "vpncloud%d".to_string(),
-        device_path: None,
-        ip: None,
-        ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
-        ifdown: Some("true".to_string()),
-        listen: "3210".to_string(),
-        peers: vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()],
-        peer_timeout: 600,
-        keepalive: Some(840),
-        switch_timeout: 300,
-        beacon_store: Some("/run/vpncloud.beacon.out".to_string()),
-        beacon_load: Some("/run/vpncloud.beacon.in".to_string()),
-        beacon_interval: 7200,
-        beacon_password: Some("test123".to_string()),
-        mode: Mode::Normal,
-        port_forwarding: true,
-        claims: vec!["10.0.1.0/24".to_string()],
-        user: Some("nobody".to_string()),
-        group: Some("nogroup".to_string()),
-        pid_file: Some("/run/vpncloud.run".to_string()),
-        stats_file: Some("/var/log/vpncloud.stats".to_string()),
-        statsd_server: Some("example.com:1234".to_string()),
-        statsd_prefix: Some("prefix".to_string()),
-        ..Default::default()
-    });
+    assert_eq!(
+        config,
+        Config {
+            device_type: Type::Tun,
+            device_name: "vpncloud%d".to_string(),
+            device_path: None,
+            ip: None,
+            advertise_addresses: vec![],
+            ifup: Some("ifconfig $IFNAME 10.0.1.1/16 mtu 1400 up".to_string()),
+            ifdown: Some("true".to_string()),
+            listen: "3210".to_string(),
+            peers: vec!["remote.machine.foo:3210".to_string(), "remote.machine.bar:3210".to_string()],
+            peer_timeout: 600,
+            keepalive: Some(840),
+            switch_timeout: 300,
+            beacon_store: Some("/run/vpncloud.beacon.out".to_string()),
+            beacon_load: Some("/run/vpncloud.beacon.in".to_string()),
+            beacon_interval: 7200,
+            beacon_password: Some("test123".to_string()),
+            mode: Mode::Normal,
+            port_forwarding: true,
+            claims: vec!["10.0.1.0/24".to_string()],
+            user: Some("nobody".to_string()),
+            group: Some("nogroup".to_string()),
+            pid_file: Some("/run/vpncloud.run".to_string()),
+            stats_file: Some("/var/log/vpncloud.stats".to_string()),
+            statsd_server: Some("example.com:1234".to_string()),
+            statsd_prefix: Some("prefix".to_string()),
+            ..Default::default()
+        }
+    );
     config.merge_args(Args {
         type_: Some(Type::Tap),
         device: Some("vpncloud0".to_string()),
@@ -866,6 +877,7 @@ async fn config_merge() {
         device_path: Some("/dev/null".to_string()),
         device_mtu: None,
         fix_rp_filter: false,
+        advertise_addresses: vec![],
         ip: None,
         ifup: Some("ifconfig $IFNAME 10.0.1.2/16 mtu 1400 up".to_string()),
         ifdown: Some("ifconfig $IFNAME down".to_string()),

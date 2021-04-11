@@ -43,7 +43,7 @@ impl Protocol for Frame {
                 // treat vlan id 0x000 as untagged
                 src.copy_within(2..8, 0);
                 dst.copy_within(2..8, 0);
-                return Ok((Address { data: src, len: 6 }, Address { data: dst, len: 6 }))
+                return Ok((Address { data: src, len: 6 }, Address { data: dst, len: 6 }));
             }
             Ok((Address { data: src, len: 8 }, Address { data: dst, len: 8 }))
         } else {
@@ -51,7 +51,6 @@ impl Protocol for Frame {
         }
     }
 }
-
 
 #[test]
 async fn decode_frame_without_vlan() {
@@ -93,13 +92,13 @@ impl Protocol for Packet {
     fn parse(data: &[u8]) -> Result<(Address, Address), Error> {
         // HOT PATH
         if data.is_empty() {
-            return Err(Error::Parse("Empty header"))
+            return Err(Error::Parse("Empty header"));
         }
         let version = data[0] >> 4;
         match version {
             4 => {
                 if data.len() < 20 {
-                    return Err(Error::Parse("Truncated IPv4 header"))
+                    return Err(Error::Parse("Truncated IPv4 header"));
                 }
                 let src = Address::read_from_fixed(&data[12..], 4)?;
                 let dst = Address::read_from_fixed(&data[16..], 4)?;
@@ -107,17 +106,16 @@ impl Protocol for Packet {
             }
             6 => {
                 if data.len() < 40 {
-                    return Err(Error::Parse("Truncated IPv6 header"))
+                    return Err(Error::Parse("Truncated IPv6 header"));
                 }
                 let src = Address::read_from_fixed(&data[8..], 16)?;
                 let dst = Address::read_from_fixed(&data[24..], 16)?;
                 Ok((src, dst))
             }
-            _ => Err(Error::Parse("Invalid IP protocol version"))
+            _ => Err(Error::Parse("Invalid IP protocol version")),
         }
     }
 }
-
 
 #[test]
 async fn decode_ipv4_packet() {
@@ -131,7 +129,7 @@ async fn decode_ipv4_packet() {
 async fn decode_ipv6_packet() {
     let data = [
         0x60, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 6, 5,
-        4, 3, 2, 1
+        4, 3, 2, 1,
     ];
     let (src, dst) = Packet::parse(&data).unwrap();
     assert_eq!(src, Address { data: [1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6], len: 16 });

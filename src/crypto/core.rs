@@ -44,7 +44,7 @@
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use ring::{
     aead::{self, LessSafeKey, UnboundKey},
-    rand::{SecureRandom, SystemRandom}
+    rand::{SecureRandom, SystemRandom},
 };
 use std::cell::UnsafeCell;
 
@@ -57,11 +57,9 @@ use std::{
 
 use crate::{error::Error, util::MsgBuffer};
 
-
 const NONCE_LEN: usize = 12;
 pub const TAG_LEN: usize = 16;
 pub const EXTRA_LEN: usize = 8;
-
 
 fn random_data(size: usize) -> Vec<u8> {
     let rand = SystemRandom::new();
@@ -98,7 +96,7 @@ impl Nonce {
             num = num.wrapping_add(1);
             self.0[i] = num;
             if num > 0 {
-                return
+                return;
             }
         }
     }
@@ -109,7 +107,7 @@ struct CryptoKey {
     send_nonce: Nonce,
     min_nonce: Nonce,
     next_min_nonce: Nonce,
-    seen_nonce: Nonce
+    seen_nonce: Nonce,
 }
 
 impl CryptoKey {
@@ -121,7 +119,7 @@ impl CryptoKey {
             send_nonce,
             min_nonce: Nonce::zero(),
             next_min_nonce: Nonce::zero(),
-            seen_nonce: Nonce::zero()
+            seen_nonce: Nonce::zero(),
         }
     }
 
@@ -190,7 +188,7 @@ impl CryptoCore {
 
     fn decrypt_with_key(key: &mut CryptoKey, nonce: Nonce, data_and_tag: &mut [u8]) -> Result<(), Error> {
         if nonce < key.min_nonce {
-            return Err(Error::Crypto("Old nonce rejected"))
+            return Err(Error::Crypto("Old nonce rejected"));
         }
         // decrypt
         let crypto_nonce = aead::Nonce::assume_unique_for_key(*nonce.as_bytes());
@@ -273,7 +271,6 @@ pub fn test_speed(algo: &'static aead::Algorithm, max_time: &Duration) -> f64 {
     data as f64 / duration / 1_000_000.0
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,7 +312,6 @@ mod tests {
     async fn test_encrypt_decrypt_chacha() {
         test_encrypt_decrypt(&aead::CHACHA20_POLY1305)
     }
-
 
     fn test_tampering(algo: &'static aead::Algorithm) {
         let (sender, receiver) = create_dummy_pair(algo);
@@ -446,7 +442,6 @@ mod tests {
     async fn test_key_rotation_chacha() {
         test_key_rotation(&aead::CHACHA20_POLY1305);
     }
-
 
     #[test]
     async fn test_core_size() {

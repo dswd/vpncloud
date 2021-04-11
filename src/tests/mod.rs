@@ -6,3 +6,8 @@ mod common;
 mod nat;
 mod payload;
 mod peers;
+
+#[test]
+fn test_time_format() {
+    assert!(time::OffsetDateTime::try_now_local().is_ok());
+}
