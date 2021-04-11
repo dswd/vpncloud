@@ -2,15 +2,15 @@
 // Copyright (C) 2015-2021  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use super::util::{MockTimeSource, MsgBuffer, Time, TimeSource};
+use crate::config::DEFAULT_PORT;
 use crate::port_forwarding::PortForwarding;
+use crate::util::{MockTimeSource, MsgBuffer, Time, TimeSource};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use std::{
     collections::{HashMap, VecDeque},
     io::{self, ErrorKind},
     net::{IpAddr, Ipv6Addr, SocketAddr, UdpSocket},
-    os::unix::io::AsRawFd,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -62,11 +62,10 @@ impl Clone for NetSocket {
     }
 }
 
-
 #[async_trait]
 impl Socket for NetSocket {
     async fn listen(addr: &str) -> Result<Self, io::Error> {
-        let addr = parse_listen(addr);
+        let addr = parse_listen(addr, DEFAULT_PORT);
         Ok(NetSocket(UdpSocket::bind(addr)?))
     }
 
@@ -144,11 +143,10 @@ impl MockSocket {
     }
 }
 
-
 #[async_trait]
 impl Socket for MockSocket {
     async fn listen(addr: &str) -> Result<Self, io::Error> {
-        Ok(Self::new(parse_listen(addr)))
+        Ok(Self::new(parse_listen(addr, DEFAULT_PORT)))
     }
 
     async fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {

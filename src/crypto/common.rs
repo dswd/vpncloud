@@ -8,7 +8,6 @@ use crate::{
     types::NodeId,
     util::{from_base62, to_base62, MsgBuffer},
 };
-use libc::BPF_FS_MAGIC;
 use ring::{
     aead::{self, Algorithm, LessSafeKey, UnboundKey},
     agreement::{EphemeralPrivateKey, UnparsedPublicKey},
@@ -253,8 +252,8 @@ impl PeerCrypto {
                 if msg.stage() == STAGE_PONG {
                     buffer.set_length(last_init_message.len());
                     buffer.message_mut().copy_from_slice(last_init_message);
+                    return Ok(MessageResult::Reply)
                 }
-                return Ok(MessageResult::Reply)
             }
         }
         Ok(MessageResult::None)
