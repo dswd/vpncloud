@@ -16,7 +16,7 @@ toolchain = "1.51.0"
 upx_version = "3.96"
 
 [dependencies]
-time = "=0.2.22"
+chrono = { version = "0.4", features = ["std", "clock"], default_features = false}
 structopt = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
@@ -36,6 +36,7 @@ dialoguer = { version = "0.8", optional = true }
 tungstenite = { version = "0.13", optional = true, default-features = false }
 url = { version = "2.2", optional = true }
 igd = { version = "0.12", optional = true }
+
 
 [dev-dependencies]
 tempfile = "3"
