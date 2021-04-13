@@ -1,6 +1,6 @@
 use super::{
-    shared::{SharedPeerCrypto, SharedTable, SharedTraffic},
     common::SPACE_BEFORE,
+    shared::{SharedPeerCrypto, SharedTable, SharedTraffic},
 };
 use crate::{
     config::Config,
@@ -11,6 +11,8 @@ use crate::{
     util::{MsgBuffer, Time, TimeSource},
     Protocol,
 };
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::{marker::PhantomData, net::SocketAddr};
 use tokio::time::timeout;
 
@@ -29,12 +31,13 @@ pub struct DeviceThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
     traffic: SharedTraffic,
     peer_crypto: SharedPeerCrypto,
     table: SharedTable<TS>,
+    running: Arc<AtomicBool>,
 }
 
 impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS> {
     pub fn new(
         config: Config, device: D, socket: S, traffic: SharedTraffic, peer_crypto: SharedPeerCrypto,
-        table: SharedTable<TS>,
+        table: SharedTable<TS>, running: Arc<AtomicBool>,
     ) -> Self {
         Self {
             _dummy_ts: PhantomData,
@@ -47,7 +50,8 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
             peer_crypto,
             table,
             buffer: MsgBuffer::new(SPACE_BEFORE),
-            broadcast_buffer: MsgBuffer::new(SPACE_BEFORE)
+            broadcast_buffer: MsgBuffer::new(SPACE_BEFORE),
+            running,
         }
     }
 
@@ -144,7 +148,11 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
 
     pub async fn run(mut self) {
         loop {
-            self.iteration().await
+            self.iteration().await;
+            if !self.running.load(Ordering::SeqCst) {
+                debug!("Device: end");
+                return
+            }
         }
     }
 }

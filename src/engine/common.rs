@@ -1,13 +1,27 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::{fs::File, hash::BuildHasherDefault};
 use tokio;
 
 use fnv::FnvHasher;
 
-use crate::{config::Config, crypto::PeerCrypto, device::Device, engine::{
+use crate::{
+    config::Config,
+    crypto::PeerCrypto,
+    device::Device,
+    engine::{
         device_thread::DeviceThread,
         shared::{SharedPeerCrypto, SharedTable, SharedTraffic},
-        socket_thread::{SocketThread, ReconnectEntry},
-    }, error::Error, messages::AddrList, net::Socket, payload::Protocol, port_forwarding::PortForwarding, types::NodeId, util::{CtrlC, Time, TimeSource, resolve}};
+        socket_thread::{ReconnectEntry, SocketThread},
+    },
+    error::Error,
+    messages::AddrList,
+    net::Socket,
+    payload::Protocol,
+    port_forwarding::PortForwarding,
+    types::NodeId,
+    util::{resolve, Time, TimeSource},
+};
 
 pub type Hash = BuildHasherDefault<FnvHasher>;
 
@@ -27,6 +41,7 @@ pub struct PeerData {
 pub struct GenericCloud<D: Device, P: Protocol, S: Socket, TS: TimeSource> {
     socket_thread: SocketThread<S, D, P, TS>,
     device_thread: DeviceThread<S, D, P, TS>,
+    running: Arc<AtomicBool>,
 }
 
 impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS> {
@@ -37,6 +52,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         let table = SharedTable::<TS>::new(&config);
         let traffic = SharedTraffic::new();
         let peer_crypto = SharedPeerCrypto::new();
+        let running = Arc::new(AtomicBool::new(true));
         let device_thread = DeviceThread::<S, D, P, TS>::new(
             config.clone(),
             device.duplicate().await?,
@@ -44,6 +60,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             traffic.clone(),
             peer_crypto.clone(),
             table.clone(),
+            running.clone(),
         );
         let mut socket_thread = SocketThread::<S, D, P, TS>::new(
             config.clone(),
@@ -54,32 +71,37 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             table,
             port_forwarding,
             stats_file,
+            running.clone(),
         );
         socket_thread.housekeep().await?;
-        Ok(Self { socket_thread, device_thread })
+        Ok(Self { socket_thread, device_thread, running })
     }
 
     pub fn add_peer(&mut self, addr: String) -> Result<(), Error> {
         let resolved = resolve(addr.clone())?;
-        self.socket_thread.reconnect_peers.push(ReconnectEntry{
+        self.socket_thread.reconnect_peers.push(ReconnectEntry {
             address: Some((addr, TS::now())),
             resolved,
             tries: 0,
             timeout: 1,
             next: TS::now(),
-            final_timeout: None
+            final_timeout: None,
         });
         Ok(())
     }
 
     pub async fn run(self) {
-        let ctrlc = CtrlC::new();
+        debug!("Starting threads");
+        let running = self.running.clone();
         let device_thread_handle = tokio::spawn(self.device_thread.run());
         let socket_thread_handle = tokio::spawn(self.socket_thread.run());
-        // TODO: wait for ctrl-c
+        try_fail!(tokio::signal::ctrl_c().await, "Failed to set ctrl-c handler: {}");
+        running.store(false, Ordering::SeqCst);
+        debug!("Waiting for threads to end");
         let (dev_ret, sock_ret) = join!(device_thread_handle, socket_thread_handle);
         dev_ret.unwrap();
         sock_ret.unwrap();
+        debug!("Threads stopped");
     }
 }
 

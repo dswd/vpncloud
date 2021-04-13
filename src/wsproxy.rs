@@ -15,7 +15,6 @@ use std::{
     net::{Ipv6Addr, SocketAddr, SocketAddrV6, TcpListener, TcpStream, UdpSocket},
     os::unix::io::AsRawFd,
     sync::Arc,
-    thread::spawn,
 };
 use tungstenite::{client::AutoStream, connect, protocol::WebSocket, server::accept, Message};
 use url::Url;
@@ -100,7 +99,7 @@ pub fn run_proxy(listen: &str) -> Result<(), io::Error> {
     for stream in server.incoming() {
         let stream = stream?;
         let peer = stream.peer_addr()?;
-        spawn(move || {
+        tokio::spawn(async move {
             if let Err(err) = serve_proxy_connection(stream) {
                 error!("Error on connection {}: {}", peer, err);
             }

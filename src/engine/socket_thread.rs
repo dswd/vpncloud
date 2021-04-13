@@ -22,6 +22,8 @@ use crate::{
 };
 use rand::{random, seq::SliceRandom, thread_rng};
 use smallvec::{smallvec, SmallVec};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::{
     cmp::{max, min},
     collections::HashMap,
@@ -82,6 +84,7 @@ pub struct SocketThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
     peer_crypto: SharedPeerCrypto,
     traffic: SharedTraffic,
     table: SharedTable<TS>,
+    running: Arc<AtomicBool>,
     // Should not be here
     port_forwarding: Option<PortForwarding>, // TODO: 3rd thread
 }
@@ -90,6 +93,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
     pub fn new(
         config: Config, device: D, socket: S, traffic: SharedTraffic, peer_crypto: SharedPeerCrypto,
         table: SharedTable<TS>, port_forwarding: Option<PortForwarding>, stats_file: Option<File>,
+        running: Arc<AtomicBool>,
     ) -> Self {
         let mut claims = SmallVec::with_capacity(config.claims.len());
         for s in &config.claims {
@@ -142,6 +146,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             config,
             buffer: MsgBuffer::new(SPACE_BEFORE),
             broadcast_buffer: MsgBuffer::new(SPACE_BEFORE),
+            running,
         }
     }
 
@@ -747,7 +752,11 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
 
     pub async fn run(mut self) {
         loop {
-            self.iteration().await
+            self.iteration().await;
+            if !self.running.load(Ordering::SeqCst) {
+                debug!("Socket: end");
+                return;
+            }
         }
     }
 }

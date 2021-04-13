@@ -7,10 +7,11 @@ use crate::port_forwarding::PortForwarding;
 use crate::util::{MockTimeSource, MsgBuffer, Time, TimeSource};
 use async_trait::async_trait;
 use parking_lot::Mutex;
+use tokio::net::UdpSocket;
 use std::{
     collections::{HashMap, VecDeque},
     io::{self, ErrorKind},
-    net::{IpAddr, Ipv6Addr, SocketAddr, UdpSocket},
+    net::{IpAddr, Ipv6Addr, SocketAddr},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -26,7 +27,7 @@ pub fn mapped_addr(addr: SocketAddr) -> SocketAddr {
 }
 
 pub fn get_ip() -> IpAddr {
-    let s = UdpSocket::bind("[::]:0").unwrap();
+    let s = std::net::UdpSocket::bind("[::]:0").unwrap();
     s.connect("8.8.8.8:0").unwrap();
     s.local_addr().unwrap().ip()
 }
@@ -54,11 +55,11 @@ pub fn parse_listen(addr: &str, default_port: u16) -> SocketAddr {
     }
 }
 
-pub struct NetSocket(UdpSocket);
+pub struct NetSocket(Arc<UdpSocket>);
 
 impl Clone for NetSocket {
     fn clone(&self) -> Self {
-        Self(try_fail!(self.0.try_clone(), "Failed to clone socket: {}"))
+        Self(self.0.clone())
     }
 }
 
@@ -66,18 +67,18 @@ impl Clone for NetSocket {
 impl Socket for NetSocket {
     async fn listen(addr: &str) -> Result<Self, io::Error> {
         let addr = parse_listen(addr, DEFAULT_PORT);
-        Ok(NetSocket(UdpSocket::bind(addr)?))
+        Ok(NetSocket(Arc::new(UdpSocket::bind(addr).await?)))
     }
 
     async fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
         buffer.clear();
-        let (size, addr) = self.0.recv_from(buffer.buffer())?;
+        let (size, addr) = self.0.recv_from(buffer.buffer()).await?;
         buffer.set_length(size);
         Ok(addr)
     }
 
     async fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error> {
-        self.0.send_to(data, addr)
+        self.0.send_to(data, addr).await
     }
 
     async fn address(&self) -> Result<SocketAddr, io::Error> {

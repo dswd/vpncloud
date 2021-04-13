@@ -339,4 +339,5 @@ async fn main() {
         Type::Tap => run::<payload::Frame, _>(config, socket).await,
         Type::Tun => run::<payload::Packet, _>(config, socket).await
     }
+    std::process::exit(0)
 }

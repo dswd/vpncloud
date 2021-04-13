@@ -21,7 +21,6 @@ structopt = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.8"
 log = { version = "0.4", features = ["std"] }
-signal = "0.7"
 libc = "0.2"
 rand = "0.8"
 fnv = "1"
