@@ -2,6 +2,11 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### UNRELEASED
+
+- [added] Option to specify advertised addresses
+- [added] Peers now learn their own address from peers
+
 ### v2.2.0 (2021-04-06)
 
 - [added] Service target file (thanks to mnhauke)
