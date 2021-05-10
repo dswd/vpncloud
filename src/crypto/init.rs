@@ -244,7 +244,7 @@ impl InitMsg {
         let mut signature: SmallVec<[u8; 32]> = smallvec![0; signature_len];
         r.read_exact(&mut signature).map_err(|_| Error::Parse("Init message too short"))?;
 
-        let signed_data = &r.into_inner()[0..pos];
+        let signed_data = &r.into_inner()[1..pos];
         let public_key = signature::UnparsedPublicKey::new(&ED25519, &public_key_data);
         if public_key.verify(&signed_data, &signature).is_err() {
             return Err(Error::Crypto("invalid signature"));
@@ -376,7 +376,7 @@ impl InitMsg {
         w.write_u8(Self::PART_END)?;
 
         let pos = w.position() as usize;
-        let signature = key.sign(&w.get_ref()[0..pos]);
+        let signature = key.sign(&w.get_ref()[1..pos]);
         w.write_u8(signature.as_ref().len() as u8)?;
         w.write_all(signature.as_ref())?;
 
