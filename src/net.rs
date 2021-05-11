@@ -32,6 +32,12 @@ pub fn get_ip() -> IpAddr {
     s.local_addr().unwrap().ip()
 }
 
+pub trait SocketBuilder {
+    type SocketType: Socket;
+    fn build(self) -> Result<Self::SocketType, io::Error>;
+    fn create_port_forwarding(&self) -> Option<PortForwarding>;
+}
+
 #[async_trait]
 pub trait Socket: Sized + Clone + Send + Sync + 'static {
     async fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error>;
@@ -60,11 +66,18 @@ impl NetSocket {
         let addr = parse_listen(addr, DEFAULT_PORT);
         Ok(Self(UdpSocket::bind(addr)?))
     }
+}
 
-    pub fn create_port_forwarding(&self) -> Option<PortForwarding> {
+impl SocketBuilder for NetSocket {
+    type SocketType = AsyncNetSocket;
+
+    fn create_port_forwarding(&self) -> Option<PortForwarding> {
         PortForwarding::new(self.0.local_addr().unwrap().port())
     }
 
+    fn build(self) -> Result<Self::SocketType, io::Error> {
+        Ok(AsyncNetSocket(Arc::new(AsyncUdpSocket::from_std(self.0)?)))
+    }
 }
 
 pub struct AsyncNetSocket(Arc<AsyncUdpSocket>);
@@ -74,13 +87,6 @@ impl Clone for AsyncNetSocket {
         Self(self.0.clone())
     }
 }
-
-impl AsyncNetSocket {
-    pub fn from_sync(sock: NetSocket) -> Result<Self, io::Error> {
-        Ok(Self(Arc::new(AsyncUdpSocket::from_std(sock.0)?)))
-    }
-}
-
 
 #[async_trait]
 impl Socket for AsyncNetSocket {

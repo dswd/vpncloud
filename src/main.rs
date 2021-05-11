@@ -39,6 +39,7 @@ pub mod wizard;
 #[cfg(feature = "websocket")]
 pub mod wsproxy;
 
+use net::SocketBuilder;
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
 
@@ -176,7 +177,7 @@ fn setup_device(config: &Config) -> TunTapDevice {
 }
 
 #[allow(clippy::cognitive_complexity)]
-fn run<P: Protocol>(config: Config, socket: NetSocket) {
+fn run<P: Protocol, S: SocketBuilder>(config: Config, socket: S) {
     let device = setup_device(&config);
     let port_forwarding = if config.port_forwarding { socket.create_port_forwarding() } else { None };
     let stats_file = match config.stats_file {
@@ -226,9 +227,9 @@ fn run<P: Protocol>(config: Config, socket: NetSocket) {
     rt.block_on(async move {
         // Warning: no async code outside this block, or it will break on daemonize
         let device = AsyncTunTapDevice::from_sync(device);
-        let socket = try_fail!(AsyncNetSocket::from_sync(socket), "Failed to create async socket: {}");
+        let socket = try_fail!(socket.build(), "Failed to create async socket: {}");
         let mut cloud = try_fail!(
-            GenericCloud::<AsyncTunTapDevice, P, AsyncNetSocket, SystemTimeSource>::new(
+            GenericCloud::<AsyncTunTapDevice, P, S::SocketType, SystemTimeSource>::new(
                 &config,
                 socket,
                 device,
@@ -345,27 +346,18 @@ fn main() {
         error!("Either password or private key must be set in config or given as parameter");
         return;
     }
-    /*
     #[cfg(feature = "websocket")]
     if config.listen.starts_with("ws://") {
-        let socket = {
-            let rt = Runtime::new().unwrap();
-            try_fail!(
-                rt.block_on(ProxyConnection::listen(&config.listen)),
-                "Failed to open socket {}: {}",
-                config.listen
-            )
-        };
+        let socket = try_fail!(ProxyConnection::listen(&config.listen), "Failed to open socket {}: {}", config.listen);
         match config.device_type {
             Type::Tap => run::<payload::Frame, _>(config, socket),
             Type::Tun => run::<payload::Packet, _>(config, socket),
         }
         return;
     }
-    */
     let socket = try_fail!(NetSocket::listen(&config.listen), "Failed to open socket {}: {}", config.listen);
     match config.device_type {
-        Type::Tap => run::<payload::Frame>(config, socket),
-        Type::Tun => run::<payload::Packet>(config, socket),
+        Type::Tap => run::<payload::Frame, _>(config, socket),
+        Type::Tun => run::<payload::Packet, _>(config, socket),
     }
 }

@@ -3,7 +3,7 @@
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 use super::{
-    net::{get_ip, mapped_addr, parse_listen, Socket},
+    net::{get_ip, mapped_addr, parse_listen, Socket, SocketBuilder},
     poll::{WaitImpl, WaitResult},
     port_forwarding::PortForwarding,
     util::MsgBuffer,
@@ -115,6 +115,17 @@ pub struct ProxyConnection {
 }
 
 impl ProxyConnection {
+    pub fn listen(url: &str) -> Result<Self, io::Error> {
+        let parsed_url = io_error!(Url::parse(url), "Invalid URL {}: {}", url)?;
+        let (mut socket, _) = io_error!(connect(parsed_url), "Failed to connect to URL {}: {}", url)?;
+        socket.get_mut().set_nodelay(true)?;
+        let addr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
+        let mut con = ProxyConnection { addr, socket: Arc::new(socket) };
+        let addr_data = con.read_message()?;
+        con.addr = read_addr(Cursor::new(&addr_data))?;
+        Ok(con)
+    }
+
     fn read_message(&mut self) -> Result<Vec<u8>, io::Error> {
         loop {
             unimplemented!();
@@ -127,21 +138,20 @@ impl ProxyConnection {
     }
 }
 
+impl SocketBuilder for ProxyConnection {
+    type SocketType = ProxyConnection;
+
+    fn build(self) -> Result<Self::SocketType, io::Error> {
+        Ok(self)
+    }
+
+    fn create_port_forwarding(&self) -> Option<PortForwarding> {
+        None
+    }
+}
+
 #[async_trait]
 impl Socket for ProxyConnection {
-    /*
-    async fn listen(url: &str) -> Result<Self, io::Error> {
-        let parsed_url = io_error!(Url::parse(url), "Invalid URL {}: {}", url)?;
-        let (mut socket, _) = io_error!(connect(parsed_url), "Failed to connect to URL {}: {}", url)?;
-        socket.get_mut().set_nodelay(true)?;
-        let addr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
-        let mut con = ProxyConnection { addr, socket: Arc::new(socket) };
-        let addr_data = con.read_message()?;
-        con.addr = read_addr(Cursor::new(&addr_data))?;
-        Ok(con)
-    }
-    */
-
     async fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
         buffer.clear();
         let data = self.read_message()?;
