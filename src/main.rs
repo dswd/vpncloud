@@ -59,7 +59,7 @@ use crate::{
     crypto::Crypto,
     device::{AsyncTunTapDevice, TunTapDevice, Type},
     engine::common::GenericCloud,
-    net::{AsyncNetSocket, listen_udp},
+    net::{AsyncNetSocket, NetSocket},
     oldconfig::OldConfigFile,
     payload::Protocol,
     util::SystemTimeSource,
@@ -176,10 +176,9 @@ fn setup_device(config: &Config) -> TunTapDevice {
 }
 
 #[allow(clippy::cognitive_complexity)]
-fn run<P: Protocol>(config: Config, socket: UdpSocket) {
+fn run<P: Protocol>(config: Config, socket: NetSocket) {
     let device = setup_device(&config);
-    let port_forwarding = None;
-    //if config.port_forwarding { rt.block_on(socket.create_port_forwarding()) } else { None };
+    let port_forwarding = if config.port_forwarding { socket.create_port_forwarding() } else { None };
     let stats_file = match config.stats_file {
         None => None,
         Some(ref name) => {
@@ -227,7 +226,7 @@ fn run<P: Protocol>(config: Config, socket: UdpSocket) {
     rt.block_on(async move {
         // Warning: no async code outside this block, or it will break on daemonize
         let device = AsyncTunTapDevice::from_sync(device);
-        let socket = try_fail!(AsyncNetSocket::from_socket(socket), "Failed to create async socket: {}");
+        let socket = try_fail!(AsyncNetSocket::from_sync(socket), "Failed to create async socket: {}");
         let mut cloud = try_fail!(
             GenericCloud::<AsyncTunTapDevice, P, AsyncNetSocket, SystemTimeSource>::new(
                 &config,
@@ -364,7 +363,7 @@ fn main() {
         return;
     }
     */
-    let socket = try_fail!(listen_udp(&config.listen), "Failed to open socket {}: {}", config.listen);
+    let socket = try_fail!(NetSocket::listen(&config.listen), "Failed to open socket {}: {}", config.listen);
     match config.device_type {
         Type::Tap => run::<payload::Frame>(config, socket),
         Type::Tun => run::<payload::Packet>(config, socket),

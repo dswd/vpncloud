@@ -37,7 +37,6 @@ pub trait Socket: Sized + Clone + Send + Sync + 'static {
     async fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error>;
     async fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error>;
     async fn address(&self) -> Result<SocketAddr, io::Error>;
-    async fn create_port_forwarding(&self) -> Option<PortForwarding>;
 }
 
 pub fn parse_listen(addr: &str, default_port: u16) -> SocketAddr {
@@ -54,9 +53,18 @@ pub fn parse_listen(addr: &str, default_port: u16) -> SocketAddr {
     }
 }
 
-pub fn listen_udp(addr: &str) -> Result<UdpSocket, io::Error> {
-    let addr = parse_listen(addr, DEFAULT_PORT);
-    UdpSocket::bind(addr)
+pub struct NetSocket(UdpSocket);
+
+impl NetSocket {
+    pub fn listen(addr: &str) -> Result<Self, io::Error> {
+        let addr = parse_listen(addr, DEFAULT_PORT);
+        Ok(Self(UdpSocket::bind(addr)?))
+    }
+
+    pub fn create_port_forwarding(&self) -> Option<PortForwarding> {
+        PortForwarding::new(self.0.local_addr().unwrap().port())
+    }
+
 }
 
 pub struct AsyncNetSocket(Arc<AsyncUdpSocket>);
@@ -68,8 +76,8 @@ impl Clone for AsyncNetSocket {
 }
 
 impl AsyncNetSocket {
-    pub fn from_socket(sock: UdpSocket) -> Result<Self, io::Error> {
-        Ok(Self(Arc::new(AsyncUdpSocket::from_std(sock)?)))
+    pub fn from_sync(sock: NetSocket) -> Result<Self, io::Error> {
+        Ok(Self(Arc::new(AsyncUdpSocket::from_std(sock.0)?)))
     }
 }
 
@@ -91,10 +99,6 @@ impl Socket for AsyncNetSocket {
         let mut addr = self.0.local_addr()?;
         addr.set_ip(get_ip());
         Ok(addr)
-    }
-
-    async fn create_port_forwarding(&self) -> Option<PortForwarding> {
-        PortForwarding::new(self.address().await.unwrap().port())
     }
 }
 
@@ -173,10 +177,6 @@ impl Socket for MockSocket {
 
     async fn address(&self) -> Result<SocketAddr, io::Error> {
         Ok(self.address)
-    }
-
-    async fn create_port_forwarding(&self) -> Option<PortForwarding> {
-        None
     }
 }
 

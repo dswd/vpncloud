@@ -164,8 +164,4 @@ impl Socket for ProxyConnection {
     async fn address(&self) -> Result<SocketAddr, io::Error> {
         Ok(self.addr)
     }
-
-    async fn create_port_forwarding(&self) -> Option<PortForwarding> {
-        None
-    }
 }
