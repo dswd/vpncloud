@@ -129,6 +129,7 @@ impl ProxyConnection {
 
 #[async_trait]
 impl Socket for ProxyConnection {
+    /*
     async fn listen(url: &str) -> Result<Self, io::Error> {
         let parsed_url = io_error!(Url::parse(url), "Invalid URL {}: {}", url)?;
         let (mut socket, _) = io_error!(connect(parsed_url), "Failed to connect to URL {}: {}", url)?;
@@ -139,6 +140,7 @@ impl Socket for ProxyConnection {
         con.addr = read_addr(Cursor::new(&addr_data))?;
         Ok(con)
     }
+    */
 
     async fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
         buffer.clear();

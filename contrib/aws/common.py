@@ -49,25 +49,27 @@ class Node:
     def run_cmd(self, cmd):
         return run_cmd(self.connection, cmd)
 
-    def start_vpncloud(self, ip=None, crypto=None, password="test", device_type="tun", listen="3210", mode="normal", peers=[], claims=[]):
+    def start_vpncloud(self, ip=None, crypto=None, password="test", device_type="tun", listen="3210", mode="normal", peers=[], claims=[], logfile="/var/log/vpncloud.log", extra_args=[]):
         args = [
             "--daemon", 
             "--no-port-forwarding", 
-            "-t {}".format(device_type),
-            "-m {}".format(mode),
-            "-l {}".format(listen),
-            "--password '{}'".format(password)
+            f"-t {device_type}",
+            f"-m {mode}",
+            f"-l {listen}",
+            f"--password '{password}'",
+            f"--log-file '{logfile}'",
+            *extra_args
         ]
         if ip:
-            args.append("--ip {}".format(ip))
+            args.append(f"--ip {ip}")
         if crypto:
-            args.append("--algo {}".format(crypto))
+            args.append(f"--algo {crypto}")
         for p in peers:
-            args.append("-c {}".format(p))
+            args.append(f"-c {p}")
         for c in claims:
-            args.append("--claim {}".format(c))
+            args.append(f"--claim {c}")
         args = " ".join(args)
-        self.run_cmd("sudo vpncloud {}".format(args))
+        self.run_cmd(f"sudo vpncloud {args}")
 
     def stop_vpncloud(self, wait=True):
         self.run_cmd("sudo killall vpncloud")
@@ -75,7 +77,7 @@ class Node:
             time.sleep(3.0)
 
     def ping(self, dst, size=100, count=10, interval=0.001):
-        (out, _) = self.run_cmd('sudo ping {dst} -c {count} -i {interval} -s {size} -U -q'.format(dst=dst, size=size, count=count, interval=interval))
+        (out, _) = self.run_cmd(f'sudo ping {dst} -c {count} -i {interval} -s {size} -U -q')
         match = re.search(r'([\d]*\.[\d]*)/([\d]*\.[\d]*)/([\d]*\.[\d]*)/([\d]*\.[\d]*)', out)
         ping_min = float(match.group(1))
         ping_avg = float(match.group(2))
@@ -97,7 +99,7 @@ class Node:
         self.run_cmd('killall iperf3')
 
     def run_iperf(self, dst, duration):
-        (out, _) = self.run_cmd('iperf3 -c {dst} -t {duration} --json'.format(dst=dst, duration=duration))
+        (out, _) = self.run_cmd(f'iperf3 -c {dst} -t {duration} --json')
         data = json.loads(out)
         return {
             "throughput": data['end']['streams'][0]['receiver']['bits_per_second'],
@@ -197,7 +199,7 @@ class EC2Environment:
         if self.subnet == CREATE:
             self.setup_vpc()
         else:
-            eprint("\tUsing subnet {}".format(self.subnet))
+            eprint(f"\tUsing subnet {self.subnet}")
 
         vpc = ec2.Subnet(self.subnet).vpc
 
@@ -209,7 +211,7 @@ class EC2Environment:
         sg.authorize_ingress(CidrIp='172.16.1.0/24', IpProtocol='udp', FromPort=0, ToPort=65535)
 
         if self.keyname == CREATE:
-            key_pair = ec2.create_key_pair(KeyName="{}-keypair".format(self.tag))
+            key_pair = ec2.create_key_pair(KeyName=f"{self.tag}-keypair")
             self.track_resource(key_pair)
             self.keyname = key_pair.name
             self.privatekey = key_pair.key_material
@@ -217,7 +219,7 @@ class EC2Environment:
 
         placement = {}
         if self.cluster_nodes:
-            placement_group = ec2.create_placement_group(GroupName="{}-placement".format(self.tag), Strategy="cluster")
+            placement_group = ec2.create_placement_group(GroupName=f"{self.tag}-placement", Strategy="cluster")
             self.track_resource(placement_group)
             placement = { 'GroupName': placement_group.name }
         
@@ -227,12 +229,11 @@ packages:
   - socat
 """
         if not self.vpncloud_file:
-            userdata += """
+            userdata += f"""
 runcmd:
-  - wget https://github.com/dswd/vpncloud/releases/download/v{version}/vpncloud_{version}.x86_64.rpm -O /tmp/vpncloud.rpm
+  - wget https://github.com/dswd/vpncloud/releases/download/v{self.vpncloud_version}/vpncloud_{self.vpncloud_version}.x86_64.rpm -O /tmp/vpncloud.rpm
   - yum install -y /tmp/vpncloud.rpm
-""".format(version=self.vpncloud_version)
-        
+"""     
         if self.use_spot:
             response = ec2client.request_spot_instances(
                 SpotPrice = self.max_price,
@@ -368,7 +369,7 @@ runcmd:
         eprint("Deleting resources...")
         ec2client = boto3.client('ec2', region_name=self.region)
         for res in reversed(self.resources):
-            eprint("\t{} {}".format(res.__class__.__name__, res.id if hasattr(res, "id") else ""))
+            eprint(f"\t{res.__class__.__name__} {res.id if hasattr(res, 'id') else ''}")
             if isinstance(res, SpotInstanceRequest):
                 ec2client.cancel_spot_instance_requests(SpotInstanceRequestIds=[res.id])
             if hasattr(res, "attachments"):

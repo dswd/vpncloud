@@ -48,13 +48,13 @@ if not args.keyname:
     with open(args.keyfile, 'x') as fp:
         fp.write(setup.privatekey)
     os.chmod(args.keyfile, 0o400)
-    print("SSH private key written to {}".format(args.keyfile))
+    print(f"SSH private key written to {args.keyfile}")
     atexit.register(lambda : os.remove(args.keyfile))
     print()
 
 print("Nodes:")
 for node in setup.nodes:
-    print("\t {}@{}\tprivate: {}".format(setup.username, node.public_ip, node.private_ip))
+    print(f"\t {setup.username}@{node.public_ip}\tprivate: {node.private_ip}")
 print()
 
 print("Press ENTER to shut down")

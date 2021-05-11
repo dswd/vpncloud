@@ -36,7 +36,7 @@ dialoguer = { version = "0.8", optional = true }
 tungstenite = { version = "0.13", optional = true, default-features = false }
 url = { version = "2.2", optional = true }
 igd = { version = "0.12", optional = true }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "^1.5", features = ["full"] }
 async-trait = "0.1"
 
 

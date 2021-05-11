@@ -2,9 +2,12 @@
 // Copyright (C) 2015-2021  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-#[macro_use] extern crate log;
-#[macro_use] extern crate serde;
-#[macro_use] extern crate tokio;
+#[macro_use]
+extern crate log;
+#[macro_use]
+extern crate serde;
+#[macro_use]
+extern crate tokio;
 
 #[cfg(test)]
 extern crate tempfile;
@@ -15,10 +18,10 @@ pub mod util;
 #[macro_use]
 mod tests;
 pub mod beacon;
-pub mod engine;
 pub mod config;
 pub mod crypto;
 pub mod device;
+pub mod engine;
 pub mod error;
 #[cfg(feature = "installer")]
 pub mod installer;
@@ -37,11 +40,12 @@ pub mod wizard;
 pub mod wsproxy;
 
 use structopt::StructOpt;
+use tokio::runtime::Runtime;
 
 use std::{
     fs::{self, File, Permissions},
     io::{self, Write},
-    net::{Ipv4Addr},
+    net::{Ipv4Addr, UdpSocket},
     os::unix::fs::PermissionsExt,
     path::Path,
     process,
@@ -51,11 +55,11 @@ use std::{
 };
 
 use crate::{
-    engine::common::GenericCloud,
     config::{Args, Command, Config, DEFAULT_PORT},
     crypto::Crypto,
-    device::{Device, TunTapDevice, Type},
-    net::{Socket, NetSocket},
+    device::{AsyncTunTapDevice, TunTapDevice, Type},
+    engine::common::GenericCloud,
+    net::{AsyncNetSocket, listen_udp},
     oldconfig::OldConfigFile,
     payload::Protocol,
     util::SystemTimeSource,
@@ -139,16 +143,16 @@ fn parse_ip_netmask(addr: &str) -> Result<(Ipv4Addr, Ipv4Addr), String> {
     Ok((ip, netmask))
 }
 
-async fn setup_device(config: &Config) -> TunTapDevice {
+fn setup_device(config: &Config) -> TunTapDevice {
     let device = try_fail!(
-        TunTapDevice::new(&config.device_name, config.device_type, config.device_path.as_ref().map(|s| s as &str)).await,
+        TunTapDevice::new(&config.device_name, config.device_type, config.device_path.as_ref().map(|s| s as &str)),
         "Failed to open virtual {} interface {}: {}",
         config.device_type,
         config.device_name
     );
     info!("Opened device {}", device.ifname());
     config.call_hook("device_setup", vec![("IFNAME", device.ifname())], true);
-    if let Err(err) = device.set_mtu(config.device_mtu).await {
+    if let Err(err) = device.set_mtu(config.device_mtu) {
         error!("Error setting MTU on {}: {}", device.ifname(), err);
     }
     if let Some(ip) = &config.ip {
@@ -160,9 +164,9 @@ async fn setup_device(config: &Config) -> TunTapDevice {
         run_script(script, device.ifname());
     }
     if config.fix_rp_filter {
-        try_fail!(device.fix_rp_filter().await, "Failed to change rp_filter settings: {}");
+        try_fail!(device.fix_rp_filter(), "Failed to change rp_filter settings: {}");
     }
-    if let Ok(val) = device.get_rp_filter().await {
+    if let Ok(val) = device.get_rp_filter() {
         if val != 1 {
             warn!("Your networking configuration might be affected by a vulnerability (https://vpncloud.ddswd.de/docs/security/cve-2019-14899/), please change your rp_filter setting to 1 (currently {}).", val);
         }
@@ -172,9 +176,10 @@ async fn setup_device(config: &Config) -> TunTapDevice {
 }
 
 #[allow(clippy::cognitive_complexity)]
-async fn run<P: Protocol, S: Socket>(config: Config, socket: S) {
-    let device = setup_device(&config).await;
-    let port_forwarding = if config.port_forwarding { socket.create_port_forwarding().await } else { None };
+fn run<P: Protocol>(config: Config, socket: UdpSocket) {
+    let device = setup_device(&config);
+    let port_forwarding = None;
+    //if config.port_forwarding { rt.block_on(socket.create_port_forwarding()) } else { None };
     let stats_file = match config.stats_file {
         None => None,
         Some(ref name) => {
@@ -191,25 +196,16 @@ async fn run<P: Protocol, S: Socket>(config: Config, socket: S) {
         }
     };
     let ifname = device.ifname().to_string();
-    let mut cloud =
-        try_fail!(GenericCloud::<TunTapDevice, P, S, SystemTimeSource>::new(&config, socket, device, port_forwarding, stats_file).await, "Failed to create engine: {}");
-    for mut addr in config.peers {
-        if addr.find(':').unwrap_or(0) <= addr.find(']').unwrap_or(0) {
-            // : not present or only in IPv6 address
-            addr = format!("{}:{}", addr, DEFAULT_PORT)
-        }
-        try_fail!(cloud.add_peer(addr.clone()), "Failed to send message to {}: {}", &addr);
-    }
     if config.daemonize {
         info!("Running process as daemon");
         let mut daemonize = daemonize::Daemonize::new();
-        if let Some(user) = config.user {
-            daemonize = daemonize.user(&user as &str);
+        if let Some(user) = &config.user {
+            daemonize = daemonize.user(user as &str);
         }
-        if let Some(group) = config.group {
-            daemonize = daemonize.group(&group as &str);
+        if let Some(group) = &config.group {
+            daemonize = daemonize.group(group as &str);
         }
-        if let Some(pid_file) = config.pid_file {
+        if let Some(pid_file) = &config.pid_file {
             daemonize = daemonize.pid_file(pid_file).chown_pid_file(true);
             // Give child process some time to write PID file
             daemonize = daemonize.exit_action(|| thread::sleep(std::time::Duration::from_millis(10)));
@@ -218,22 +214,47 @@ async fn run<P: Protocol, S: Socket>(config: Config, socket: S) {
     } else if config.user.is_some() || config.group.is_some() {
         info!("Dropping privileges");
         let mut pd = privdrop::PrivDrop::default();
-        if let Some(user) = config.user {
+        if let Some(user) = &config.user {
             pd = pd.user(user);
         }
-        if let Some(group) = config.group {
+        if let Some(group) = &config.group {
             pd = pd.group(group);
         }
         try_fail!(pd.apply(), "Failed to drop privileges: {}");
     }
-    cloud.run().await;
-    if let Some(script) = config.ifdown {
+    let rt = Runtime::new().unwrap();
+    let ifdown = config.ifdown.clone();
+    rt.block_on(async move {
+        // Warning: no async code outside this block, or it will break on daemonize
+        let device = AsyncTunTapDevice::from_sync(device);
+        let socket = try_fail!(AsyncNetSocket::from_socket(socket), "Failed to create async socket: {}");
+        let mut cloud = try_fail!(
+            GenericCloud::<AsyncTunTapDevice, P, AsyncNetSocket, SystemTimeSource>::new(
+                &config,
+                socket,
+                device,
+                port_forwarding,
+                stats_file
+            )
+            .await,
+            "Failed to create engine: {}"
+        );
+        for mut addr in config.peers {
+            if addr.find(':').unwrap_or(0) <= addr.find(']').unwrap_or(0) {
+                // : not present or only in IPv6 address
+                addr = format!("{}:{}", addr, DEFAULT_PORT)
+            }
+            try_fail!(cloud.add_peer(addr.clone()), "Failed to send message to {}: {}", &addr);
+        }
+        cloud.run().await
+    });
+    if let Some(script) = ifdown {
         run_script(&script, &ifname);
     }
+    std::process::exit(0)
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let args: Args = Args::from_args();
     if args.version {
         println!("VpnCloud v{}", env!("CARGO_PKG_VERSION"));
@@ -325,19 +346,27 @@ async fn main() {
         error!("Either password or private key must be set in config or given as parameter");
         return;
     }
+    /*
     #[cfg(feature = "websocket")]
     if config.listen.starts_with("ws://") {
-        let socket = try_fail!(ProxyConnection::listen(&config.listen).await, "Failed to open socket {}: {}", config.listen);
+        let socket = {
+            let rt = Runtime::new().unwrap();
+            try_fail!(
+                rt.block_on(ProxyConnection::listen(&config.listen)),
+                "Failed to open socket {}: {}",
+                config.listen
+            )
+        };
         match config.device_type {
-            Type::Tap => run::<payload::Frame, _>(config, socket).await,
-            Type::Tun => run::<payload::Packet, _>(config, socket).await
+            Type::Tap => run::<payload::Frame, _>(config, socket),
+            Type::Tun => run::<payload::Packet, _>(config, socket),
         }
         return;
     }
-    let socket = try_fail!(NetSocket::listen(&config.listen).await, "Failed to open socket {}: {}", config.listen);
+    */
+    let socket = try_fail!(listen_udp(&config.listen), "Failed to open socket {}: {}", config.listen);
     match config.device_type {
-        Type::Tap => run::<payload::Frame, _>(config, socket).await,
-        Type::Tun => run::<payload::Packet, _>(config, socket).await
+        Type::Tap => run::<payload::Frame>(config, socket),
+        Type::Tun => run::<payload::Packet>(config, socket),
     }
-    std::process::exit(0)
 }

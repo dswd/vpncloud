@@ -21,6 +21,7 @@ use super::common::PeerData;
 #[derive(Clone)]
 pub struct SharedPeerCrypto {
     peers: Arc<Mutex<HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash>>>,
+    //TODO: local hashmap as cache
 }
 
 impl SharedPeerCrypto {
@@ -29,6 +30,7 @@ impl SharedPeerCrypto {
     }
 
     pub fn encrypt_for(&self, peer: SocketAddr, data: &mut MsgBuffer) -> Result<(), Error> {
+        //TODO: use cache first
         let mut peers = self.peers.lock();
         match peers.get_mut(&peer) {
             None => Err(Error::InvalidCryptoState("No crypto found for peer")),
@@ -41,6 +43,7 @@ impl SharedPeerCrypto {
     }
 
     pub fn store(&self, data: &HashMap<SocketAddr, PeerData, Hash>) {
+        //TODO: store in shared and in cache
         let mut peers = self.peers.lock();
         peers.clear();
         peers.extend(data.iter().map(|(k, v)| (*k, v.crypto.get_core())));
@@ -51,6 +54,7 @@ impl SharedPeerCrypto {
     }
 
     pub fn get_snapshot(&self) -> HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash> {
+        //TODO: return local cache
         self.peers.lock().clone()
     }
 
@@ -121,6 +125,8 @@ impl SharedTraffic {
 #[derive(Clone)]
 pub struct SharedTable<TS: TimeSource> {
     table: Arc<Mutex<ClaimTable<TS>>>,
+    //TODO: local reader lookup table Addr => Option<SocketAddr>
+    //TODO: local writer cache Addr => SocketAddr
 }
 
 impl<TS: TimeSource> SharedTable<TS> {
@@ -131,21 +137,29 @@ impl<TS: TimeSource> SharedTable<TS> {
 
     pub fn sync(&mut self) {
         // TODO sync if needed
+        // once every x seconds
+        // fetch reader cache
+        // clear writer cache
     }
 
     pub fn lookup(&mut self, addr: Address) -> Option<SocketAddr> {
+        // TODO: use local reader cache
+        // if not found, use shared table and put into cache
         self.table.lock().lookup(addr)
     }
 
     pub fn set_claims(&mut self, peer: SocketAddr, claims: RangeList) {
+        // clear writer cache
         self.table.lock().set_claims(peer, claims)
     }
 
     pub fn remove_claims(&mut self, peer: SocketAddr) {
+        // clear writer cache
         self.table.lock().remove_claims(peer)
     }
 
     pub fn cache(&mut self, addr: Address, peer: SocketAddr) {
+        // check writer cache and only write real updates to shared table
         self.table.lock().cache(addr, peer)
     }
 
@@ -154,14 +168,17 @@ impl<TS: TimeSource> SharedTable<TS> {
     }
 
     pub fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error> {
+        //TODO: stats call
         self.table.lock().write_out(out)
     }
 
     pub fn cache_len(&self) -> usize {
+        //TODO: stats call
         self.table.lock().cache_len()
     }
 
     pub fn claim_len(&self) -> usize {
+        //TODO: stats call
         self.table.lock().claim_len()
     }
 }

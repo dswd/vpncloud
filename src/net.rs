@@ -7,11 +7,11 @@ use crate::port_forwarding::PortForwarding;
 use crate::util::{MockTimeSource, MsgBuffer, Time, TimeSource};
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use tokio::net::UdpSocket;
+use tokio::net::UdpSocket as AsyncUdpSocket;
 use std::{
     collections::{HashMap, VecDeque},
     io::{self, ErrorKind},
-    net::{IpAddr, Ipv6Addr, SocketAddr},
+    net::{UdpSocket, IpAddr, Ipv6Addr, SocketAddr},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -34,7 +34,6 @@ pub fn get_ip() -> IpAddr {
 
 #[async_trait]
 pub trait Socket: Sized + Clone + Send + Sync + 'static {
-    async fn listen(addr: &str) -> Result<Self, io::Error>;
     async fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error>;
     async fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error>;
     async fn address(&self) -> Result<SocketAddr, io::Error>;
@@ -55,21 +54,28 @@ pub fn parse_listen(addr: &str, default_port: u16) -> SocketAddr {
     }
 }
 
-pub struct NetSocket(Arc<UdpSocket>);
+pub fn listen_udp(addr: &str) -> Result<UdpSocket, io::Error> {
+    let addr = parse_listen(addr, DEFAULT_PORT);
+    UdpSocket::bind(addr)
+}
 
-impl Clone for NetSocket {
+pub struct AsyncNetSocket(Arc<AsyncUdpSocket>);
+
+impl Clone for AsyncNetSocket {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
 
-#[async_trait]
-impl Socket for NetSocket {
-    async fn listen(addr: &str) -> Result<Self, io::Error> {
-        let addr = parse_listen(addr, DEFAULT_PORT);
-        Ok(NetSocket(Arc::new(UdpSocket::bind(addr).await?)))
+impl AsyncNetSocket {
+    pub fn from_socket(sock: UdpSocket) -> Result<Self, io::Error> {
+        Ok(Self(Arc::new(AsyncUdpSocket::from_std(sock)?)))
     }
+}
 
+
+#[async_trait]
+impl Socket for AsyncNetSocket {
     async fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
         buffer.clear();
         let (size, addr) = self.0.recv_from(buffer.buffer()).await?;
@@ -146,10 +152,6 @@ impl MockSocket {
 
 #[async_trait]
 impl Socket for MockSocket {
-    async fn listen(addr: &str) -> Result<Self, io::Error> {
-        Ok(Self::new(parse_listen(addr, DEFAULT_PORT)))
-    }
-
     async fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
         if let Some((addr, data)) = self.inbound.lock().pop_front() {
             buffer.clear();

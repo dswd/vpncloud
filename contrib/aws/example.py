@@ -14,7 +14,7 @@ sender = setup.nodes[0]
 receiver = setup.nodes[1]
 
 sender.start_vpncloud(ip="10.0.0.1/24")
-receiver.start_vpncloud(ip="10.0.0.2/24", peers=["{}:3210".format(sender.private_ip)])
+receiver.start_vpncloud(ip="10.0.0.2/24", peers=[f"{sender.private_ip}:3210"])
 time.sleep(1.0)
 
 sender.ping("10.0.0.2")

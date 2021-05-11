@@ -9,15 +9,16 @@ use std::{
     collections::VecDeque,
     convert::TryInto,
     fmt,
-    io::{self, Cursor, Error as IoError},
+    io::{self, Cursor, Read, Write, Error as IoError, BufReader, BufRead},
     net::{Ipv4Addr, UdpSocket},
+    fs::{self, File},
     os::unix::io::AsRawFd,
     str,
     str::FromStr,
     sync::Arc,
 };
-use tokio::fs::{self, File};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::fs::{File as AsyncFile};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::{crypto, error::Error, util::MsgBuffer};
 
@@ -83,9 +84,6 @@ pub trait Device: Send + 'static + Sized {
     /// Returns the type of this device
     fn get_type(&self) -> Type;
 
-    /// Returns the interface name of this device.
-    fn ifname(&self) -> &str;
-
     /// Reads a packet/frame from the device
     ///
     /// This method reads one packet or frame (depending on the device type) into the `buffer`.
@@ -141,9 +139,9 @@ impl TunTapDevice {
     /// # Panics
     /// This method panics if the interface name is longer than 31 bytes.
     #[allow(clippy::useless_conversion)]
-    pub async fn new(ifname: &str, type_: Type, path: Option<&str>) -> io::Result<Self> {
+    pub fn new(ifname: &str, type_: Type, path: Option<&str>) -> io::Result<Self> {
         let path = path.unwrap_or_else(|| Self::default_path(type_));
-        let fd = fs::OpenOptions::new().read(true).write(true).open(path).await?;
+        let fd = fs::OpenOptions::new().read(true).write(true).open(path)?;
         let flags = match type_ {
             Type::Tun => libc::IFF_TUN | libc::IFF_NO_PI,
             Type::Tap => libc::IFF_TAP | libc::IFF_NO_PI,
@@ -155,7 +153,7 @@ impl TunTapDevice {
             0 => {
                 let mut ifname = String::with_capacity(32);
                 let mut cursor = Cursor::new(ifreq.ifr_name);
-                cursor.read_to_string(&mut ifname).await?;
+                Read::read_to_string(&mut cursor, &mut ifname)?;
                 ifname = ifname.trim_end_matches('\0').to_owned();
                 Ok(Self { fd, ifname, type_ })
             }
@@ -163,11 +161,78 @@ impl TunTapDevice {
         }
     }
 
+    pub fn ifname(&self) -> &str {
+        &self.ifname
+    }
+
     /// Returns the default device path for a given type
     #[inline]
     pub fn default_path(type_: Type) -> &'static str {
         match type_ {
             Type::Tun | Type::Tap => "/dev/net/tun",
+        }
+    }
+
+    pub fn get_overhead(&self) -> usize {
+        40 /* for outer IPv6 header, can't be sure to only have IPv4 peers */
+        + 8 /* for outer UDP header */
+        + crypto::EXTRA_LEN + crypto::TAG_LEN /* crypto overhead */
+        + 1 /* message type header */
+        + match self.type_ {
+            Type::Tap => 14, /* inner ethernet header */
+            Type::Tun => 0
+        }
+    }
+
+    pub fn set_mtu(&self, value: Option<usize>) -> io::Result<()> {
+        let value = match value {
+            Some(value) => value,
+            None => {
+                let default_device = get_default_device()?;
+                info!("Deriving MTU from default device {}", default_device);
+                get_device_mtu(&default_device)? - self.get_overhead()
+            }
+        };
+        info!("Setting MTU {} on device {}", value, self.ifname);
+        set_device_mtu(&self.ifname, value)
+    }
+
+    pub fn configure(&self, addr: Ipv4Addr, netmask: Ipv4Addr) -> io::Result<()> {
+        set_device_addr(&self.ifname, addr)?;
+        set_device_netmask(&self.ifname, netmask)?;
+        set_device_enabled(&self.ifname, true)
+    }
+
+    pub fn get_rp_filter(&self) -> io::Result<u8> {
+        Ok(cmp::max(get_rp_filter("all")?, get_rp_filter(&self.ifname)?))
+    }
+
+    pub fn fix_rp_filter(&self) -> io::Result<()> {
+        if get_rp_filter("all")? > 1 {
+            info!("Setting net.ipv4.conf.all.rp_filter=1");
+            set_rp_filter("all", 1)?
+        }
+        if get_rp_filter(&self.ifname)? != 1 {
+            info!("Setting net.ipv4.conf.{}.rp_filter=1", self.ifname);
+            set_rp_filter(&self.ifname, 1)?
+        }
+        Ok(())
+    }
+}
+
+/// Represents a tun/tap device
+pub struct AsyncTunTapDevice {
+    fd: AsyncFile,
+    ifname: String,
+    type_: Type,
+}
+
+impl AsyncTunTapDevice {
+    pub fn from_sync(dev: TunTapDevice) -> Self {
+        Self {
+            fd: AsyncFile::from_std(dev.fd),
+            ifname: dev.ifname,
+            type_: dev.type_
         }
     }
 
@@ -219,62 +284,12 @@ impl TunTapDevice {
             }
         }
     }
-
-    pub fn get_overhead(&self) -> usize {
-        40 /* for outer IPv6 header, can't be sure to only have IPv4 peers */
-        + 8 /* for outer UDP header */
-        + crypto::EXTRA_LEN + crypto::TAG_LEN /* crypto overhead */
-        + 1 /* message type header */
-        + match self.type_ {
-            Type::Tap => 14, /* inner ethernet header */
-            Type::Tun => 0
-        }
-    }
-
-    pub async fn set_mtu(&self, value: Option<usize>) -> io::Result<()> {
-        let value = match value {
-            Some(value) => value,
-            None => {
-                let default_device = get_default_device().await?;
-                info!("Deriving MTU from default device {}", default_device);
-                get_device_mtu(&default_device)? - self.get_overhead()
-            }
-        };
-        info!("Setting MTU {} on device {}", value, self.ifname);
-        set_device_mtu(&self.ifname, value)
-    }
-
-    pub fn configure(&self, addr: Ipv4Addr, netmask: Ipv4Addr) -> io::Result<()> {
-        set_device_addr(&self.ifname, addr)?;
-        set_device_netmask(&self.ifname, netmask)?;
-        set_device_enabled(&self.ifname, true)
-    }
-
-    pub async fn get_rp_filter(&self) -> io::Result<u8> {
-        Ok(cmp::max(get_rp_filter("all").await?, get_rp_filter(&self.ifname).await?))
-    }
-
-    pub async fn fix_rp_filter(&self) -> io::Result<()> {
-        if get_rp_filter("all").await? > 1 {
-            info!("Setting net.ipv4.conf.all.rp_filter=1");
-            set_rp_filter("all", 1).await?
-        }
-        if get_rp_filter(&self.ifname).await? != 1 {
-            info!("Setting net.ipv4.conf.{}.rp_filter=1", self.ifname);
-            set_rp_filter(&self.ifname, 1).await?
-        }
-        Ok(())
-    }
 }
 
 #[async_trait]
-impl Device for TunTapDevice {
+impl Device for AsyncTunTapDevice {
     fn get_type(&self) -> Type {
         self.type_
-    }
-
-    fn ifname(&self) -> &str {
-        &self.ifname
     }
 
     async fn duplicate(&self) -> Result<Self, Error> {
@@ -338,10 +353,6 @@ impl Device for MockDevice {
 
     fn get_type(&self) -> Type {
         Type::Tun
-    }
-
-    fn ifname(&self) -> &str {
-        "mock0"
     }
 
     async fn read(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
@@ -477,13 +488,13 @@ fn set_device_enabled(ifname: &str, up: bool) -> io::Result<()> {
     }
 }
 
-async fn get_default_device() -> io::Result<String> {
-    let mut fd = BufReader::new(File::open("/proc/net/route").await?);
+fn get_default_device() -> io::Result<String> {
+    let mut fd = BufReader::new(File::open("/proc/net/route")?);
     let mut best = None;
     let mut line = String::with_capacity(80);
-    fd.read_line(&mut line).await?;
+    fd.read_line(&mut line)?;
     line.clear();
-    while let Ok(read) = fd.read_line(&mut line).await {
+    while let Ok(read) = fd.read_line(&mut line) {
         if read == 0 {
             break;
         }
@@ -504,14 +515,14 @@ async fn get_default_device() -> io::Result<String> {
     }
 }
 
-async fn get_rp_filter(device: &str) -> io::Result<u8> {
-    let mut fd = File::open(format!("/proc/sys/net/ipv4/conf/{}/rp_filter", device)).await?;
+fn get_rp_filter(device: &str) -> io::Result<u8> {
+    let mut fd = File::open(format!("/proc/sys/net/ipv4/conf/{}/rp_filter", device))?;
     let mut contents = String::with_capacity(10);
-    fd.read_to_string(&mut contents).await?;
+    fd.read_to_string(&mut contents)?;
     u8::from_str(contents.trim()).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "Invalid rp_filter value"))
 }
 
-async fn set_rp_filter(device: &str, val: u8) -> io::Result<()> {
-    let mut fd = File::create(format!("/proc/sys/net/ipv4/conf/{}/rp_filter", device)).await?;
-    fd.write_all(format!("{}", val).as_bytes()).await
+fn set_rp_filter(device: &str, val: u8) -> io::Result<()> {
+    let mut fd = File::create(format!("/proc/sys/net/ipv4/conf/{}/rp_filter", device))?;
+    fd.write_all(format!("{}", val).as_bytes())
 }

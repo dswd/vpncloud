@@ -47,11 +47,11 @@ class PerfTest:
         return cls(env.nodes[0], env.nodes[1], meta)
 
     def run_ping(self, dst, size):
-        eprint("\tRunning ping {} with size {} ...".format(dst, size))
+        eprint(f"\tRunning ping {dst} with size {size} ...")
         return self.sender.ping(dst=dst, size=size, count=30000, interval=0.001)
 
     def run_iperf(self, dst):
-        eprint("\tRunning iperf on {} ...".format(dst))
+        eprint(f"\tRunning iperf on {dst} ...")
         self.receiver.start_iperf_server()
         time.sleep(0.1)
         result = self.sender.run_iperf(dst=dst, duration=30)
@@ -68,9 +68,9 @@ class PerfTest:
 
     def start_vpncloud(self, crypto=None):
         eprint("\tSetting up vpncloud on receiver")
-        self.receiver.start_vpncloud(crypto=crypto, ip="{}/24".format(self.receiver_ip_vpncloud))
+        self.receiver.start_vpncloud(crypto=crypto, ip=f"{self.receiver_ip_vpncloud}/24")
         eprint("\tSetting up vpncloud on sender")
-        self.sender.start_vpncloud(crypto=crypto, peers=["{}:3210".format(self.receiver.private_ip)], ip="{}/24".format(self.sender_ip_vpncloud))
+        self.sender.start_vpncloud(crypto=crypto, peers=[f"{self.receiver_ip_vpncloud}:3210"], ip=f"{self.sender_ip_vpncloud}/24")
         time.sleep(1.0)
 
     def stop_vpncloud(self):
@@ -84,7 +84,7 @@ class PerfTest:
             "native": self.run_suite(self.receiver.private_ip)
         }
         for crypto in CRYPTO:
-            eprint("Running with crypto {}".format(crypto))
+            eprint(f"Running with crypto {crypto}")
             self.start_vpncloud(crypto=crypto)
             res = self.run_suite(self.receiver_ip_vpncloud)
             self.stop_vpncloud()
@@ -109,8 +109,8 @@ duration = time.time() - start
 
 results["meta"]["duration"] = duration
 
-name = "measurements/{date}_{version}_perf.json".format(date=date.today().strftime('%Y-%m-%d'), version=VERSION)
-eprint('Storing results in {}'.format(name))
+name = f"measurements/{date.today().strftime('%Y-%m-%d')}_{VERSION}_perf.json"
+eprint(f'Storing results in {name}')
 with open(name, 'w') as fp:
     json.dump(results, fp, indent=2)
 eprint("done.")

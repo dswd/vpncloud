@@ -386,6 +386,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         let src = mapped_addr(src);
         debug!("Received {} bytes from {}", self.buffer.len(), src);
         let buffer = &mut self.buffer;
+        self.traffic.count_in_traffic(src, buffer.len());
         if let Some(result) = self.peers.get_mut(&src).map(|peer| peer.crypto.handle_message(buffer)) {
             return self.process_message(src, result?).await;
         }
