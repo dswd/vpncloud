@@ -46,7 +46,7 @@ use tokio::runtime::Runtime;
 use std::{
     fs::{self, File, Permissions},
     io::{self, Write},
-    net::{Ipv4Addr, UdpSocket},
+    net::Ipv4Addr,
     os::unix::fs::PermissionsExt,
     path::Path,
     process,
@@ -60,7 +60,7 @@ use crate::{
     crypto::Crypto,
     device::{AsyncTunTapDevice, TunTapDevice, Type},
     engine::common::GenericCloud,
-    net::{AsyncNetSocket, NetSocket},
+    net::NetSocket,
     oldconfig::OldConfigFile,
     payload::Protocol,
     util::SystemTimeSource,
