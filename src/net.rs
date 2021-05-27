@@ -51,7 +51,7 @@ pub fn parse_listen(addr: &str, default_port: u16) -> SocketAddr {
 
 impl Socket for UdpSocket {
     fn listen(addr: &str) -> Result<Self, io::Error> {
-        let addr = parse_listen(addr, DEFAULT_PORT);
+        let addr = mapped_addr(parse_listen(addr, DEFAULT_PORT));
         UdpSocket::bind(addr)
     }
 
@@ -136,7 +136,7 @@ impl AsRawFd for MockSocket {
 
 impl Socket for MockSocket {
     fn listen(addr: &str) -> Result<Self, io::Error> {
-        Ok(Self::new(parse_listen(addr, DEFAULT_PORT)))
+        Ok(Self::new(mapped_addr(parse_listen(addr, DEFAULT_PORT))))
     }
 
     fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
