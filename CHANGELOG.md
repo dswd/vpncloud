@@ -6,6 +6,7 @@ This project follows [semantic versioning](http://semver.org).
 
 - [added] Option to specify advertised addresses
 - [added] Peers now learn their own address from peers
+- [fixed] Fixed problem with IPv4 addresses in listen option
 
 ### v2.2.0 (2021-04-06)
 
