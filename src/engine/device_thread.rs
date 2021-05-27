@@ -90,8 +90,8 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
             if let Some(crypto) = crypto {
                 crypto.encrypt(&mut self.broadcast_buffer);
             }
-            traffic.count_out_traffic(addr, self.broadcast_buffer.len());
-            match socket.send(self.broadcast_buffer.message(), addr).await {
+            traffic.count_out_traffic(*addr, self.broadcast_buffer.len());
+            match socket.send(self.broadcast_buffer.message(), *addr).await {
                 Ok(written) if written == self.broadcast_buffer.len() => Ok(()),
                 Ok(_) => Err(Error::Socket("Sent out truncated packet")),
                 Err(e) => Err(Error::SocketIo("IOError when sending", e)),

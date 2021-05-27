@@ -21,45 +21,53 @@ use super::common::PeerData;
 #[derive(Clone)]
 pub struct SharedPeerCrypto {
     peers: Arc<Mutex<HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash>>>,
-    //TODO: local hashmap as cache
+    cache: HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash>, //TODO: local hashmap as cache
 }
 
 impl SharedPeerCrypto {
     pub fn new() -> Self {
-        SharedPeerCrypto { peers: Arc::new(Mutex::new(HashMap::default())) }
+        SharedPeerCrypto { peers: Arc::new(Mutex::new(HashMap::default())), cache: HashMap::default() }
     }
 
-    pub fn encrypt_for(&self, peer: SocketAddr, data: &mut MsgBuffer) -> Result<(), Error> {
-        //TODO: use cache first
-        let mut peers = self.peers.lock();
-        match peers.get_mut(&peer) {
-            None => Err(Error::InvalidCryptoState("No crypto found for peer")),
-            Some(None) => Ok(()),
-            Some(Some(crypto)) => {
-                crypto.encrypt(data);
-                Ok(())
+    pub fn encrypt_for(&mut self, peer: SocketAddr, data: &mut MsgBuffer) -> Result<(), Error> {
+        let crypto = match self.cache.get(&peer) {
+            Some(crypto) => crypto,
+            None => {
+                let peers = self.peers.lock();
+                if let Some(crypto) = peers.get(&peer) {
+                    self.cache.insert(peer, crypto.clone());
+                    self.cache.get(&peer).unwrap()
+                } else {
+                    return Err(Error::InvalidCryptoState("No crypto found for peer"));
+                }
             }
+        };
+        if let Some(crypto) = crypto {
+            crypto.encrypt(data);
         }
+        Ok(())
     }
 
-    pub fn store(&self, data: &HashMap<SocketAddr, PeerData, Hash>) {
-        //TODO: store in shared and in cache
+    pub fn store(&mut self, data: &HashMap<SocketAddr, PeerData, Hash>) {
+        self.cache.clear();
+        self.cache.extend(data.iter().map(|(k, v)| (*k, v.crypto.get_core())));
         let mut peers = self.peers.lock();
         peers.clear();
-        peers.extend(data.iter().map(|(k, v)| (*k, v.crypto.get_core())));
+        peers.extend(self.cache.iter().map(|(k, v)| (*k, v.clone())));
     }
 
     pub fn load(&mut self) {
-        // TODO sync if needed
+        let peers = self.peers.lock();
+        self.cache.clear();
+        self.cache.extend(peers.iter().map(|(k, v)| (*k, v.clone())));
     }
 
-    pub fn get_snapshot(&self) -> HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash> {
-        //TODO: return local cache
-        self.peers.lock().clone()
+    pub fn get_snapshot(&mut self) -> &HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash> {
+        &self.cache
     }
 
     pub fn count(&self) -> usize {
-        self.peers.lock().len()
+        self.cache.len()
     }
 }
 
