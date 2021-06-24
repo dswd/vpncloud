@@ -2,23 +2,9 @@
 // Copyright (C) 2015-2021  Dennis Schwerdel
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
-use async_trait::async_trait;
 use parking_lot::Mutex;
-use std::{
-    cmp,
-    collections::VecDeque,
-    convert::TryInto,
-    fmt,
-    io::{self, Cursor, Read, Write, Error as IoError, BufReader, BufRead},
-    net::{Ipv4Addr, UdpSocket},
-    fs::{self, File},
-    os::unix::io::AsRawFd,
-    str,
-    str::FromStr,
-    sync::Arc,
-};
-use tokio::fs::{File as AsyncFile};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use std::{cmp, collections::VecDeque, convert::TryInto, fmt, fs::{self, File}, io::{self, Cursor, Read, Write, Error as IoError, BufReader, BufRead}, net::{Ipv4Addr, UdpSocket}, os::unix::io::AsRawFd, str, str::FromStr, sync::Arc, time::Duration};
+use timeout_io::Reader;
 
 use crate::{crypto, error::Error, util::MsgBuffer};
 
@@ -79,7 +65,6 @@ impl FromStr for Type {
     }
 }
 
-#[async_trait]
 pub trait Device: Send + 'static + Sized {
     /// Returns the type of this device
     fn get_type(&self) -> Type;
@@ -95,7 +80,7 @@ pub trait Device: Send + 'static + Sized {
     ///
     /// # Errors
     /// This method will return an error if the underlying read call fails.
-    async fn read(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error>;
+    fn read(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error>;
 
     /// Writes a packet/frame to the device
     ///
@@ -106,9 +91,9 @@ pub trait Device: Send + 'static + Sized {
     ///
     /// # Errors
     /// This method will return an error if the underlying read call fails.
-    async fn write(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error>;
+    fn write(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error>;
 
-    async fn duplicate(&self) -> Result<Self, Error>;
+    fn duplicate(&self) -> Result<Self, Error>;
 
     fn get_ip(&self) -> Result<Ipv4Addr, Error>;
 }
@@ -218,23 +203,6 @@ impl TunTapDevice {
         }
         Ok(())
     }
-}
-
-/// Represents a tun/tap device
-pub struct AsyncTunTapDevice {
-    fd: AsyncFile,
-    ifname: String,
-    type_: Type,
-}
-
-impl AsyncTunTapDevice {
-    pub fn from_sync(dev: TunTapDevice) -> Self {
-        Self {
-            fd: AsyncFile::from_std(dev.fd),
-            ifname: dev.ifname,
-            type_: dev.type_
-        }
-    }
 
     #[cfg(any(target_os = "linux", target_os = "android"))]
     #[inline]
@@ -286,32 +254,32 @@ impl AsyncTunTapDevice {
     }
 }
 
-#[async_trait]
-impl Device for AsyncTunTapDevice {
+impl Device for TunTapDevice {
     fn get_type(&self) -> Type {
         self.type_
     }
 
-    async fn duplicate(&self) -> Result<Self, Error> {
+    fn duplicate(&self) -> Result<Self, Error> {
         Ok(Self {
-            fd: self.fd.try_clone().await.map_err(|e| Error::DeviceIo("Failed to clone device", e))?,
+            fd: self.fd.try_clone().map_err(|e| Error::DeviceIo("Failed to clone device", e))?,
             ifname: self.ifname.clone(),
             type_: self.type_,
         })
     }
 
-    async fn read(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
+    fn read(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
         buffer.clear();
-        let read = self.fd.read(buffer.buffer()).await.map_err(|e| Error::DeviceIo("Read error", e))?;
+        let mut read = 0;
+        self.fd.try_read(buffer.buffer(), &mut read, Duration::from_secs(1)).map_err(|e| Error::DeviceRead(e))?;
         buffer.set_length(read);
         self.correct_data_after_read(buffer);
         Ok(())
     }
 
-    async fn write(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
+    fn write(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
         self.correct_data_before_write(buffer);
-        match self.fd.write_all(buffer.message()).await {
-            Ok(_) => self.fd.flush().await.map_err(|e| Error::DeviceIo("Flush error", e)),
+        match self.fd.write_all(buffer.message()) {
+            Ok(_) => self.fd.flush().map_err(|e| Error::DeviceIo("Flush error", e)),
             Err(e) => Err(Error::DeviceIo("Write error", e)),
         }
     }
@@ -345,9 +313,8 @@ impl MockDevice {
     }
 }
 
-#[async_trait]
 impl Device for MockDevice {
-    async fn duplicate(&self) -> Result<Self, Error> {
+    fn duplicate(&self) -> Result<Self, Error> {
         Ok(self.clone())
     }
 
@@ -355,7 +322,7 @@ impl Device for MockDevice {
         Type::Tun
     }
 
-    async fn read(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
+    fn read(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
         if let Some(data) = self.inbound.lock().pop_front() {
             buffer.clear();
             buffer.set_length(data.len());
@@ -366,7 +333,7 @@ impl Device for MockDevice {
         }
     }
 
-    async fn write(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
+    fn write(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
         self.outbound.lock().push_back(buffer.message().into());
         Ok(())
     }

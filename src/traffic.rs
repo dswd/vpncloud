@@ -70,6 +70,18 @@ impl TrafficEntry {
         self.out_bytes = 0;
         self.in_bytes = 0;
     }
+
+    fn clear(&mut self) {
+        self.in_bytes = 0;
+        self.out_bytes = 0;
+        self.in_packets = 0;
+        self.out_packets = 0;
+        self.idle_periods = 0;
+        self.in_bytes_total = 0;
+        self.in_packets_total = 0;
+        self.out_bytes_total = 0;
+        self.out_packets_total = 0;
+    }
 }
 
 #[derive(Default)]
@@ -202,5 +214,29 @@ impl TrafficStats {
             self.dropped.out_packets
         )?;
         Ok(())
+    }
+
+    pub fn add(&mut self, other: &Self) {
+        for (addr, data) in &other.peers {
+            if let Some(entry) = self.peers.get_mut(addr) {
+                *entry += data
+            } else {
+                self.peers.insert(*addr, data.clone());
+            }
+        }
+        for (key, data) in &other.payload {
+            if let Some(entry) = self.payload.get_mut(key) {
+                *entry += data
+            } else {
+                self.payload.insert(*key, data.clone());
+            }
+        }
+        self.dropped += &other.dropped
+    }
+
+    pub fn clear(&mut self) {
+        self.peers.clear();
+        self.payload.clear();
+        self.dropped.clear();
     }
 }

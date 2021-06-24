@@ -53,7 +53,7 @@ impl Protocol for Frame {
 }
 
 #[test]
-async fn decode_frame_without_vlan() {
+fn decode_frame_without_vlan() {
     let data = [6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 7, 8];
     let (src, dst) = Frame::parse(&data).unwrap();
     assert_eq!(src, Address { data: [1, 2, 3, 4, 5, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], len: 6 });
@@ -61,7 +61,7 @@ async fn decode_frame_without_vlan() {
 }
 
 #[test]
-async fn decode_frame_with_vlan() {
+fn decode_frame_with_vlan() {
     let data = [6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 0x81, 0, 4, 210, 1, 2, 3, 4, 5, 6, 7, 8];
     let (src, dst) = Frame::parse(&data).unwrap();
     assert_eq!(src, Address { data: [4, 210, 1, 2, 3, 4, 5, 6, 0, 0, 0, 0, 0, 0, 0, 0], len: 8 });
@@ -69,7 +69,7 @@ async fn decode_frame_with_vlan() {
 }
 
 #[test]
-async fn decode_invalid_frame() {
+fn decode_invalid_frame() {
     assert!(Frame::parse(&[6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 7, 8]).is_ok());
     // truncated frame
     assert!(Frame::parse(&[]).is_err());
@@ -118,7 +118,7 @@ impl Protocol for Packet {
 }
 
 #[test]
-async fn decode_ipv4_packet() {
+fn decode_ipv4_packet() {
     let data = [0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 192, 168, 1, 1, 192, 168, 1, 2];
     let (src, dst) = Packet::parse(&data).unwrap();
     assert_eq!(src, Address { data: [192, 168, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], len: 4 });
@@ -126,7 +126,7 @@ async fn decode_ipv4_packet() {
 }
 
 #[test]
-async fn decode_ipv6_packet() {
+fn decode_ipv6_packet() {
     let data = [
         0x60, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 6, 5,
         4, 3, 2, 1,
@@ -137,7 +137,7 @@ async fn decode_ipv6_packet() {
 }
 
 #[test]
-async fn decode_invalid_packet() {
+fn decode_invalid_packet() {
     assert!(Packet::parse(&[0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 192, 168, 1, 1, 192, 168, 1, 2]).is_ok());
     assert!(Packet::parse(&[
         0x60, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 6, 5,

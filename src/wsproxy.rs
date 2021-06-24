@@ -3,19 +3,13 @@
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 use super::{
-    net::{get_ip, mapped_addr, parse_listen, Socket, SocketBuilder},
+    net::{get_ip, mapped_addr, parse_listen, Socket},
     poll::{WaitImpl, WaitResult},
     port_forwarding::PortForwarding,
     util::MsgBuffer,
 };
-use async_trait::async_trait;
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
-use std::{
-    io::{self, Cursor, Read, Write},
-    net::{Ipv6Addr, SocketAddr, SocketAddrV6, TcpListener, TcpStream, UdpSocket},
-    os::unix::io::AsRawFd,
-    sync::Arc,
-};
+use std::{io::{self, Cursor, Read, Write}, net::{Ipv6Addr, SocketAddr, SocketAddrV6, TcpListener, TcpStream, UdpSocket}, os::unix::io::AsRawFd, sync::Arc, thread};
 use tungstenite::{client::AutoStream, connect, protocol::WebSocket, server::accept, Message};
 use url::Url;
 
@@ -99,7 +93,7 @@ pub fn run_proxy(listen: &str) -> Result<(), io::Error> {
     for stream in server.incoming() {
         let stream = stream?;
         let peer = stream.peer_addr()?;
-        tokio::spawn(async move {
+        thread::spawn(move || {
             if let Err(err) = serve_proxy_connection(stream) {
                 error!("Error on connection {}: {}", peer, err);
             }
@@ -138,21 +132,12 @@ impl ProxyConnection {
     }
 }
 
-impl SocketBuilder for ProxyConnection {
-    type SocketType = ProxyConnection;
-
-    fn build(self) -> Result<Self::SocketType, io::Error> {
-        Ok(self)
-    }
-
+impl Socket for ProxyConnection {
     fn create_port_forwarding(&self) -> Option<PortForwarding> {
         None
     }
-}
 
-#[async_trait]
-impl Socket for ProxyConnection {
-    async fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
+    fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
         buffer.clear();
         let data = self.read_message()?;
         let addr = read_addr(Cursor::new(&data))?;
@@ -160,7 +145,7 @@ impl Socket for ProxyConnection {
         Ok(addr)
     }
 
-    async fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error> {
+    fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error> {
         let mut msg = Vec::with_capacity(data.len() + 18);
         write_addr(addr, &mut msg)?;
         msg.write_all(data)?;
@@ -171,7 +156,7 @@ impl Socket for ProxyConnection {
         */
     }
 
-    async fn address(&self) -> Result<SocketAddr, io::Error> {
+    fn address(&self) -> Result<SocketAddr, io::Error> {
         Ok(self.addr)
     }
 }

@@ -4,9 +4,6 @@ from common import EC2Environment, CREATE, eprint
 import time, json, os, atexit
 from datetime import date
 
-
-# Note: this script will run for ~8 minutes and incur costs of about $ 0.02
-
 FILE = "../../target/release/vpncloud"
 VERSION = "2.2.0"
 REGION = "eu-central-1"
@@ -23,9 +20,6 @@ env = EC2Environment(
     subnet = CREATE, 
     keyname = CREATE
 )
-
-
-CRYPTO = ["plain", "aes256", "aes128", "chacha20"]
 
 
 class PerfTest:

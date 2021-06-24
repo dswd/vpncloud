@@ -5,50 +5,52 @@
 use super::common::*;
 
 #[test]
-async fn switch_delivers() {
+fn switch_delivers() {
     let config = Config { device_type: Type::Tap, ..Config::default() };
     let mut sim = TapSimulator::new();
-    let node1 = sim.add_node(false, &config).await;
-    let node2 = sim.add_node(false, &config).await;
+    let node1 = sim.add_node(false, &config);
+    let node2 = sim.add_node(false, &config);
 
-    sim.connect(node1, node2).await;
-    sim.simulate_all_messages().await;
+    sim.connect(node1, node2);
+    sim.simulate_all_messages();
     assert!(sim.is_connected(node1, node2));
     assert!(sim.is_connected(node2, node1));
+    sim.trigger_housekeep();
 
     let payload = vec![2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5];
 
-    sim.put_payload(node1, payload.clone()).await;
-    sim.simulate_all_messages().await;
+    sim.put_payload(node1, payload.clone());
+    sim.simulate_all_messages();
 
     assert_eq!(Some(payload), sim.pop_payload(node2));
 }
 
 #[test]
-async fn switch_learns() {
+fn switch_learns() {
     let config = Config { device_type: Type::Tap, ..Config::default() };
     let mut sim = TapSimulator::new();
-    let node1 = sim.add_node(false, &config).await;
-    let node2 = sim.add_node(false, &config).await;
-    let node3 = sim.add_node(false, &config).await;
+    let node1 = sim.add_node(false, &config);
+    let node2 = sim.add_node(false, &config);
+    let node3 = sim.add_node(false, &config);
 
-    sim.connect(node1, node2).await;
-    sim.connect(node1, node3).await;
-    sim.connect(node2, node3).await;
-    sim.simulate_all_messages().await;
+    sim.connect(node1, node2);
+    sim.connect(node1, node3);
+    sim.connect(node2, node3);
+    sim.simulate_all_messages();
     assert!(sim.is_connected(node1, node2));
     assert!(sim.is_connected(node2, node1));
     assert!(sim.is_connected(node1, node3));
     assert!(sim.is_connected(node3, node1));
     assert!(sim.is_connected(node2, node3));
     assert!(sim.is_connected(node3, node2));
+    sim.trigger_housekeep();
 
     let payload = vec![2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5];
 
     // Nothing learnt so far, node1 broadcasts
 
-    sim.put_payload(node1, payload.clone()).await;
-    sim.simulate_all_messages().await;
+    sim.put_payload(node1, payload.clone());
+    sim.simulate_all_messages();
 
     assert_eq!(Some(payload.clone()), sim.pop_payload(node2));
     assert_eq!(Some(payload), sim.pop_payload(node3));
@@ -57,38 +59,39 @@ async fn switch_learns() {
 
     // Node 2 learned the address by receiving it, does not broadcast
 
-    sim.put_payload(node2, payload.clone()).await;
-    sim.simulate_all_messages().await;
+    sim.put_payload(node2, payload.clone());
+    sim.simulate_all_messages();
 
     assert_eq!(Some(payload), sim.pop_payload(node1));
     assert_eq!(None, sim.pop_payload(node3));
 }
 
 #[test]
-async fn switch_honours_vlans() {
+fn switch_honours_vlans() {
     let config = Config { device_type: Type::Tap, ..Config::default() };
     let mut sim = TapSimulator::new();
-    let node1 = sim.add_node(false, &config).await;
-    let node2 = sim.add_node(false, &config).await;
-    let node3 = sim.add_node(false, &config).await;
+    let node1 = sim.add_node(false, &config);
+    let node2 = sim.add_node(false, &config);
+    let node3 = sim.add_node(false, &config);
 
-    sim.connect(node1, node2).await;
-    sim.connect(node1, node3).await;
-    sim.connect(node2, node3).await;
-    sim.simulate_all_messages().await;
+    sim.connect(node1, node2);
+    sim.connect(node1, node3);
+    sim.connect(node2, node3);
+    sim.simulate_all_messages();
     assert!(sim.is_connected(node1, node2));
     assert!(sim.is_connected(node2, node1));
     assert!(sim.is_connected(node1, node3));
     assert!(sim.is_connected(node3, node1));
     assert!(sim.is_connected(node2, node3));
     assert!(sim.is_connected(node3, node2));
+    sim.trigger_housekeep();
 
     let payload = vec![2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 0x81, 0, 0, 0x67, 1, 2, 3, 4, 5];
 
     // Nothing learnt so far, node1 broadcasts
 
-    sim.put_payload(node1, payload.clone()).await;
-    sim.simulate_all_messages().await;
+    sim.put_payload(node1, payload.clone());
+    sim.simulate_all_messages();
 
     assert_eq!(Some(payload.clone()), sim.pop_payload(node2));
     assert_eq!(Some(payload), sim.pop_payload(node3));
@@ -97,8 +100,8 @@ async fn switch_honours_vlans() {
 
     // Node 2 learned the address by receiving it, does not broadcast
 
-    sim.put_payload(node2, payload.clone()).await;
-    sim.simulate_all_messages().await;
+    sim.put_payload(node2, payload.clone());
+    sim.simulate_all_messages();
 
     assert_eq!(Some(payload), sim.pop_payload(node1));
     assert_eq!(None, sim.pop_payload(node3));
@@ -107,8 +110,8 @@ async fn switch_honours_vlans() {
 
     // Different VLANs, node 2 does not learn, still broadcasts
 
-    sim.put_payload(node2, payload.clone()).await;
-    sim.simulate_all_messages().await;
+    sim.put_payload(node2, payload.clone());
+    sim.simulate_all_messages();
 
     assert_eq!(Some(payload.clone()), sim.pop_payload(node1));
     assert_eq!(Some(payload), sim.pop_payload(node3));
@@ -116,13 +119,13 @@ async fn switch_honours_vlans() {
 
 #[test]
 #[ignore]
-async fn switch_forgets() {
+fn switch_forgets() {
     // TODO Test
     unimplemented!()
 }
 
 #[test]
-async fn router_delivers() {
+fn router_delivers() {
     let config1 = Config {
         device_type: Type::Tun,
         auto_claim: false,
@@ -136,24 +139,24 @@ async fn router_delivers() {
         ..Config::default()
     };
     let mut sim = TunSimulator::new();
-    let node1 = sim.add_node(false, &config1).await;
-    let node2 = sim.add_node(false, &config2).await;
+    let node1 = sim.add_node(false, &config1);
+    let node2 = sim.add_node(false, &config2);
 
-    sim.connect(node1, node2).await;
-    sim.simulate_all_messages().await;
+    sim.connect(node1, node2);
+    sim.simulate_all_messages();
     assert!(sim.is_connected(node1, node2));
     assert!(sim.is_connected(node2, node1));
 
     let payload = vec![0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2];
 
-    sim.put_payload(node1, payload.clone()).await;
-    sim.simulate_all_messages().await;
+    sim.put_payload(node1, payload.clone());
+    sim.simulate_all_messages();
 
     assert_eq!(Some(payload), sim.pop_payload(node2));
 }
 
 #[test]
-async fn router_drops_unknown_dest() {
+fn router_drops_unknown_dest() {
     let config1 = Config {
         device_type: Type::Tun,
         auto_claim: false,
@@ -167,18 +170,18 @@ async fn router_drops_unknown_dest() {
         ..Config::default()
     };
     let mut sim = TunSimulator::new();
-    let node1 = sim.add_node(false, &config1).await;
-    let node2 = sim.add_node(false, &config2).await;
+    let node1 = sim.add_node(false, &config1);
+    let node2 = sim.add_node(false, &config2);
 
-    sim.connect(node1, node2).await;
-    sim.simulate_all_messages().await;
+    sim.connect(node1, node2);
+    sim.simulate_all_messages();
     assert!(sim.is_connected(node1, node2));
     assert!(sim.is_connected(node2, node1));
 
     let payload = vec![0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 3, 3, 3, 3];
 
-    sim.put_payload(node1, payload).await;
-    sim.simulate_all_messages().await;
+    sim.put_payload(node1, payload);
+    sim.simulate_all_messages();
 
     assert_eq!(None, sim.pop_payload(node2));
 }

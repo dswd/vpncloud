@@ -731,7 +731,7 @@ mod tests {
     }
 
     #[test]
-    async fn normal_init() {
+    fn normal_init() {
         let (mut sender, mut receiver) = create_pair();
         let mut out = MsgBuffer::new(8);
         sender.send_ping(&mut out);
@@ -753,7 +753,7 @@ mod tests {
     }
 
     #[test]
-    async fn lost_init_sender_recovers() {
+    fn lost_init_sender_recovers() {
         let (mut sender, mut receiver) = create_pair();
         let mut out = MsgBuffer::new(8);
         sender.send_ping(&mut out);
@@ -786,7 +786,7 @@ mod tests {
     }
 
     #[test]
-    async fn lost_init_receiver_recovers() {
+    fn lost_init_receiver_recovers() {
         let (mut sender, mut receiver) = create_pair();
         let mut out = MsgBuffer::new(8);
         sender.send_ping(&mut out);
@@ -818,7 +818,7 @@ mod tests {
     }
 
     #[test]
-    async fn timeout() {
+    fn timeout() {
         let (mut sender, _receiver) = create_pair();
         let mut out = MsgBuffer::new(8);
         sender.send_ping(&mut out);
@@ -833,7 +833,7 @@ mod tests {
     }
 
     #[test]
-    async fn untrusted_peer() {
+    fn untrusted_peer() {
         let (mut sender, _) = create_pair();
         let (_, mut receiver) = create_pair();
         let mut out = MsgBuffer::new(8);
@@ -843,7 +843,7 @@ mod tests {
     }
 
     #[test]
-    async fn manipulated_message() {
+    fn manipulated_message() {
         let (mut sender, mut receiver) = create_pair();
         let mut out = MsgBuffer::new(8);
         sender.send_ping(&mut out);
@@ -853,7 +853,7 @@ mod tests {
     }
 
     #[test]
-    async fn connect_to_self() {
+    fn connect_to_self() {
         let (mut sender, _) = create_pair();
         let mut out = MsgBuffer::new(8);
         sender.send_ping(&mut out);
@@ -881,7 +881,7 @@ mod tests {
     }
 
     #[test]
-    async fn algorithm_negotiation() {
+    fn algorithm_negotiation() {
         // Equal algorithms
         test_algorithm_negotiation(
             Algorithms {

@@ -71,42 +71,49 @@ impl SharedPeerCrypto {
     }
 }
 
-#[derive(Clone)]
 pub struct SharedTraffic {
+    cache: TrafficStats,
     traffic: Arc<Mutex<TrafficStats>>,
+}
+
+impl Clone for SharedTraffic {
+    fn clone(&self) -> Self {
+        Self { cache: TrafficStats::default(), traffic: self.traffic.clone() }
+    }
 }
 
 impl SharedTraffic {
     pub fn new() -> Self {
-        Self { traffic: Arc::new(Mutex::new(Default::default())) }
+        Self { cache: TrafficStats::default(), traffic: Arc::new(Mutex::new(Default::default())) }
     }
 
     pub fn sync(&mut self) {
-        // TODO sync if needed
+        self.traffic.lock().add(&self.cache);
+        self.cache.clear();
     }
 
-    pub fn count_out_traffic(&self, peer: SocketAddr, bytes: usize) {
-        self.traffic.lock().count_out_traffic(peer, bytes);
+    pub fn count_out_traffic(&mut self, peer: SocketAddr, bytes: usize) {
+        self.cache.count_out_traffic(peer, bytes);
     }
 
-    pub fn count_in_traffic(&self, peer: SocketAddr, bytes: usize) {
-        self.traffic.lock().count_in_traffic(peer, bytes);
+    pub fn count_in_traffic(&mut self, peer: SocketAddr, bytes: usize) {
+        self.cache.count_in_traffic(peer, bytes);
     }
 
-    pub fn count_out_payload(&self, remote: Address, local: Address, bytes: usize) {
-        self.traffic.lock().count_out_payload(remote, local, bytes);
+    pub fn count_out_payload(&mut self, remote: Address, local: Address, bytes: usize) {
+        self.cache.count_out_payload(remote, local, bytes);
     }
 
-    pub fn count_in_payload(&self, remote: Address, local: Address, bytes: usize) {
-        self.traffic.lock().count_in_payload(remote, local, bytes);
+    pub fn count_in_payload(&mut self, remote: Address, local: Address, bytes: usize) {
+        self.cache.count_in_payload(remote, local, bytes);
     }
 
-    pub fn count_dropped_payload(&self, bytes: usize) {
-        self.traffic.lock().count_dropped_payload(bytes);
+    pub fn count_dropped_payload(&mut self, bytes: usize) {
+        self.cache.count_dropped_payload(bytes);
     }
 
-    pub fn count_invalid_protocol(&self, bytes: usize) {
-        self.traffic.lock().count_invalid_protocol(bytes);
+    pub fn count_invalid_protocol(&mut self, bytes: usize) {
+        self.cache.count_invalid_protocol(bytes);
     }
 
     pub fn period(&mut self, cleanup_idle: Option<usize>) {
@@ -133,60 +140,60 @@ impl SharedTraffic {
 #[derive(Clone)]
 pub struct SharedTable<TS: TimeSource> {
     table: Arc<Mutex<ClaimTable<TS>>>,
-    //TODO: local reader lookup table Addr => Option<SocketAddr>
-    //TODO: local writer cache Addr => SocketAddr
+    cache: HashMap<Address, Option<SocketAddr>, Hash>,
 }
 
 impl<TS: TimeSource> SharedTable<TS> {
     pub fn new(config: &Config) -> Self {
         let table = ClaimTable::new(config.switch_timeout as Duration, config.peer_timeout as Duration);
-        SharedTable { table: Arc::new(Mutex::new(table)) }
+        SharedTable { table: Arc::new(Mutex::new(table)), cache: Default::default() }
     }
 
     pub fn sync(&mut self) {
-        // TODO sync if needed
-        // once every x seconds
-        // fetch reader cache
-        // clear writer cache
+        self.cache.clear();
     }
 
     pub fn lookup(&mut self, addr: Address) -> Option<SocketAddr> {
-        // TODO: use local reader cache
+        if let Some(val) = self.cache.get(&addr) {
+            return *val;
+        }
         // if not found, use shared table and put into cache
-        self.table.lock().lookup(addr)
+        let val = self.table.lock().lookup(addr);
+        self.cache.insert(addr, val);
+        val
     }
 
     pub fn set_claims(&mut self, peer: SocketAddr, claims: RangeList) {
-        // clear writer cache
-        self.table.lock().set_claims(peer, claims)
+        self.table.lock().set_claims(peer, claims);
+        self.cache.clear();
     }
 
     pub fn remove_claims(&mut self, peer: SocketAddr) {
-        // clear writer cache
-        self.table.lock().remove_claims(peer)
+        self.table.lock().remove_claims(peer);
+        self.cache.clear();
     }
 
     pub fn cache(&mut self, addr: Address, peer: SocketAddr) {
-        // check writer cache and only write real updates to shared table
-        self.table.lock().cache(addr, peer)
+        if self.cache.get(&addr) != Some(&Some(peer)) {
+            self.table.lock().cache(addr, peer);
+            self.cache.insert(addr, Some(peer));
+        }
     }
 
     pub fn housekeep(&mut self) {
-        self.table.lock().housekeep()
+        self.table.lock().housekeep();
+        self.cache.clear();
     }
 
     pub fn write_out<W: Write>(&self, out: &mut W) -> Result<(), io::Error> {
-        //TODO: stats call
         self.table.lock().write_out(out)
     }
 
     pub fn cache_len(&self) -> usize {
-        //TODO: stats call
         self.table.lock().cache_len()
     }
 
     pub fn claim_len(&self) -> usize {
-        //TODO: stats call
         self.table.lock().claim_len()
     }
 }

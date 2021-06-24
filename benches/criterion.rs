@@ -136,7 +136,6 @@ fn crypto_aes256(c: &mut Criterion) {
 }
 
 fn full_communication_tun_router(c: &mut Criterion) {
-    let runtime = tokio::runtime::Runtime::new().unwrap();
     log::set_max_level(log::LevelFilter::Error);
     let config1 = Config {
         device_type: Type::Tun,
@@ -152,60 +151,53 @@ fn full_communication_tun_router(c: &mut Criterion) {
     };
     let mut sim = TunSimulator::new();
 
-    let (node1, node2) = runtime.block_on(async {
-        log::set_max_level(log::LevelFilter::Error);
-        let node1 = sim.add_node(false, &config1).await;
-        let node2 = sim.add_node(false, &config2).await;
+    let node1 = sim.add_node(false, &config1);
+    let node2 = sim.add_node(false, &config2);
 
-        sim.connect(node1, node2).await;
-        sim.simulate_all_messages().await;
-        assert!(sim.is_connected(node1, node2));
-        assert!(sim.is_connected(node2, node1));
-        (node1, node2)
-    });
+    sim.connect(node1, node2);
+    sim.simulate_all_messages();
+    assert!(sim.is_connected(node1, node2));
+    assert!(sim.is_connected(node2, node1));
+    sim.trigger_housekeep();
 
     let mut payload = vec![0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2];
     payload.append(&mut vec![0; 1400]);
     let mut g = c.benchmark_group("full_communication");
     g.throughput(Throughput::Bytes(2 * 1400));
     g.bench_function("tun_router", |b| {
-        b.iter(|| runtime.block_on(async {
-            sim.put_payload(node1, payload.clone()).await;
-            sim.simulate_all_messages().await;
+        b.iter(|| {
+            sim.put_payload(node1, payload.clone());
+            sim.simulate_all_messages();
             assert_eq!(Some(&payload), sim.pop_payload(node2).as_ref());
-        }));
+        });
     });
     g.finish()
 }
 
 fn full_communication_tap_switch(c: &mut Criterion) {
-    let runtime = tokio::runtime::Runtime::new().unwrap();
     log::set_max_level(log::LevelFilter::Error);
     let config = Config { device_type: Type::Tap, ..Config::default() };
     let mut sim = TapSimulator::new();
 
-    let (node1, node2) = runtime.block_on(async {
-        log::set_max_level(log::LevelFilter::Error);
-        let node1 = sim.add_node(false, &config).await;
-        let node2 = sim.add_node(false, &config).await;
+    let node1 = sim.add_node(false, &config);
+    let node2 = sim.add_node(false, &config);
 
-        sim.connect(node1, node2).await;
-        sim.simulate_all_messages().await;
-        assert!(sim.is_connected(node1, node2));
-        assert!(sim.is_connected(node2, node1));
-        (node1, node2)
-    });
+    sim.connect(node1, node2);
+    sim.simulate_all_messages();
+    assert!(sim.is_connected(node1, node2));
+    assert!(sim.is_connected(node2, node1));
+    sim.trigger_housekeep();
 
     let mut payload = vec![2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5];
     payload.append(&mut vec![0; 1400]);
     let mut g = c.benchmark_group("full_communication");
     g.throughput(Throughput::Bytes(2 * 1400));
     g.bench_function("tap_switch", |b| {
-        b.iter(|| runtime.block_on(async {
-            sim.put_payload(node1, payload.clone()).await;
-            sim.simulate_all_messages().await;
+        b.iter(|| {
+            sim.put_payload(node1, payload.clone());
+            sim.simulate_all_messages();
             assert_eq!(Some(&payload), sim.pop_payload(node2).as_ref());
-        }));
+        });
     });
     g.finish()
 }

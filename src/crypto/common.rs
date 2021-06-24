@@ -349,7 +349,7 @@ mod tests {
     }
 
     #[test]
-    async fn normal() {
+    fn normal() {
         let config = Config { password: Some("test".to_string()), ..Default::default() };
         let mut node1 = create_node(&config);
         let mut node2 = create_node(&config);

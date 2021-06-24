@@ -228,7 +228,7 @@ mod tests {
     }
 
     #[test]
-    async fn test_encode_decode_message() {
+    fn test_encode_decode_message() {
         let mut data = Vec::with_capacity(100);
         let (_, key) = RotationState::create_key();
         let msg = RotationMessage { message_id: 1, propose: key, confirm: None };
@@ -249,7 +249,7 @@ mod tests {
     }
 
     #[test]
-    async fn test_normal_rotation() {
+    fn test_normal_rotation() {
         let mut out1 = MsgBuffer::new(8);
         let mut out2 = MsgBuffer::new(8);
 
@@ -323,7 +323,7 @@ mod tests {
     }
 
     #[test]
-    async fn test_duplication() {
+    fn test_duplication() {
         let mut out1 = MsgBuffer::new(8);
         let mut out2 = MsgBuffer::new(8);
 
@@ -359,7 +359,7 @@ mod tests {
     }
 
     #[test]
-    async fn test_lost_message() {
+    fn test_lost_message() {
         let mut out1 = MsgBuffer::new(8);
         let mut out2 = MsgBuffer::new(8);
 
@@ -385,7 +385,7 @@ mod tests {
     }
 
     #[test]
-    async fn test_reflect_back() {
+    fn test_reflect_back() {
         let mut out1 = MsgBuffer::new(8);
         let mut out2 = MsgBuffer::new(8);
 

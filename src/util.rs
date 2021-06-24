@@ -3,6 +3,7 @@
 // This software is licensed under GPL-3 or newer (see LICENSE.md)
 
 use std::process::Command;
+use std::time::Instant;
 use std::{
     fmt,
     net::{Ipv4Addr, SocketAddr, ToSocketAddrs, UdpSocket},
@@ -11,6 +12,8 @@ use std::{
 
 use crate::error::Error;
 
+use signal::trap::Trap;
+use signal::Signal;
 #[cfg(not(target_os = "linux"))]
 use time;
 
@@ -260,6 +263,38 @@ impl fmt::Display for Bytes {
     }
 }
 
+pub struct CtrlC {
+    dummy_time: Instant,
+    trap: Trap,
+}
+
+impl CtrlC {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn was_pressed(&self) -> bool {
+        self.trap.wait(self.dummy_time).is_some()
+    }
+
+    pub fn wait(&self) {
+        loop {
+            let deadline = Instant::now() + std::time::Duration::from_secs(10);
+            if self.trap.wait(deadline).is_some() {
+                return;
+            }
+        }
+    }
+}
+
+impl Default for CtrlC {
+    fn default() -> Self {
+        let dummy_time = Instant::now();
+        let trap = Trap::trap(&[Signal::SIGINT, Signal::SIGTERM, Signal::SIGQUIT]);
+        Self { dummy_time, trap }
+    }
+}
+
 pub trait TimeSource: Sync + Copy + Send + 'static {
     fn now() -> Time;
 }
@@ -402,7 +437,7 @@ pub fn run_cmd(mut cmd: Command) {
 }
 
 #[test]
-async fn base62() {
+fn base62() {
     assert_eq!("", to_base62(&[0]));
     assert_eq!("z", to_base62(&[61]));
     assert_eq!("10", to_base62(&[62]));

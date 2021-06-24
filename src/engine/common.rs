@@ -1,10 +1,11 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::thread;
 use std::{fs::File, hash::BuildHasherDefault};
-use tokio;
 
 use fnv::FnvHasher;
 
+use crate::util::CtrlC;
 use crate::{
     config::Config,
     crypto::PeerCrypto,
@@ -46,7 +47,7 @@ pub struct GenericCloud<D: Device, P: Protocol, S: Socket, TS: TimeSource> {
 
 impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS> {
     #[allow(clippy::too_many_arguments)]
-    pub async fn new(
+    pub fn new(
         config: &Config, socket: S, device: D, port_forwarding: Option<PortForwarding>, stats_file: Option<File>,
     ) -> Result<Self, Error> {
         let table = SharedTable::<TS>::new(&config);
@@ -55,7 +56,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         let running = Arc::new(AtomicBool::new(true));
         let device_thread = DeviceThread::<S, D, P, TS>::new(
             config.clone(),
-            device.duplicate().await?,
+            device.duplicate()?,
             socket.clone(),
             traffic.clone(),
             peer_crypto.clone(),
@@ -73,7 +74,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             stats_file,
             running.clone(),
         );
-        socket_thread.housekeep().await?;
+        socket_thread.housekeep()?;
         Ok(Self { socket_thread, device_thread, running })
     }
 
@@ -90,17 +91,19 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         Ok(())
     }
 
-    pub async fn run(self) {
+    pub fn run(self) {
         debug!("Starting threads");
         let running = self.running.clone();
-        let device_thread_handle = tokio::spawn(self.device_thread.run());
-        let socket_thread_handle = tokio::spawn(self.socket_thread.run());
-        try_fail!(tokio::signal::ctrl_c().await, "Failed to set ctrl-c handler: {}");
+        let device = self.device_thread;
+        let device_thread_handle = thread::spawn(move || device.run());
+        let socket = self.socket_thread;
+        let socket_thread_handle = thread::spawn(move || socket.run());
+        let ctrlc = CtrlC::new();
+        ctrlc.wait();
         running.store(false, Ordering::SeqCst);
         debug!("Waiting for threads to end");
-        let (dev_ret, sock_ret) = join!(device_thread_handle, socket_thread_handle);
-        dev_ret.unwrap();
-        sock_ret.unwrap();
+        device_thread_handle.join().unwrap();
+        socket_thread_handle.join().unwrap();
         debug!("Threads stopped");
     }
 }
@@ -124,21 +127,21 @@ impl<P: Protocol> GenericCloud<MockDevice, P, MockSocket, MockTimeSource> {
         &mut self.device_thread.device
     }
 
-    pub async fn connect(&mut self, addr: SocketAddr) -> Result<(), Error> {
-        self.socket_thread.connect(addr).await
+    pub fn connect(&mut self, addr: SocketAddr) -> Result<(), Error> {
+        self.socket_thread.connect(addr)
     }
 
-    pub async fn trigger_socket_event(&mut self) {
-        self.socket_thread.iteration().await
+    pub fn trigger_socket_event(&mut self) {
+        self.socket_thread.iteration()
     }
 
-    pub async fn trigger_device_event(&mut self) {
-        self.device_thread.iteration().await
+    pub fn trigger_device_event(&mut self) {
+        self.device_thread.iteration()
     }
 
-    pub async fn trigger_housekeep(&mut self) {
-        try_fail!(self.socket_thread.housekeep().await, "Housekeep failed: {}");
-        try_fail!(self.device_thread.housekeep().await, "Housekeep failed: {}");
+    pub fn trigger_housekeep(&mut self) {
+        try_fail!(self.socket_thread.housekeep(), "Housekeep failed: {}");
+        try_fail!(self.device_thread.housekeep(), "Housekeep failed: {}");
     }
 
     pub fn is_connected(&self, addr: &SocketAddr) -> bool {
@@ -149,7 +152,7 @@ impl<P: Protocol> GenericCloud<MockDevice, P, MockSocket, MockTimeSource> {
         &self.socket_thread.own_addresses
     }
 
-    pub async fn get_num(&self) -> usize {
-        self.socket_thread.socket.address().await.unwrap().port() as usize
+    pub fn get_num(&self) -> usize {
+        self.socket_thread.socket.address().unwrap().port() as usize
     }
 }

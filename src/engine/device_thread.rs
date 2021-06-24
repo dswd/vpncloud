@@ -14,7 +14,6 @@ use crate::{
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::{marker::PhantomData, net::SocketAddr};
-use tokio::time::timeout;
 
 pub struct DeviceThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
     // Read-only fields
@@ -56,11 +55,11 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
     }
 
     #[inline]
-    async fn send_to(&mut self, addr: SocketAddr) -> Result<(), Error> {
+    fn send_to(&mut self, addr: SocketAddr) -> Result<(), Error> {
         let size = self.buffer.len();
         debug!("Sending msg with {} bytes to {}", size, addr);
         self.traffic.count_out_traffic(addr, size);
-        match self.socket.send(self.buffer.message(), addr).await {
+        match self.socket.send(self.buffer.message(), addr) {
             Ok(written) if written == size => Ok(()),
             Ok(_) => Err(Error::Socket("Sent out truncated packet")),
             Err(e) => Err(Error::SocketIo("IOError when sending", e)),
@@ -68,15 +67,15 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
     }
 
     #[inline]
-    async fn send_msg(&mut self, addr: SocketAddr, type_: u8) -> Result<(), Error> {
+    fn send_msg(&mut self, addr: SocketAddr, type_: u8) -> Result<(), Error> {
         debug!("Sending msg with {} bytes to {}", self.buffer.len(), addr);
         self.buffer.prepend_byte(type_);
         self.peer_crypto.encrypt_for(addr, &mut self.buffer)?;
-        self.send_to(addr).await
+        self.send_to(addr)
     }
 
     #[inline]
-    async fn broadcast_msg(&mut self, type_: u8) -> Result<(), Error> {
+    fn broadcast_msg(&mut self, type_: u8) -> Result<(), Error> {
         let size = self.buffer.len();
         debug!("Broadcasting message type {}, {:?} bytes to {} peers", type_, size, self.peer_crypto.count());
         let traffic = &mut self.traffic;
@@ -91,7 +90,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
                 crypto.encrypt(&mut self.broadcast_buffer);
             }
             traffic.count_out_traffic(*addr, self.broadcast_buffer.len());
-            match socket.send(self.broadcast_buffer.message(), *addr).await {
+            match socket.send(self.broadcast_buffer.message(), *addr) {
                 Ok(written) if written == self.broadcast_buffer.len() => Ok(()),
                 Ok(_) => Err(Error::Socket("Sent out truncated packet")),
                 Err(e) => Err(Error::SocketIo("IOError when sending", e)),
@@ -100,7 +99,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
         Ok(())
     }
 
-    async fn forward_packet(&mut self) -> Result<(), Error> {
+    fn forward_packet(&mut self) -> Result<(), Error> {
         let (src, dst) = P::parse(self.buffer.message())?;
         debug!("Read data from interface: src: {}, dst: {}, {} bytes", src, dst, self.buffer.len());
         self.traffic.count_out_payload(dst, src, self.buffer.len());
@@ -108,12 +107,12 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
             Some(addr) => {
                 // Peer found for destination
                 debug!("Found destination for {} => {}", dst, addr);
-                self.send_msg(addr, MESSAGE_TYPE_DATA).await?;
+                self.send_msg(addr, MESSAGE_TYPE_DATA)?;
             }
             None => {
                 if self.broadcast {
                     debug!("No destination for {} found, broadcasting", dst);
-                    self.broadcast_msg(MESSAGE_TYPE_DATA).await?;
+                    self.broadcast_msg(MESSAGE_TYPE_DATA)?;
                 } else {
                     debug!("No destination for {} found, dropping", dst);
                     self.traffic.count_dropped_payload(self.buffer.len());
@@ -123,35 +122,35 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
         Ok(())
     }
 
-    pub async fn housekeep(&mut self) -> Result<(), Error> {
+    pub fn housekeep(&mut self) -> Result<(), Error> {
         self.peer_crypto.load();
         self.table.sync();
         self.traffic.sync();
         Ok(())
     }
 
-    pub async fn iteration(&mut self) {
-        if let Ok(result) = timeout(std::time::Duration::from_millis(1000), self.device.read(&mut self.buffer)).await {
-            try_fail!(result, "Failed to read from device: {}");
-            if let Err(e) = self.forward_packet().await {
+    pub fn iteration(&mut self) {
+        if self.device.read(&mut self.buffer).is_ok() {
+            //try_fail!(result, "Failed to read from device: {}");
+            if let Err(e) = self.forward_packet() {
                 error!("{}", e);
             }
         }
         let now = TS::now();
         if self.next_housekeep < now {
-            if let Err(e) = self.housekeep().await {
+            if let Err(e) = self.housekeep() {
                 error!("{}", e)
             }
             self.next_housekeep = now + 1
         }
     }
 
-    pub async fn run(mut self) {
+    pub fn run(mut self) {
         loop {
-            self.iteration().await;
+            self.iteration();
             if !self.running.load(Ordering::SeqCst) {
                 debug!("Device: end");
-                return
+                return;
             }
         }
     }

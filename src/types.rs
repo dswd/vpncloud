@@ -233,7 +233,7 @@ mod tests {
     use std::io::Cursor;
 
     #[test]
-    async fn address_parse_fmt() {
+    fn address_parse_fmt() {
         assert_eq!(format!("{}", Address::from_str("120.45.22.5").unwrap()), "120.45.22.5");
         assert_eq!(format!("{}", Address::from_str("78:2d:16:05:01:02").unwrap()), "78:2d:16:05:01:02");
         assert_eq!(
@@ -249,7 +249,7 @@ mod tests {
     }
 
     #[test]
-    async fn address_decode_encode() {
+    fn address_decode_encode() {
         let mut buf = vec![];
         let addr = Address::from_str("120.45.22.5").unwrap();
         addr.write_to(Cursor::new(&mut buf));
@@ -270,7 +270,7 @@ mod tests {
     }
 
     #[test]
-    async fn address_eq() {
+    fn address_eq() {
         assert_eq!(
             Address::read_from_fixed(Cursor::new(&[1, 2, 3, 4]), 4).unwrap(),
             Address::read_from_fixed(Cursor::new(&[1, 2, 3, 4]), 4).unwrap()
@@ -290,7 +290,7 @@ mod tests {
     }
 
     #[test]
-    async fn address_range_decode_encode() {
+    fn address_range_decode_encode() {
         let mut buf = vec![];
         let range =
             Range { base: Address { data: [0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], len: 4 }, prefix_len: 24 };

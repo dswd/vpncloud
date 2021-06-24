@@ -323,7 +323,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 #[test]
-async fn encode() {
+fn encode() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let mut peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:53").unwrap()];
@@ -335,7 +335,7 @@ async fn encode() {
 }
 
 #[test]
-async fn decode() {
+fn decode() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let mut peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:53").unwrap()];
@@ -348,7 +348,7 @@ async fn decode() {
 }
 
 #[test]
-async fn decode_split() {
+fn decode_split() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:53").unwrap()];
@@ -363,7 +363,7 @@ async fn decode_split() {
 }
 
 #[test]
-async fn decode_offset() {
+fn decode_offset() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:53").unwrap()];
@@ -374,7 +374,7 @@ async fn decode_offset() {
 }
 
 #[test]
-async fn decode_multiple() {
+fn decode_multiple() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:53").unwrap()];
@@ -385,7 +385,7 @@ async fn decode_multiple() {
 }
 
 #[test]
-async fn decode_ttl() {
+fn decode_ttl() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     MockTimeSource::set_time(2000 * 3600);
@@ -409,7 +409,7 @@ async fn decode_ttl() {
 }
 
 #[test]
-async fn decode_invalid() {
+fn decode_invalid() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     assert_eq!(0, ser.decode("", None).len());
@@ -422,7 +422,7 @@ async fn decode_invalid() {
 }
 
 #[test]
-async fn encode_decode() {
+fn encode_decode() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:53").unwrap()];
@@ -432,7 +432,7 @@ async fn encode_decode() {
 }
 
 #[test]
-async fn encode_decode_file() {
+fn encode_decode_file() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:53").unwrap()];
@@ -444,7 +444,7 @@ async fn encode_decode_file() {
 }
 
 #[test]
-async fn encode_decode_cmd() {
+fn encode_decode_cmd() {
     MockTimeSource::set_time(2000 * 3600);
     let ser = BeaconSerializer::<MockTimeSource>::new(b"mysecretkey");
     let peers = vec![SocketAddr::from_str("1.2.3.4:5678").unwrap(), SocketAddr::from_str("6.6.6.6:53").unwrap()];

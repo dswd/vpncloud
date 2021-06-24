@@ -38,6 +38,9 @@ pub enum Error {
     #[error("Device error: {0} ({1})")]
     DeviceIo(&'static str, #[source] io::Error),
 
+    #[error("Device read error: {0}")]
+    DeviceRead(#[source] timeout_io::TimeoutIoError),
+
     #[error("File error: {0}")]
     FileIo(&'static str, #[source] io::Error),
 

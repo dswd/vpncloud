@@ -277,7 +277,7 @@ mod tests {
     use ring::aead::{self, LessSafeKey, UnboundKey};
 
     #[test]
-    async fn test_nonce() {
+    fn test_nonce() {
         let mut nonce = Nonce::zero();
         assert_eq!(nonce.as_bytes(), &[0; 12]);
         nonce.increment();
@@ -299,17 +299,17 @@ mod tests {
     }
 
     #[test]
-    async fn test_encrypt_decrypt_aes128() {
+    fn test_encrypt_decrypt_aes128() {
         test_encrypt_decrypt(&aead::AES_128_GCM)
     }
 
     #[test]
-    async fn test_encrypt_decrypt_aes256() {
+    fn test_encrypt_decrypt_aes256() {
         test_encrypt_decrypt(&aead::AES_256_GCM)
     }
 
     #[test]
-    async fn test_encrypt_decrypt_chacha() {
+    fn test_encrypt_decrypt_chacha() {
         test_encrypt_decrypt(&aead::CHACHA20_POLY1305)
     }
 
@@ -339,17 +339,17 @@ mod tests {
     }
 
     #[test]
-    async fn test_tampering_aes128() {
+    fn test_tampering_aes128() {
         test_tampering(&aead::AES_128_GCM)
     }
 
     #[test]
-    async fn test_tampering_aes256() {
+    fn test_tampering_aes256() {
         test_tampering(&aead::AES_256_GCM)
     }
 
     #[test]
-    async fn test_tampering_chacha() {
+    fn test_tampering_chacha() {
         test_tampering(&aead::CHACHA20_POLY1305)
     }
 
@@ -380,17 +380,17 @@ mod tests {
     }
 
     #[test]
-    async fn test_nonce_pinning_aes128() {
+    fn test_nonce_pinning_aes128() {
         test_nonce_pinning(&aead::AES_128_GCM)
     }
 
     #[test]
-    async fn test_nonce_pinning_aes256() {
+    fn test_nonce_pinning_aes256() {
         test_nonce_pinning(&aead::AES_256_GCM)
     }
 
     #[test]
-    async fn test_nonce_pinning_chacha() {
+    fn test_nonce_pinning_chacha() {
         test_nonce_pinning(&aead::CHACHA20_POLY1305)
     }
 
@@ -429,39 +429,39 @@ mod tests {
     }
 
     #[test]
-    async fn test_key_rotation_aes128() {
+    fn test_key_rotation_aes128() {
         test_key_rotation(&aead::AES_128_GCM);
     }
 
     #[test]
-    async fn test_key_rotation_aes256() {
+    fn test_key_rotation_aes256() {
         test_key_rotation(&aead::AES_256_GCM);
     }
 
     #[test]
-    async fn test_key_rotation_chacha() {
+    fn test_key_rotation_chacha() {
         test_key_rotation(&aead::CHACHA20_POLY1305);
     }
 
     #[test]
-    async fn test_core_size() {
+    fn test_core_size() {
         assert_eq!(2400, mem::size_of::<CryptoCore>());
     }
 
     #[test]
-    async fn test_speed_aes128() {
+    fn test_speed_aes128() {
         let speed = test_speed(&aead::AES_128_GCM, &Duration::from_secs_f32(0.2));
         assert!(speed > 10.0);
     }
 
     #[test]
-    async fn test_speed_aes256() {
+    fn test_speed_aes256() {
         let speed = test_speed(&aead::AES_256_GCM, &Duration::from_secs_f32(0.2));
         assert!(speed > 10.0);
     }
 
     #[test]
-    async fn test_speed_chacha() {
+    fn test_speed_chacha() {
         let speed = test_speed(&aead::CHACHA20_POLY1305, &Duration::from_secs_f32(0.2));
         assert!(speed > 10.0);
     }

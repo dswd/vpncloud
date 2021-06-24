@@ -6,8 +6,6 @@
 extern crate log;
 #[macro_use]
 extern crate serde;
-#[macro_use]
-extern crate tokio;
 
 #[cfg(test)]
 extern crate tempfile;
@@ -39,9 +37,8 @@ pub mod wizard;
 #[cfg(feature = "websocket")]
 pub mod wsproxy;
 
-use net::SocketBuilder;
+use net::Socket;
 use structopt::StructOpt;
-use tokio::runtime::Runtime;
 
 use std::{
     fs::{self, File, Permissions},
@@ -58,7 +55,7 @@ use std::{
 use crate::{
     config::{Args, Command, Config, DEFAULT_PORT},
     crypto::Crypto,
-    device::{AsyncTunTapDevice, TunTapDevice, Type},
+    device::{TunTapDevice, Type},
     engine::common::GenericCloud,
     net::NetSocket,
     oldconfig::OldConfigFile,
@@ -177,7 +174,7 @@ fn setup_device(config: &Config) -> TunTapDevice {
 }
 
 #[allow(clippy::cognitive_complexity)]
-fn run<P: Protocol, S: SocketBuilder>(config: Config, socket: S) {
+fn run<P: Protocol, S: Socket>(config: Config, socket: S) {
     let device = setup_device(&config);
     let port_forwarding = if config.port_forwarding { socket.create_port_forwarding() } else { None };
     let stats_file = match config.stats_file {
@@ -222,32 +219,25 @@ fn run<P: Protocol, S: SocketBuilder>(config: Config, socket: S) {
         }
         try_fail!(pd.apply(), "Failed to drop privileges: {}");
     }
-    let rt = Runtime::new().unwrap();
     let ifdown = config.ifdown.clone();
-    rt.block_on(async move {
-        // Warning: no async code outside this block, or it will break on daemonize
-        let device = AsyncTunTapDevice::from_sync(device);
-        let socket = try_fail!(socket.build(), "Failed to create async socket: {}");
-        let mut cloud = try_fail!(
-            GenericCloud::<AsyncTunTapDevice, P, S::SocketType, SystemTimeSource>::new(
-                &config,
-                socket,
-                device,
-                port_forwarding,
-                stats_file
-            )
-            .await,
-            "Failed to create engine: {}"
-        );
-        for mut addr in config.peers {
-            if addr.find(':').unwrap_or(0) <= addr.find(']').unwrap_or(0) {
-                // : not present or only in IPv6 address
-                addr = format!("{}:{}", addr, DEFAULT_PORT)
-            }
-            try_fail!(cloud.add_peer(addr.clone()), "Failed to send message to {}: {}", &addr);
+    let mut cloud = try_fail!(
+        GenericCloud::<TunTapDevice, P, S, SystemTimeSource>::new(
+            &config,
+            socket,
+            device,
+            port_forwarding,
+            stats_file
+        ),
+        "Failed to create engine: {}"
+    );
+    for mut addr in config.peers {
+        if addr.find(':').unwrap_or(0) <= addr.find(']').unwrap_or(0) {
+            // : not present or only in IPv6 address
+            addr = format!("{}:{}", addr, DEFAULT_PORT)
         }
-        cloud.run().await
-    });
+        try_fail!(cloud.add_peer(addr.clone()), "Failed to send message to {}: {}", &addr);
+    }
+    cloud.run();
     if let Some(script) = ifdown {
         run_script(&script, &ifname);
     }
