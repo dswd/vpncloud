@@ -33,7 +33,7 @@ byteorder = "1.4"
 thiserror = "1.0"
 smallvec = "1.6"
 dialoguer = { version = "0.8", optional = true }
-tungstenite = { version = "0.13", optional = true, default-features = false }
+tungstenite = { version = "0.14", optional = true, default-features = false }
 url = { version = "2.2", optional = true }
 igd = { version = "0.12", optional = true }
 
