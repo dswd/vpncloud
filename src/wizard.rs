@@ -501,8 +501,8 @@ pub fn configure(name: Option<String>) -> Result<(), io::Error> {
         println!("  start the VPN:   sudo service vpncloud@{0} start", name);
         println!("  stop the VPN:    sudo service vpncloud@{0} stop", name);
         println!("  get the status:  sudo service vpncloud@{0} status", name);
-        println!("  add VPN to autostart:       sudo sysctl enable vpncloud@{0}", name);
-        println!("  remove VPN from autostart:  sudo sysctl disable vpncloud@{0}", name);
+        println!("  add VPN to autostart:       sudo systemctl enable vpncloud@{0}", name);
+        println!("  remove VPN from autostart:  sudo systemctl disable vpncloud@{0}", name);
     }
 
     Ok(())
