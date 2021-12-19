@@ -6,8 +6,10 @@ RUN apt-get update \
     curl \
     gcc-aarch64-linux-gnu \
     gcc-arm-linux-gnueabihf \
+    gcc-arm-linux-gnueabi \
     libc6-dev-arm64-cross \
     libc6-dev-armhf-cross \
+    libc6-dev-armel-cross \
     libc6-dev-i386 \
     gcc-5-multilib \
     asciidoctor \

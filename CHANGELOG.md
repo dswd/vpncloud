@@ -4,8 +4,11 @@ This project follows [semantic versioning](http://semver.org).
 
 ### UNRELEASED
 
+- [added] Added build for armv5te (thanks to xek)
 - [added] Option to specify advertised addresses
 - [added] Peers now learn their own address from peers
+- [changed] Changed Rust version to 1.57.0
+- [changed] Updated dependencies
 - [fixed] Fixed problem with IPv4 addresses in listen option
 
 ### v2.2.0 (2021-04-06)

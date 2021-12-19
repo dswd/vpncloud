@@ -25,7 +25,8 @@
 		"editorconfig.editorconfig",
 		"swellaby.vscode-rust-test-adapter",
 		"matklad.rust-analyzer",
-		"asciidoctor.asciidoctor-vscode"
+		"asciidoctor.asciidoctor-vscode",
+		"ms-vscode.test-adapter-converter"
 	],
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
