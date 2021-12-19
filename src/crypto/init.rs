@@ -235,7 +235,7 @@ impl InitMsg {
 
         let signed_data = &r.into_inner()[0..pos];
         let public_key = signature::UnparsedPublicKey::new(&ED25519, &public_key_data);
-        if public_key.verify(&signed_data, &signature).is_err() {
+        if public_key.verify(signed_data, &signature).is_err() {
             return Err(Error::Crypto("invalid signature"));
         }
 
@@ -319,7 +319,7 @@ impl InitMsg {
                 w.write_u8(Self::PART_ECDH_PUBLIC_KEY)?;
                 let key_bytes = ecdh_public_key.bytes();
                 w.write_u16::<NetworkEndian>(key_bytes.len() as u16)?;
-                w.write_all(&key_bytes)?;
+                w.write_all(key_bytes)?;
             }
             _ => (),
         }
@@ -522,8 +522,8 @@ impl<P: Payload> InitState<P> {
             },
             _ => unreachable!(),
         };
-        let mut bytes = out.buffer();
-        let len = msg.write_to(&mut bytes, &self.key_pair).expect("Buffer too small");
+        let bytes = out.buffer();
+        let len = msg.write_to(bytes, &self.key_pair).expect("Buffer too small");
         self.last_message = Some(bytes[0..len].to_vec());
         out.set_length(len);
     }
@@ -662,7 +662,7 @@ mod tests {
 
     impl Payload for Vec<u8> {
         fn write_to(&self, buffer: &mut MsgBuffer) {
-            buffer.buffer().write_all(&self).expect("Buffer too small");
+            buffer.buffer().write_all(self).expect("Buffer too small");
             buffer.set_length(self.len())
         }
 

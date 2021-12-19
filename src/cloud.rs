@@ -379,7 +379,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         for entry in &mut self.reconnect_peers {
             // Schedule for next second if node is connected
             for addr in &entry.resolved {
-                if self.peers.contains_key(&addr) {
+                if self.peers.contains_key(addr) {
                     entry.tries = 0;
                     entry.timeout = 1;
                     entry.next = now + 1;
@@ -424,7 +424,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         let now = TS::now();
         let mut buffer = MsgBuffer::new(SPACE_BEFORE);
         let mut del: SmallVec<[SocketAddr; 3]> = SmallVec::new();
-        for (&addr, ref data) in &self.peers {
+        for (&addr, data) in &self.peers {
             if data.timeout < now {
                 del.push(addr);
             }
