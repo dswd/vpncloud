@@ -15,7 +15,7 @@ use std::{
     os::unix::io::{AsRawFd, RawFd},
     thread::spawn,
 };
-use tungstenite::{client::AutoStream, connect, protocol::WebSocket, server::accept, Message};
+use tungstenite::{connect, protocol::WebSocket, Message, accept, stream::{MaybeTlsStream, NoDelay}};
 use url::Url;
 
 macro_rules! io_error {
@@ -109,7 +109,7 @@ pub fn run_proxy(listen: &str) -> Result<(), io::Error> {
 
 pub struct ProxyConnection {
     addr: SocketAddr,
-    socket: WebSocket<AutoStream>,
+    socket: WebSocket<MaybeTlsStream<TcpStream>>,
 }
 
 impl ProxyConnection {
@@ -124,7 +124,10 @@ impl ProxyConnection {
 
 impl AsRawFd for ProxyConnection {
     fn as_raw_fd(&self) -> RawFd {
-        self.socket.get_ref().as_raw_fd()
+        match self.socket.get_ref() {
+            MaybeTlsStream::Plain(stream) => stream.as_raw_fd(),
+            _ => unimplemented!()
+        }
     }
 }
 
