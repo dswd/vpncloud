@@ -3,8 +3,6 @@
 extern crate serde;
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate tokio;
 
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 

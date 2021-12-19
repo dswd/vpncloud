@@ -247,7 +247,7 @@ impl PeerCrypto {
         match self {
             PeerCrypto::Encrypted { trusted_keys, last_init_message, .. }
             | PeerCrypto::Unencrypted { trusted_keys, last_init_message, .. } => {
-                let (msg, _) = InitMsg::read_from(buffer.buffer(), &trusted_keys)?;
+                let (msg, _) = InitMsg::read_from(buffer.buffer(), trusted_keys)?;
                 buffer.clear();
                 if msg.stage() == STAGE_PONG {
                     buffer.set_length(last_init_message.len());

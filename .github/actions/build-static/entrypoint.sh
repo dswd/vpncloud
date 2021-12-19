@@ -17,6 +17,7 @@ source $HOME/.cargo/env
 
 rustup target add x86_64-unknown-linux-musl
 rustup target add i686-unknown-linux-musl
+rustup target add armv5te-unknown-linux-musleabi
 rustup target add armv7-unknown-linux-musleabihf
 rustup target add aarch64-unknown-linux-musl
 
@@ -34,4 +35,5 @@ build_static() {
 build_static amd64 x86_64-unknown-linux-musl
 #build_static i386 i686-unknown-linux-musl
 build_static armhf armv7-unknown-linux-musleabihf
+build_static armel armv5te-unknown-linux-musleabi
 build_static arm64 aarch64-unknown-linux-musl

@@ -9,8 +9,13 @@ use super::{
     util::MsgBuffer,
 };
 use byteorder::{NetworkEndian, ReadBytesExt, WriteBytesExt};
-use std::{io::{self, Cursor, Read, Write}, net::{Ipv6Addr, SocketAddr, SocketAddrV6, TcpListener, TcpStream, UdpSocket}, os::unix::io::AsRawFd, sync::Arc, thread};
-use tungstenite::{client::AutoStream, connect, protocol::WebSocket, server::accept, Message};
+use std::{
+    io::{self, Cursor, Read, Write},
+    net::{Ipv6Addr, SocketAddr, SocketAddrV6, TcpListener, TcpStream, UdpSocket},
+    os::unix::io::{AsRawFd, RawFd},
+    thread, sync::Arc,
+};
+use tungstenite::{connect, protocol::WebSocket, Message, accept, stream::{MaybeTlsStream, NoDelay}};
 use url::Url;
 
 macro_rules! io_error {
@@ -105,7 +110,7 @@ pub fn run_proxy(listen: &str) -> Result<(), io::Error> {
 #[derive(Clone)]
 pub struct ProxyConnection {
     addr: SocketAddr,
-    socket: Arc<WebSocket<AutoStream>>,
+    socket: Arc<WebSocket<MaybeTlsStream<TcpStream>>>,
 }
 
 impl ProxyConnection {
@@ -128,6 +133,15 @@ impl ProxyConnection {
                 return Ok(data);
             }
             */
+        }
+    }
+}
+
+impl AsRawFd for ProxyConnection {
+    fn as_raw_fd(&self) -> RawFd {
+        match self.socket.get_ref() {
+            MaybeTlsStream::Plain(stream) => stream.as_raw_fd(),
+            _ => unimplemented!()
         }
     }
 }

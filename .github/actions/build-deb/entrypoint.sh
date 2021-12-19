@@ -13,6 +13,7 @@ curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain ${TOOLCHAIN}
 source $HOME/.cargo/env
 
 rustup target add i686-unknown-linux-gnu
+rustup target add armv5te-unknown-linux-gnueabi
 rustup target add armv7-unknown-linux-gnueabihf
 rustup target add aarch64-unknown-linux-gnu
 
@@ -32,4 +33,5 @@ cp target/debian/vpncloud_${DEB_VERSION}_amd64.deb dist/vpncloud_${DEB_VERSION}_
 
 build_deb i386 i686-unknown-linux-gnu
 build_deb armhf armv7-unknown-linux-gnueabihf
+build_deb armel armv5te-unknown-linux-gnueabi
 build_deb arm64 aarch64-unknown-linux-gnu

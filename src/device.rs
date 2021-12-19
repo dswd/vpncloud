@@ -270,7 +270,7 @@ impl Device for TunTapDevice {
     fn read(&mut self, buffer: &mut MsgBuffer) -> Result<(), Error> {
         buffer.clear();
         let mut read = 0;
-        self.fd.try_read(buffer.buffer(), &mut read, Duration::from_secs(1)).map_err(|e| Error::DeviceRead(e))?;
+        self.fd.try_read(buffer.buffer(), &mut read, Duration::from_secs(1)).map_err(Error::DeviceRead)?;
         buffer.set_length(read);
         self.correct_data_after_read(buffer);
         Ok(())

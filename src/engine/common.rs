@@ -50,7 +50,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     pub fn new(
         config: &Config, socket: S, device: D, port_forwarding: Option<PortForwarding>, stats_file: Option<File>,
     ) -> Result<Self, Error> {
-        let table = SharedTable::<TS>::new(&config);
+        let table = SharedTable::<TS>::new(config);
         let traffic = SharedTraffic::new();
         let peer_crypto = SharedPeerCrypto::new();
         let running = Arc::new(AtomicBool::new(true));

@@ -112,7 +112,7 @@ struct CryptoKey {
 
 impl CryptoKey {
     fn new(rand: &SystemRandom, key: LessSafeKey, nonce_half: bool) -> Self {
-        let mut send_nonce = Nonce::random(&rand);
+        let mut send_nonce = Nonce::random(rand);
         send_nonce.set_msb(if nonce_half { 0x80 } else { 0x00 });
         CryptoKey {
             key,

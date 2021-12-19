@@ -387,7 +387,7 @@ impl Config {
         if let Some(ref s) = self.hook {
             script = Some(s);
         }
-        if let Some(ref s) = self.hooks.get(event) {
+        if let Some(s) = self.hooks.get(event) {
             script = Some(s);
         }
         if script.is_none() {

@@ -96,13 +96,15 @@ thread_local! {
     static MOCK_SOCKET_NAT: AtomicBool = AtomicBool::new(false);
 }
 
+type MsgQueue = Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>;
+
 #[derive(Clone)]
 pub struct MockSocket {
     nat: bool,
     nat_peers: Arc<Mutex<HashMap<SocketAddr, Time>>>,
     address: SocketAddr,
-    outbound: Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>,
-    inbound: Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>,
+    outbound: MsgQueue,
+    inbound: MsgQueue,
 }
 
 impl MockSocket {

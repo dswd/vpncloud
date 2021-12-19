@@ -430,7 +430,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
     pub fn housekeep(&mut self) -> Result<(), Error> {
         let now = TS::now();
         let mut del: SmallVec<[SocketAddr; 3]> = SmallVec::new();
-        for (&addr, ref data) in &self.peers {
+        for (&addr, data) in &self.peers {
             if data.timeout < now {
                 del.push(addr);
             }
@@ -675,7 +675,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         for entry in &mut self.reconnect_peers {
             // Schedule for next second if node is connected
             for addr in &entry.resolved {
-                if self.peers.contains_key(&addr) {
+                if self.peers.contains_key(addr) {
                     entry.tries = 0;
                     entry.timeout = 1;
                     entry.next = now + 1;

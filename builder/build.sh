@@ -53,6 +53,7 @@ build_deb() {
 
 build_deb i386 i686-unknown-linux-gnu
 build_deb armhf armv7-unknown-linux-gnueabihf
+build_deb armel armv5te-unknown-linux-gnueabi
 build_deb arm64 aarch64-unknown-linux-gnu
 
 
@@ -69,6 +70,7 @@ build_static() {
 
 build_static amd64 x86_64-unknown-linux-musl
 #build_static i386 i686-unknown-linux-musl
+build_static armel armv5te-unknown-linux-musleabi
 build_static armhf armv7-unknown-linux-musleabihf
 build_static arm64 aarch64-unknown-linux-musl
 

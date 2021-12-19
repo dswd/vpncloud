@@ -176,7 +176,7 @@ impl RotationState {
         if let Some(ref private_key) = self.proposed {
             // Still a proposed key that has not been confirmed, proposal must have been lost
             if self.timeout {
-                let proposed_key = Self::compute_public_key(&private_key);
+                let proposed_key = Self::compute_public_key(private_key);
                 if let Some((ref confirmed_key, message_id)) = self.confirmed {
                     // Reconfirm last confirmed key
                     Self::send(
@@ -271,7 +271,7 @@ mod tests {
         assert!(key2.is_some());
         let key2 = key2.unwrap();
         assert_eq!(key2.id, 2);
-        assert_eq!(key2.use_for_sending, false);
+        assert!(!key2.use_for_sending);
         assert!(!out2.is_empty());
         let msg2 = out2.msg().unwrap();
         assert_eq!(msg2.message_id, 2);
@@ -281,14 +281,14 @@ mod tests {
         assert!(key.is_some());
         let key = key.unwrap();
         assert_eq!(key.id, 2);
-        assert_eq!(key.use_for_sending, true);
+        assert!(key.use_for_sending);
         // Cycle 2
         let key1 = node1.cycle(&mut out1);
         let key2 = node2.cycle(&mut out2);
         assert!(key1.is_some());
         let key1 = key1.unwrap();
         assert_eq!(key1.id, 3);
-        assert_eq!(key1.use_for_sending, false);
+        assert!(!key1.use_for_sending);
         assert!(!out1.is_empty());
         let msg1 = out1.msg().unwrap();
         assert_eq!(msg1.message_id, 3);
@@ -300,7 +300,7 @@ mod tests {
         assert!(key.is_some());
         let key = key.unwrap();
         assert_eq!(key.id, 3);
-        assert_eq!(key.use_for_sending, true);
+        assert!(key.use_for_sending);
         // Cycle 3
         let key1 = node1.cycle(&mut out1);
         let key2 = node2.cycle(&mut out2);
@@ -309,7 +309,7 @@ mod tests {
         assert!(key2.is_some());
         let key2 = key2.unwrap();
         assert_eq!(key2.id, 4);
-        assert_eq!(key2.use_for_sending, false);
+        assert!(!key2.use_for_sending);
         assert!(!out2.is_empty());
         let msg2 = out2.msg().unwrap();
         assert_eq!(msg2.message_id, 4);
@@ -319,7 +319,7 @@ mod tests {
         assert!(key.is_some());
         let key = key.unwrap();
         assert_eq!(key.id, 4);
-        assert_eq!(key.use_for_sending, true);
+        assert!(key.use_for_sending);
     }
 
     #[test]
