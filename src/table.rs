@@ -48,6 +48,7 @@ impl<TS: TimeSource> ClaimTable<TS> {
     }
 
     pub fn set_claims(&mut self, peer: SocketAddr, mut claims: RangeList) {
+        let mut removed_claim = false;
         for entry in &mut self.claims {
             if entry.peer == peer {
                 let pos = claims.iter().position(|r| r == &entry.claim);
@@ -58,16 +59,19 @@ impl<TS: TimeSource> ClaimTable<TS> {
                         break;
                     }
                 } else {
-                    entry.timeout = 0
+                    entry.timeout = 0;
+                    removed_claim = true;
                 }
             }
         }
         for claim in claims {
             self.claims.push(ClaimEntry { peer, claim, timeout: TS::now() + self.claim_timeout as Time })
         }
-        for entry in self.cache.values_mut() {
-            if entry.peer == peer {
-                entry.timeout = 0
+        if removed_claim {
+            for entry in self.cache.values_mut() {
+                if entry.peer == peer {
+                    entry.timeout = 0
+                }
             }
         }
         self.housekeep()
