@@ -6,6 +6,8 @@ RUN yum install -y libstdc++-*.i686 \
  && yum install -y glibc-*.i686 \
  && yum install -y libgcc.i686
 
+RUN ln -s /usr/bin/gcc /usr/bin/i686-linux-gnu-gcc
+
 ADD entrypoint.sh /entrypoint.sh
 
 ENTRYPOINT /entrypoint.sh

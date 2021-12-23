@@ -2,7 +2,7 @@
 
 This project follows [semantic versioning](http://semver.org).
 
-### UNRELEASED
+### v2.3.0 (2021-12-23)
 
 - [added] Added build for armv5te (thanks to xek)
 - [added] Option to specify advertised addresses
