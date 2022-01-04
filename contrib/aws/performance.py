@@ -8,14 +8,14 @@ from datetime import date
 # Note: this script will run for ~8 minutes and incur costs of about $ 0.02
 
 FILE = "../../target/release/vpncloud"
-VERSION = "2.2.0"
+VERSION = "2.3.0"
 REGION = "eu-central-1"
 
 env = EC2Environment(
     region = REGION, 
     node_count = 2, 
     instance_type = "m5.large", 
-    use_spot = True, 
+    use_spot = False, 
     max_price = "0.08", # USD per hour per VM
     vpncloud_version = VERSION,
     vpncloud_file = FILE,

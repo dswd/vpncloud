@@ -293,7 +293,7 @@ runcmd:
                 MinCount=self.node_count,
                 NetworkInterfaces=[
                     {
-                        'SubnetId': self.subnet.id,
+                        'SubnetId': self.subnet,
                         'DeviceIndex': 0,
                         'AssociatePublicIpAddress': True,
                         'Groups': [sg.group_id]
@@ -301,7 +301,7 @@ runcmd:
                 ],
                 Placement=placement,
                 UserData=userdata,
-                KeyName='vpncloud-perf-test-keypair'
+                KeyName=key_pair.name
             )
             for instance in self.instances:
                 self.track_resource(instance)

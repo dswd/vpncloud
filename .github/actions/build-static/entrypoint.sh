@@ -21,7 +21,7 @@ rustup target add armv5te-unknown-linux-musleabi
 rustup target add armv7-unknown-linux-musleabihf
 rustup target add aarch64-unknown-linux-musl
 
-curl https://github.com/upx/upx/releases/download/v${UPX_VERSION}/upx-${UPX_VERSION}-amd64_linux.tar.xz -Lf | tar -xJ --strip-components=1 -C /opt/rust/cargo/bin
+curl https://github.com/upx/upx/releases/download/v${UPX_VERSION}/upx-${UPX_VERSION}-amd64_linux.tar.xz -Lf | tar -xJ --strip-components=1 -C /usr/bin
 
 mkdir dist
 
