@@ -331,7 +331,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         let (src, dst) = P::parse(self.buffer.message())?;
         let len = self.buffer.len();
         debug!("Writing data to device: {} bytes", len);
-        self.traffic.count_in_payload(src, dst, len);
+        self.traffic.count_in_payload(src.clone(), dst, len);
         if let Err(e) = self.device.write(&mut self.buffer) {
             error!("Failed to send via device: {}", e);
             return Err(e);
@@ -339,7 +339,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         self.buffer.clear();
         if self.learning {
             // Learn single address
-            self.table.cache(src, peer);
+            self.table.cache(&src, peer);
         }
         Ok(())
     }
@@ -716,7 +716,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         Ok(())
     }
 
-    pub fn iteration(&mut self) {
+    pub fn iteration(&mut self) -> bool {
         if let Ok(src) = self.socket.receive(&mut self.buffer)
         {
             match self.handle_message(src) {
@@ -744,18 +744,17 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             if let Err(e) = self.housekeep() {
                 error!("{}", e)
             }
-            self.next_housekeep = now + 1
+            self.next_housekeep = now + 1;
+            if !self.running.load(Ordering::SeqCst) {
+                debug!("Socket: end");
+                return false;
+            }
         }
         debug_assert!(self.buffer.is_empty());
+        true
     }
 
     pub fn run(mut self) {
-        loop {
-            self.iteration();
-            if !self.running.load(Ordering::SeqCst) {
-                debug!("Socket: end");
-                return;
-            }
-        }
+        while self.iteration() {}
     }
 }

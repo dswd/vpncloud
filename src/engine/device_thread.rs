@@ -102,8 +102,8 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
     fn forward_packet(&mut self) -> Result<(), Error> {
         let (src, dst) = P::parse(self.buffer.message())?;
         debug!("Read data from interface: src: {}, dst: {}, {} bytes", src, dst, self.buffer.len());
-        self.traffic.count_out_payload(dst, src, self.buffer.len());
-        match self.table.lookup(dst) {
+        self.traffic.count_out_payload(dst.clone(), src, self.buffer.len());
+        match self.table.lookup(&dst) {
             Some(addr) => {
                 // Peer found for destination
                 debug!("Found destination for {} => {}", dst, addr);
@@ -129,7 +129,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
         Ok(())
     }
 
-    pub fn iteration(&mut self) {
+    pub fn iteration(&mut self) -> bool {
         if self.device.read(&mut self.buffer).is_ok() {
             //try_fail!(result, "Failed to read from device: {}");
             if let Err(e) = self.forward_packet() {
@@ -141,17 +141,16 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
             if let Err(e) = self.housekeep() {
                 error!("{}", e)
             }
-            self.next_housekeep = now + 1
+            self.next_housekeep = now + 1;
+            if !self.running.load(Ordering::SeqCst) {
+                debug!("Device: end");
+                return false;
+            }
         }
+        true
     }
 
     pub fn run(mut self) {
-        loop {
-            self.iteration();
-            if !self.running.load(Ordering::SeqCst) {
-                debug!("Device: end");
-                return;
-            }
-        }
+        while self.iteration() {}
     }
 }

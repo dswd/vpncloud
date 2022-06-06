@@ -228,7 +228,7 @@ impl TrafficStats {
             if let Some(entry) = self.payload.get_mut(key) {
                 *entry += data
             } else {
-                self.payload.insert(*key, data.clone());
+                self.payload.insert(key.clone(), data.clone());
             }
         }
         self.dropped += &other.dropped

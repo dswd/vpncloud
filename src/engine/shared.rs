@@ -153,13 +153,13 @@ impl<TS: TimeSource> SharedTable<TS> {
         self.cache.clear();
     }
 
-    pub fn lookup(&mut self, addr: Address) -> Option<SocketAddr> {
-        if let Some(val) = self.cache.get(&addr) {
+    pub fn lookup(&mut self, addr: &Address) -> Option<SocketAddr> {
+        if let Some(val) = self.cache.get(addr) {
             return *val;
         }
         // if not found, use shared table and put into cache
         let val = self.table.lock().lookup(addr);
-        self.cache.insert(addr, val);
+        self.cache.insert(addr.clone(), val);
         val
     }
 
@@ -173,10 +173,10 @@ impl<TS: TimeSource> SharedTable<TS> {
         self.cache.clear();
     }
 
-    pub fn cache(&mut self, addr: Address, peer: SocketAddr) {
-        if self.cache.get(&addr) != Some(&Some(peer)) {
-            self.table.lock().cache(addr, peer);
-            self.cache.insert(addr, Some(peer));
+    pub fn cache(&mut self, addr: &Address, peer: SocketAddr) {
+        if self.cache.get(addr) != Some(&Some(peer)) {
+            self.table.lock().cache(addr.clone(), peer);
+            self.cache.insert(addr.clone(), Some(peer));
         }
     }
 

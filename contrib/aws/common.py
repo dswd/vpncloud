@@ -361,7 +361,8 @@ runcmd:
         self.connections = []
         eprint("Terminating instances...")
         for instance in self.instances:
-            instance.terminate()
+            if instance:
+                instance.terminate()
         for instance in self.instances:
             eprint("\t{}".format(instance.id))
             instance.wait_until_terminated()

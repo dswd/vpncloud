@@ -70,7 +70,7 @@ class PerfTest:
         eprint("\tSetting up vpncloud on receiver")
         self.receiver.start_vpncloud(crypto=crypto, ip=f"{self.receiver_ip_vpncloud}/24")
         eprint("\tSetting up vpncloud on sender")
-        self.sender.start_vpncloud(crypto=crypto, peers=[f"{self.receiver_ip_vpncloud}:3210"], ip=f"{self.sender_ip_vpncloud}/24")
+        self.sender.start_vpncloud(crypto=crypto, peers=[f"{self.receiver.private_ip}:3210"], ip=f"{self.sender_ip_vpncloud}/24")
         time.sleep(1.0)
 
     def stop_vpncloud(self):

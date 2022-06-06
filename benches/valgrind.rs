@@ -57,9 +57,9 @@ fn decode_ethernet_with_vlan() {
 fn lookup_warm() {
     let mut table = ClaimTable::<MockTimeSource>::new(60, 60);
     let addr = Address::from_str("1.2.3.4").unwrap();
-    table.cache(addr, SocketAddr::from_str("1.2.3.4:3210").unwrap());
+    table.cache(addr.clone(), SocketAddr::from_str("1.2.3.4:3210").unwrap());
     for _ in 0..1000 {
-        table.lookup(black_box(addr));
+        table.lookup(black_box(&addr));
     }
 }
 
@@ -69,7 +69,7 @@ fn lookup_cold() {
     table.set_claims(SocketAddr::from_str("1.2.3.4:3210").unwrap(), smallvec![Range::from_str("1.2.3.4/32").unwrap()]);
     for _ in 0..1000 {
         table.clear_cache();
-        table.lookup(black_box(addr));
+        table.lookup(black_box(&addr));
     }
 }
 
@@ -121,10 +121,82 @@ fn full_communication_tun_router() {
 
     let mut payload = vec![0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2];
     payload.append(&mut vec![0; 1400]);
-    for _ in 0..1000 {
+    for _ in 0..10000 {
         sim.put_payload(node1, payload.clone());
         sim.simulate_all_messages();
         assert_eq!(Some(&payload), black_box(sim.pop_payload(node2).as_ref()));
+    }
+}
+
+fn tun_router_send() {
+    log::set_max_level(log::LevelFilter::Error);
+    let config1 = Config {
+        device_type: Type::Tun,
+        auto_claim: false,
+        claims: vec!["1.1.1.1/32".to_string()],
+        ..Config::default()
+    };
+    let config2 = Config {
+        device_type: Type::Tun,
+        auto_claim: false,
+        claims: vec!["2.2.2.2/32".to_string()],
+        ..Config::default()
+    };
+    let mut sim = TunSimulator::new();
+    let node1 = sim.add_node(false, &config1);
+    let node2 = sim.add_node(false, &config2);
+
+    sim.connect(node1, node2);
+    sim.simulate_all_messages();
+    assert!(sim.is_connected(node1, node2));
+    assert!(sim.is_connected(node2, node1));
+    sim.trigger_housekeep();
+
+    let mut payload = vec![0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2];
+    payload.append(&mut vec![0; 1400]);
+    let node = sim.get_node(node1);
+    for _ in 0..10000 {
+        node.device().put_inbound(black_box(payload.clone()));
+        node.trigger_device_event();
+        assert!(node.socket().pop_outbound().is_some());
+    }
+}
+
+fn tun_router_receive() {
+    log::set_max_level(log::LevelFilter::Error);
+    let config1 = Config {
+        device_type: Type::Tun,
+        auto_claim: false,
+        claims: vec!["1.1.1.1/32".to_string()],
+        ..Config::default()
+    };
+    let config2 = Config {
+        device_type: Type::Tun,
+        auto_claim: false,
+        claims: vec!["2.2.2.2/32".to_string()],
+        ..Config::default()
+    };
+    let mut sim = TunSimulator::new();
+    let node1 = sim.add_node(false, &config1);
+    let node2 = sim.add_node(false, &config2);
+
+    sim.connect(node1, node2);
+    sim.simulate_all_messages();
+    assert!(sim.is_connected(node1, node2));
+    assert!(sim.is_connected(node2, node1));
+    sim.trigger_housekeep();
+
+    let mut payload = vec![0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2];
+    payload.append(&mut vec![0; 1400]);
+    let node = sim.get_node(node1);
+    node.device().put_inbound(payload.clone());
+    node.trigger_device_event();
+    let msg = node.socket().pop_outbound().unwrap().1;
+    let node = sim.get_node(node2);
+    for _ in 0..10000 {
+        node.socket().put_inbound(node1, black_box(msg.clone()));
+        node.trigger_socket_event();
+        assert!(node.device().pop_outbound().is_some());
     }
 }
 
@@ -144,10 +216,62 @@ fn full_communication_tap_switch() {
 
     let mut payload = vec![2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5];
     payload.append(&mut vec![0; 1400]);
-    for _ in 0..1000 {
+    for _ in 0..10000 {
         sim.put_payload(node1, payload.clone());
         sim.simulate_all_messages();
         assert_eq!(Some(&payload), black_box(sim.pop_payload(node2).as_ref()));
+    }
+}
+
+fn tap_switch_send() {
+    log::set_max_level(log::LevelFilter::Error);
+    let config = Config { device_type: Type::Tap, ..Config::default() };
+    let mut sim = TapSimulator::new();
+
+    let node1 = sim.add_node(false, &config);
+    let node2 = sim.add_node(false, &config);
+
+    sim.connect(node1, node2);
+    sim.simulate_all_messages();
+    assert!(sim.is_connected(node1, node2));
+    assert!(sim.is_connected(node2, node1));
+    sim.trigger_housekeep();
+
+    let mut payload = vec![2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5];
+    payload.append(&mut vec![0; 1400]);
+    let node = sim.get_node(node1);
+    for _ in 0..10000 {
+        node.device().put_inbound(black_box(payload.clone()));
+        node.trigger_device_event();
+        assert!(node.socket().pop_outbound().is_some());
+    }
+}
+
+fn tap_switch_receive() {
+    log::set_max_level(log::LevelFilter::Error);
+    let config = Config { device_type: Type::Tap, ..Config::default() };
+    let mut sim = TapSimulator::new();
+
+    let node1 = sim.add_node(false, &config);
+    let node2 = sim.add_node(false, &config);
+
+    sim.connect(node1, node2);
+    sim.simulate_all_messages();
+    assert!(sim.is_connected(node1, node2));
+    assert!(sim.is_connected(node2, node1));
+    sim.trigger_housekeep();
+
+    let mut payload = vec![2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5];
+    payload.append(&mut vec![0; 1400]);
+    let node = sim.get_node(node1);
+    node.device().put_inbound(payload.clone());
+    node.trigger_device_event();
+    let msg = node.socket().pop_outbound().unwrap().1;
+    let node = sim.get_node(node2);
+    for _ in 0..10000 {
+        node.socket().put_inbound(node1, black_box(msg.clone()));
+        node.trigger_socket_event();
+        assert!(node.device().pop_outbound().is_some());
     }
 }
 
@@ -162,6 +286,10 @@ iai::main!(
     crypto_chacha20,
     crypto_aes128,
     crypto_aes256,
+    tun_router_send,
+    tun_router_receive,
     full_communication_tun_router,
+    tap_switch_send,
+    tap_switch_receive,
     full_communication_tap_switch
 );

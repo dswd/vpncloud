@@ -82,11 +82,11 @@ fn decode_ethernet_with_vlan(c: &mut Criterion) {
 fn lookup_warm(c: &mut Criterion) {
     let mut table = ClaimTable::<MockTimeSource>::new(60, 60);
     let addr = Address::from_str("1.2.3.4").unwrap();
-    table.cache(addr, SocketAddr::from_str("1.2.3.4:3210").unwrap());
+    table.cache(addr.clone(), SocketAddr::from_str("1.2.3.4:3210").unwrap());
     let mut g = c.benchmark_group("table");
     g.throughput(Throughput::Bytes(1400));
     g.bench_function("lookup_warm", |b| {
-        b.iter(|| table.lookup(addr));
+        b.iter(|| table.lookup(&addr));
     });
     g.finish();
 }
@@ -100,7 +100,7 @@ fn lookup_cold(c: &mut Criterion) {
     g.bench_function("lookup_cold", |b| {
         b.iter(|| {
             table.clear_cache();
-            table.lookup(addr)
+            table.lookup(&addr)
         });
     });
     g.finish();

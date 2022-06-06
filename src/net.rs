@@ -31,11 +31,12 @@ pub fn get_ip() -> IpAddr {
     s.local_addr().unwrap().ip()
 }
 
-pub trait Socket: Sized + Clone + Send + Sync + 'static {
+pub trait Socket: Sized + Send + Sync + 'static {
     fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error>;
     fn send(&mut self, data: &[u8], addr: SocketAddr) -> Result<usize, io::Error>;
     fn address(&self) -> Result<SocketAddr, io::Error>;
     fn create_port_forwarding(&self) -> Option<PortForwarding>;
+    fn try_clone(&self) -> Result<Self, io::Error>;
 }
 
 pub fn parse_listen(addr: &str, default_port: u16) -> SocketAddr {
@@ -63,12 +64,6 @@ impl NetSocket {
     }
 }
 
-impl Clone for NetSocket {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-
 impl Socket for NetSocket {
     fn create_port_forwarding(&self) -> Option<PortForwarding> {
         PortForwarding::new(self.0.local_addr().unwrap().port())
@@ -89,6 +84,10 @@ impl Socket for NetSocket {
         let mut addr = self.0.local_addr()?;
         addr.set_ip(get_ip());
         Ok(addr)
+    }
+
+    fn try_clone(&self) -> Result<Self, io::Error> {
+        Ok(Self(self.0.clone()))
     }
 }
 
@@ -172,6 +171,10 @@ impl Socket for MockSocket {
 
     fn create_port_forwarding(&self) -> Option<PortForwarding> {
         None
+    }
+
+    fn try_clone(&self) -> Result<Self, io::Error> {
+        Ok(self.clone())
     }
 }
 

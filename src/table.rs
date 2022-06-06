@@ -91,9 +91,9 @@ impl<TS: TimeSource> ClaimTable<TS> {
         self.housekeep()
     }
 
-    pub fn lookup(&mut self, addr: Address) -> Option<SocketAddr> {
+    pub fn lookup(&mut self, addr: &Address) -> Option<SocketAddr> {
         // HOT PATH
-        if let Some(entry) = self.cache.get(&addr) {
+        if let Some(entry) = self.cache.get(addr) {
             return Some(entry.peer);
         }
         // COLD PATH
@@ -107,7 +107,7 @@ impl<TS: TimeSource> ClaimTable<TS> {
         }
         if let Some(entry) = found {
             self.cache.insert(
-                addr,
+                addr.clone(),
                 CacheValue { peer: entry.peer, timeout: min(TS::now() + self.cache_timeout as Time, entry.timeout) },
             );
             return Some(entry.peer);

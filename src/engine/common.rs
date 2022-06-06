@@ -57,7 +57,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
         let device_thread = DeviceThread::<S, D, P, TS>::new(
             config.clone(),
             device.duplicate()?,
-            socket.clone(),
+            socket.try_clone().map_err(|e| Error::SocketIo("Failed to clone socket", e))?,
             traffic.clone(),
             peer_crypto.clone(),
             table.clone(),
@@ -132,11 +132,11 @@ impl<P: Protocol> GenericCloud<MockDevice, P, MockSocket, MockTimeSource> {
     }
 
     pub fn trigger_socket_event(&mut self) {
-        self.socket_thread.iteration()
+        self.socket_thread.iteration();
     }
 
     pub fn trigger_device_event(&mut self) {
-        self.device_thread.iteration()
+        self.device_thread.iteration();
     }
 
     pub fn trigger_housekeep(&mut self) {

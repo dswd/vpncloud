@@ -20,7 +20,7 @@ pub const NODE_ID_BYTES: usize = 16;
 
 pub type NodeId = [u8; NODE_ID_BYTES];
 
-#[derive(Eq, Clone, Copy)]
+#[derive(Eq, Clone)]
 pub struct Address {
     pub data: [u8; 16],
     pub len: u8,
@@ -126,7 +126,7 @@ impl FromStr for Address {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct Range {
     pub base: Address,
     pub prefix_len: u8,
@@ -135,7 +135,7 @@ pub struct Range {
 pub type RangeList = SmallVec<[Range; 4]>;
 
 impl Range {
-    pub fn matches(&self, addr: Address) -> bool {
+    pub fn matches(&self, addr: &Address) -> bool {
         if self.base.len != addr.len {
             return false;
         }

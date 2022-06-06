@@ -12,7 +12,7 @@ env = EC2Environment(
     region = REGION, 
     node_count = 2, 
     instance_type = "m5.large", 
-    use_spot = True, 
+    use_spot = False, 
     max_price = "0.08", # USD per hour per VM
     vpncloud_version = VERSION,
     vpncloud_file = FILE,
@@ -45,11 +45,11 @@ class PerfTest:
         self.receiver.stop_iperf_server()
         return result
 
-    def start_vpncloud(self):
+    def start_vpncloud(self, crypto=None):
         eprint("\tSetting up vpncloud on receiver")
-        self.receiver.start_vpncloud(ip=f"{self.receiver_ip_vpncloud}/24")
+        self.receiver.start_vpncloud(crypto=crypto, ip=f"{self.receiver_ip_vpncloud}/24")
         eprint("\tSetting up vpncloud on sender")
-        self.sender.start_vpncloud(peers=[f"{self.receiver.private_ip}:3210"], ip=f"{self.sender_ip_vpncloud}/24")
+        self.sender.start_vpncloud(crypto=crypto, peers=[f"{self.receiver.private_ip}:3210"], ip=f"{self.sender_ip_vpncloud}/24")
         time.sleep(1.0)
 
     def stop_vpncloud(self):
@@ -58,7 +58,7 @@ class PerfTest:
 
     def run(self):
         print()
-        self.start_vpncloud()
+        self.start_vpncloud(crypto="plain")
         throughput = self.run_iperf(self.receiver_ip_vpncloud)["throughput"]
         print(f"Throughput: {throughput / 1_000_000.0} MBit/s")
         native_ping_100 = self.run_ping(self.receiver.private_ip, 100)["rtt_avg"]

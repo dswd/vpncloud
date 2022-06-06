@@ -13,9 +13,14 @@ use std::{
     io::{self, Cursor, Read, Write},
     net::{Ipv6Addr, SocketAddr, SocketAddrV6, TcpListener, TcpStream, UdpSocket},
     os::unix::io::{AsRawFd, RawFd},
-    thread, sync::Arc,
+    thread,
 };
-use tungstenite::{connect, protocol::WebSocket, Message, accept, stream::{MaybeTlsStream, NoDelay}};
+use tungstenite::{
+    accept, connect,
+    protocol::WebSocket,
+    stream::{MaybeTlsStream, NoDelay},
+    Message,
+};
 use url::Url;
 
 macro_rules! io_error {
@@ -107,10 +112,9 @@ pub fn run_proxy(listen: &str) -> Result<(), io::Error> {
     Ok(())
 }
 
-#[derive(Clone)]
 pub struct ProxyConnection {
     addr: SocketAddr,
-    socket: Arc<WebSocket<MaybeTlsStream<TcpStream>>>,
+    socket: WebSocket<MaybeTlsStream<TcpStream>>,
 }
 
 impl ProxyConnection {
@@ -119,7 +123,7 @@ impl ProxyConnection {
         let (mut socket, _) = io_error!(connect(parsed_url), "Failed to connect to URL {}: {}", url)?;
         socket.get_mut().set_nodelay(true)?;
         let addr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
-        let mut con = ProxyConnection { addr, socket: Arc::new(socket) };
+        let mut con = ProxyConnection { addr, socket };
         let addr_data = con.read_message()?;
         con.addr = read_addr(Cursor::new(&addr_data))?;
         Ok(con)
@@ -127,12 +131,9 @@ impl ProxyConnection {
 
     fn read_message(&mut self) -> Result<Vec<u8>, io::Error> {
         loop {
-            unimplemented!();
-            /*
             if let Message::Binary(data) = io_error!(self.socket.read_message(), "Failed to read from ws proxy: {}")? {
                 return Ok(data);
             }
-            */
         }
     }
 }
@@ -141,7 +142,7 @@ impl AsRawFd for ProxyConnection {
     fn as_raw_fd(&self) -> RawFd {
         match self.socket.get_ref() {
             MaybeTlsStream::Plain(stream) => stream.as_raw_fd(),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 }
@@ -163,14 +164,23 @@ impl Socket for ProxyConnection {
         let mut msg = Vec::with_capacity(data.len() + 18);
         write_addr(addr, &mut msg)?;
         msg.write_all(data)?;
-        unimplemented!();
-        /*
         io_error!(self.socket.write_message(Message::Binary(msg)), "Failed to write to ws proxy: {}")?;
         Ok(data.len())
-        */
     }
 
     fn address(&self) -> Result<SocketAddr, io::Error> {
         Ok(self.addr)
+    }
+
+    fn try_clone(&self) -> Result<Self, io::Error> {
+        let socket = match self.socket.get_ref() {
+            MaybeTlsStream::Plain(stream) => WebSocket::from_raw_socket(
+                MaybeTlsStream::Plain(stream.try_clone()?),
+                tungstenite::protocol::Role::Client,
+                Some(*self.socket.get_config()),
+            ),
+            _ => unimplemented!(),
+        };
+        Ok(Self { addr: self.addr, socket })
     }
 }
