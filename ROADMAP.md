@@ -8,6 +8,7 @@
 - [x] Sync traffic stats
 - [x] Sync forwarding table
 - [ ] Fix WS Proxy code
-
+- [ ] Fix Ctrl-C
+- [x] Fix auto-claim IP
 
 ## REST API
