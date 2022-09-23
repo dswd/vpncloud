@@ -13,7 +13,7 @@ use std::{
     io::{self, Cursor, Read, Write},
     net::{Ipv6Addr, SocketAddr, SocketAddrV6, TcpListener, TcpStream, UdpSocket},
     os::unix::io::{AsRawFd, RawFd},
-    thread,
+    thread, time::Duration,
 };
 use tungstenite::{
     accept, connect,
@@ -122,6 +122,12 @@ impl ProxyConnection {
         let parsed_url = io_error!(Url::parse(url), "Invalid URL {}: {}", url)?;
         let (mut socket, _) = io_error!(connect(parsed_url), "Failed to connect to URL {}: {}", url)?;
         socket.get_mut().set_nodelay(true)?;
+        match socket.get_mut() {
+            &mut MaybeTlsStream::Plain(ref mut stream) => {
+                io_error!(stream.set_read_timeout(Some(Duration::from_secs(1))), "Failed to set read timeout: {}")?
+            },
+            _ => unimplemented!()
+        }
         let addr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
         let mut con = ProxyConnection { addr, socket };
         let addr_data = con.read_message()?;
