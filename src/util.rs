@@ -379,7 +379,7 @@ pub fn from_base62(data: &str) -> Result<Vec<u8>, char> {
     let mut buf = Vec::with_capacity(data.len() / 2 + data.len() / 4);
     for c in data.chars() {
         let mut val = match c {
-            '0'..='9' => ((c as usize) % ('0' as usize)),
+            '0'..='9' => (c as usize) % ('0' as usize),
             'A'..='Z' => ((c as usize) % ('A' as usize)) + 10,
             'a'..='z' => ((c as usize) % ('a' as usize)) + 36,
             _ => return Err(c),

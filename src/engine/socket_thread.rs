@@ -89,6 +89,7 @@ pub struct SocketThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
 }
 
 impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: Config, device: D, socket: S, traffic: SharedTraffic, peer_crypto: SharedPeerCrypto,
         table: SharedTable<TS>, port_forwarding: Option<PortForwarding>, stats_file: Option<File>,

@@ -11,7 +11,7 @@ use structopt::{clap::Shell, StructOpt};
 pub const DEFAULT_PEER_TIMEOUT: u16 = 300;
 pub const DEFAULT_PORT: u16 = 3210;
 
-#[derive(Deserialize, Debug, PartialEq, Clone)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Config {
     pub device_type: Type,
     pub device_name: String,
@@ -622,7 +622,7 @@ pub enum Command {
     },
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields, default)]
 pub struct ConfigFileDevice {
     #[serde(rename = "type")]
@@ -633,7 +633,7 @@ pub struct ConfigFileDevice {
     pub fix_rp_filter: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields, default)]
 pub struct ConfigFileBeacon {
     pub store: Option<String>,
@@ -642,14 +642,14 @@ pub struct ConfigFileBeacon {
     pub password: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields, default)]
 pub struct ConfigFileStatsd {
     pub server: Option<String>,
     pub prefix: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields, default)]
 pub struct ConfigFile {
     pub device: Option<ConfigFileDevice>,

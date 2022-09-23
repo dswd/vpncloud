@@ -190,7 +190,7 @@ impl fmt::Debug for Range {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     #[serde(rename = "normal")]
     Normal,

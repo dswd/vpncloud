@@ -19,6 +19,7 @@ use std::{
 use super::common::PeerData;
 
 #[derive(Clone)]
+#[allow(clippy::type_complexity)]
 pub struct SharedPeerCrypto {
     peers: Arc<Mutex<HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash>>>,
     cache: HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash>, //TODO: local hashmap as cache

@@ -34,7 +34,7 @@ impl IfReq {
 }
 
 /// The type of a tun/tap device
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Type {
     /// Tun interface: This interface transports IP packets.
     #[serde(rename = "tun")]

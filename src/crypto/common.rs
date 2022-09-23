@@ -47,7 +47,7 @@ pub struct Algorithms {
     pub allow_unencrypted: bool,
 }
 
-#[derive(Debug, Default, Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields, default)]
 pub struct Config {
     pub password: Option<String>,
@@ -201,13 +201,14 @@ impl Crypto {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum MessageResult {
     Message(u8),
     Reply,
     None,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum PeerCrypto {
     Encrypted {
         last_init_message: Vec<u8>,

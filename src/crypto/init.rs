@@ -384,7 +384,7 @@ impl InitMsg {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum InitResult<P: Payload> {
     Continue,
     Success { peer_payload: P, is_initiator: bool },

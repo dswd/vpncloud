@@ -23,13 +23,13 @@ pub const MESSAGE_TYPE_CLOSE: u8 = 0xff;
 pub type AddrList = SmallVec<[SocketAddr; 4]>;
 pub type PeerList = SmallVec<[PeerInfo; 16]>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct PeerInfo {
     pub node_id: Option<NodeId>,
     pub addrs: AddrList,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct NodeInfo {
     pub node_id: NodeId,
     pub peers: PeerList,

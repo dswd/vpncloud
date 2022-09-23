@@ -6,7 +6,7 @@ use super::{device::Type, types::Mode, util::Duration};
 use crate::config::{ConfigFile, ConfigFileBeacon, ConfigFileDevice, ConfigFileStatsd, CryptoConfig};
 use std::collections::HashMap;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum OldCryptoMethod {
     #[serde(rename = "chacha20")]
     ChaCha20,
@@ -16,7 +16,7 @@ pub enum OldCryptoMethod {
     AES128,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default)]
 pub struct OldConfigFile {
     #[serde(alias = "device-type")]
     pub device_type: Option<Type>,
