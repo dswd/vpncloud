@@ -2,6 +2,11 @@
 
 This project follows [semantic versioning](http://semver.org).
 
+### UNRELEASED
+
+- [changed] Changed Rust version to 1.64.0
+- [changed] Updated dependencies
+
 ### v2.3.0 (2021-12-23)
 
 - [added] Added build for armv5te (thanks to xek)
