@@ -19,7 +19,7 @@ upx_version = "3.96"
 chrono = { version = "0.4", features = ["std", "clock"], default_features = false}
 structopt = "0.3"
 serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.8"
+serde_yaml = "0.9"
 log = { version = "0.4", features = ["std"] }
 libc = "0.2"
 rand = "0.8"
@@ -30,10 +30,10 @@ ring = "0.16"
 privdrop = "0.5"
 byteorder = "1.4"
 thiserror = "1.0"
-parking_lot = "^0.11.2"
+parking_lot = "0.12"
 smallvec = "1.7"
-dialoguer = { version = "0.9", optional = true }
-tungstenite = { version = "0.16", optional = true, default-features = false }
+dialoguer = { version = "0.10", optional = true }
+tungstenite = { version = "0.17", optional = true, default-features = false }
 url = { version = "2.2", optional = true }
 igd = { version = "0.12", optional = true }
 timeout_io = "0.6"
@@ -41,7 +41,7 @@ signal = "0.7"
 
 [dev-dependencies]
 tempfile = "3"
-criterion = { version = "0.3", features = ["html_reports"] }
+criterion = { version = "0.4", features = ["html_reports"] }
 iai = "0.1"
 
 [features]
