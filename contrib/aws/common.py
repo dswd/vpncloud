@@ -120,7 +120,7 @@ def find_ami(region, owner, name_pattern, arch='x86_64'):
 
 
 class EC2Environment:
-    def __init__(self, vpncloud_version, region, node_count, instance_type, vpncloud_file=None, use_spot=True, max_price=0.1, ami=('amazon', 'amzn2-ami-hvm-*'), username="ec2-user", subnet=CREATE, keyname=CREATE, privatekey=CREATE, tag="vpncloud", cluster_nodes=False):
+    def __init__(self, vpncloud_version, region, node_count, instance_type, vpncloud_file=None, use_spot=True, max_price=0.1, ami=('amazon', 'al2023-ami-*-hvm-*'), username="ec2-user", subnet=CREATE, keyname=CREATE, privatekey=CREATE, tag="vpncloud", cluster_nodes=False):
         self.region = region
         self.node_count = node_count
         self.instance_type = instance_type
@@ -249,7 +249,6 @@ runcmd:
                             "Ebs": {
                                 "DeleteOnTermination": True,
                                 "VolumeType": "gp2",
-                                "VolumeSize": 8,
                             }
                         }
                     ],
