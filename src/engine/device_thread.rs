@@ -109,6 +109,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
                 debug!("Found destination for {} => {}", dst, addr);
                 self.send_msg(addr, MESSAGE_TYPE_DATA)?;
             }
+            //TODO: VIA: find relay peer and relay message
             None => {
                 if self.broadcast {
                     debug!("No destination for {} found, broadcasting", dst);

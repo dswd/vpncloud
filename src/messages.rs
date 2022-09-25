@@ -36,6 +36,7 @@ pub struct NodeInfo {
     pub claims: RangeList,
     pub peer_timeout: Option<u16>,
     pub addrs: AddrList,
+    //TODO: VIA: Add via ranges
 }
 
 impl NodeInfo {

@@ -349,6 +349,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         match msg_result {
             MessageResult::Message(type_) => match type_ {
                 MESSAGE_TYPE_DATA => self.handle_payload_from(src)?,
+                //TODO: VIA: relay message
                 MESSAGE_TYPE_NODE_INFO => {
                     let info = match NodeInfo::decode(Cursor::new(self.buffer.message())) {
                         Ok(val) => val,
@@ -445,6 +446,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         self.table.housekeep();
         self.crypto_housekeep()?;
         // Periodically extend the port-forwarding
+        //TODO: extra thread
         if let Some(ref mut pfw) = self.port_forwarding {
             pfw.check_extend();
         }
@@ -463,7 +465,9 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         self.reconnect_to_peers()?;
         if self.next_stats_out < now {
             // Write out the statistics
+            //TODO: extra thread
             self.write_out_stats().map_err(|err| Error::FileIo("Failed to write stats file", err))?;
+            //TODO: extra thread
             self.send_stats_to_statsd()?;
             self.next_stats_out = now + STATS_INTERVAL;
             self.traffic.period(Some(5));
