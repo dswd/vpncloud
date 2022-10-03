@@ -31,7 +31,7 @@ ring = "0.16"
 privdrop = "0.5"
 byteorder = "1.4"
 thiserror = "1.0"
-smallvec = "1.7"
+smallvec = "1.10"
 dialoguer = { version = "0.9", optional = true }
 tungstenite = { version = "0.16", optional = true, default-features = false }
 url = { version = "2.2", optional = true }
