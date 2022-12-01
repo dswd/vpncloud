@@ -12,8 +12,8 @@ use crate::{
     device::Device,
     engine::{
         device_thread::DeviceThread,
-        shared::{SharedPeerCrypto, SharedTable, SharedTraffic},
         socket_thread::{ReconnectEntry, SocketThread},
+        coms::Coms
     },
     error::Error,
     messages::AddrList,
@@ -50,26 +50,17 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     pub fn new(
         config: &Config, socket: S, device: D, port_forwarding: Option<PortForwarding>, stats_file: Option<File>,
     ) -> Result<Self, Error> {
-        let table = SharedTable::<TS>::new(config);
-        let traffic = SharedTraffic::new();
-        let peer_crypto = SharedPeerCrypto::new();
         let running = Arc::new(AtomicBool::new(true));
+        let coms = Coms::<S, TS, P>::new(config, socket.try_clone().map_err(|e| Error::SocketIo("Failed to clone socket", e))?);
         let device_thread = DeviceThread::<S, D, P, TS>::new(
-            config.clone(),
             device.duplicate()?,
-            socket.try_clone().map_err(|e| Error::SocketIo("Failed to clone socket", e))?,
-            traffic.clone(),
-            peer_crypto.clone(),
-            table.clone(),
+            coms.try_clone()?,
             running.clone(),
         );
         let mut socket_thread = SocketThread::<S, D, P, TS>::new(
             config.clone(),
+            coms,
             device,
-            socket,
-            traffic,
-            peer_crypto,
-            table,
             port_forwarding,
             stats_file,
             running.clone(),
@@ -120,7 +111,7 @@ use std::net::SocketAddr;
 #[cfg(test)]
 impl<P: Protocol> GenericCloud<MockDevice, P, MockSocket, MockTimeSource> {
     pub fn socket(&mut self) -> &mut MockSocket {
-        &mut self.socket_thread.socket
+        &mut self.socket_thread.coms.socket
     }
 
     pub fn device(&mut self) -> &mut MockDevice {
@@ -153,6 +144,6 @@ impl<P: Protocol> GenericCloud<MockDevice, P, MockSocket, MockTimeSource> {
     }
 
     pub fn get_num(&self) -> usize {
-        self.socket_thread.socket.address().unwrap().port() as usize
+        self.socket_thread.coms.socket.address().unwrap().port() as usize
     }
 }

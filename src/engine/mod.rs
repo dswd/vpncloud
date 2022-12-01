@@ -5,4 +5,5 @@
 mod device_thread;
 mod shared;
 mod socket_thread;
+pub mod coms;
 pub mod common;

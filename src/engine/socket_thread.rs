@@ -1,7 +1,4 @@
-use super::{
-    common::SPACE_BEFORE,
-    shared::{SharedPeerCrypto, SharedTable, SharedTraffic},
-};
+use super::{common::SPACE_BEFORE, coms::Coms};
 
 use crate::{
     beacon::BeaconSerializer,
@@ -62,7 +59,7 @@ pub struct SocketThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
     _dummy_ts: PhantomData<TS>,
     _dummy_p: PhantomData<P>,
     // Socket-only fields
-    pub socket: S,
+    pub coms: Coms<S, TS, P>,
     device: D,
     next_housekeep: Time,
     pub own_addresses: AddrList,
@@ -78,11 +75,8 @@ pub struct SocketThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
     statsd_server: Option<String>,
     pub reconnect_peers: SmallVec<[ReconnectEntry; 3]>,
     buffer: MsgBuffer,
-    broadcast_buffer: MsgBuffer,
     // Shared fields
-    peer_crypto: SharedPeerCrypto,
-    traffic: SharedTraffic,
-    table: SharedTable<TS>,
+    //table: SharedTable<TS>,
     running: Arc<AtomicBool>,
     // Should not be here
     port_forwarding: Option<PortForwarding>, // TODO: 3rd thread
@@ -91,9 +85,8 @@ pub struct SocketThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
 impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        config: Config, device: D, socket: S, traffic: SharedTraffic, peer_crypto: SharedPeerCrypto,
-        table: SharedTable<TS>, port_forwarding: Option<PortForwarding>, stats_file: Option<File>,
-        running: Arc<AtomicBool>,
+        config: Config, coms: Coms<S, TS, P>, device: D,
+        port_forwarding: Option<PortForwarding>, stats_file: Option<File>, running: Arc<AtomicBool>,
     ) -> Self {
         let mut claims = SmallVec::with_capacity(config.claims.len());
         for s in &config.claims {
@@ -122,10 +115,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             node_id,
             claims,
             device,
-            socket,
-            peer_crypto,
-            traffic,
-            table,
+            coms,
             learning: config.is_learning(),
             next_housekeep: now,
             next_beacon: now,
@@ -145,44 +135,8 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             crypto: Crypto::new(node_id, &config.crypto).unwrap(),
             config,
             buffer: MsgBuffer::new(SPACE_BEFORE),
-            broadcast_buffer: MsgBuffer::new(SPACE_BEFORE),
             running,
         }
-    }
-
-    #[inline]
-    fn send_to(&mut self, addr: SocketAddr) -> Result<(), Error> {
-        let size = self.buffer.len();
-        debug!("Sending msg with {} bytes to {}", size, addr);
-        self.traffic.count_out_traffic(addr, size);
-        match self.socket.send(self.buffer.message(), addr) {
-            Ok(written) if written == size => {
-                self.buffer.clear();
-                Ok(())
-            }
-            Ok(_) => Err(Error::Socket("Sent out truncated packet")),
-            Err(e) => Err(Error::SocketIo("IOError when sending", e)),
-        }
-    }
-
-    #[inline]
-    fn broadcast_msg(&mut self, type_: u8) -> Result<(), Error> {
-        debug!("Broadcasting message type {}, {:?} bytes to {} peers", type_, self.buffer.len(), self.peers.len());
-        for (addr, peer) in &mut self.peers {
-            self.broadcast_buffer.set_start(self.buffer.get_start());
-            self.broadcast_buffer.set_length(self.buffer.len());
-            self.broadcast_buffer.message_mut().clone_from_slice(self.buffer.message());
-            self.broadcast_buffer.prepend_byte(type_);
-            peer.crypto.encrypt_message(&mut self.broadcast_buffer);
-            self.traffic.count_out_traffic(*addr, self.broadcast_buffer.len());
-            match self.socket.send(self.broadcast_buffer.message(), *addr) {
-                Ok(written) if written == self.broadcast_buffer.len() => Ok(()),
-                Ok(_) => Err(Error::Socket("Sent out truncated packet")),
-                Err(e) => Err(Error::SocketIo("IOError when sending", e)),
-            }?
-        }
-        self.buffer.clear();
-        Ok(())
     }
 
     fn connect_sock(&mut self, addr: SocketAddr) -> Result<(), Error> {
@@ -198,7 +152,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         let mut init = self.crypto.peer_instance(payload);
         init.send_ping(&mut self.buffer);
         self.pending_inits.insert(addr, init);
-        self.send_to(addr)
+        self.coms.send_to(addr, &mut self.buffer)
     }
 
     pub fn connect<Addr: ToSocketAddrs + fmt::Debug + Clone>(&mut self, addr: Addr) -> Result<(), Error> {
@@ -258,7 +212,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         }
         if let Some(info) = info {
             debug!("Adding claims of peer {}: {:?}", addr_nice(addr), info.claims);
-            self.table.set_claims(addr, info.claims);
+            self.coms.table.set_claims(addr, info.claims);
             debug!("Received {} peers from {}: {:?}", info.peers.len(), addr_nice(addr), info.peers);
             self.connect_to_peers(&info.peers)?;
         }
@@ -270,22 +224,20 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         if let Some(init) = self.pending_inits.remove(&addr) {
             self.buffer.clear();
             let crypto = init.finish(&mut self.buffer);
-            self.peers.insert(
-                addr,
-                PeerData {
-                    addrs: info.addrs.clone(),
-                    crypto,
-                    node_id: info.node_id,
-                    peer_timeout: info.peer_timeout.unwrap_or(DEFAULT_PEER_TIMEOUT),
-                    last_seen: TS::now(),
-                    timeout: TS::now() + self.config.peer_timeout as Time,
-                },
-            );
+            let peer_data = PeerData {
+                addrs: info.addrs.clone(),
+                crypto,
+                node_id: info.node_id,
+                peer_timeout: info.peer_timeout.unwrap_or(DEFAULT_PEER_TIMEOUT),
+                last_seen: TS::now(),
+                timeout: TS::now() + self.config.peer_timeout as Time,
+            };
+            self.coms.add_peer(addr, &peer_data);
+            self.peers.insert(addr, peer_data);
             self.update_peer_info(addr, Some(info))?;
             if !self.buffer.is_empty() {
-                self.send_to(addr)?;
+                self.coms.send_to(addr, &mut self.buffer)?;
             }
-            self.peer_crypto.store(&self.peers);
         } else {
             error!("No init for new peer {}", addr_nice(addr));
         }
@@ -323,8 +275,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
     fn remove_peer(&mut self, addr: SocketAddr) {
         if let Some(_peer) = self.peers.remove(&addr) {
             info!("Closing connection to {}", addr_nice(addr));
-            self.table.remove_claims(addr);
-            self.peer_crypto.store(&self.peers);
+            self.coms.remove_peer(&addr);
         }
     }
 
@@ -332,7 +283,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         let (src, dst) = P::parse(self.buffer.message())?;
         let len = self.buffer.len();
         debug!("Writing data to device: {} bytes", len);
-        self.traffic.count_in_payload(src.clone(), dst, len);
+        self.coms.traffic.count_in_payload(src.clone(), dst, len);
         if let Err(e) = self.device.write(&mut self.buffer) {
             error!("Failed to send via device: {}", e);
             return Err(e);
@@ -340,7 +291,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         self.buffer.clear();
         if self.learning {
             // Learn single address
-            self.table.cache(&src, peer);
+            self.coms.table.cache(&src, peer);
         }
         Ok(())
     }
@@ -354,7 +305,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
                     let info = match NodeInfo::decode(Cursor::new(self.buffer.message())) {
                         Ok(val) => val,
                         Err(err) => {
-                            self.traffic.count_invalid_protocol(self.buffer.len());
+                            self.coms.traffic.count_invalid_protocol(self.buffer.len());
                             return Err(err);
                         }
                     };
@@ -371,11 +322,11 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
                 }
                 _ => {
                     self.buffer.clear();
-                    self.traffic.count_invalid_protocol(self.buffer.len());
+                    self.coms.traffic.count_invalid_protocol(self.buffer.len());
                     return Err(Error::Message("Unknown message type"));
                 }
             },
-            MessageResult::Reply => self.send_to(src)?,
+            MessageResult::Reply => self.coms.send_to(src, &mut self.buffer)?,
             MessageResult::None => {
                 self.buffer.clear();
             }
@@ -387,7 +338,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         let src = mapped_addr(src);
         debug!("Received {} bytes from {}", self.buffer.len(), src);
         let buffer = &mut self.buffer;
-        self.traffic.count_in_traffic(src, buffer.len());
+        self.coms.traffic.count_in_traffic(src, buffer.len());
         if let Some(result) = self.peers.get_mut(&src).map(|peer| peer.crypto.handle_message(buffer)) {
             return self.process_message(src, result?);
         }
@@ -402,7 +353,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             }
         }) {
             if !buffer.is_empty() {
-                self.send_to(src)?
+                self.coms.send_to(src, &mut self.buffer)?
             }
             if let InitResult::Success { peer_payload, .. } = result? {
                 self.add_new_peer(src, peer_payload)?
@@ -411,7 +362,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         }
         if !is_init_message(self.buffer.message()) {
             info!("Ignoring non-init message from unknown peer {}", addr_nice(src));
-            self.traffic.count_invalid_protocol(self.buffer.len());
+            self.coms.traffic.count_invalid_protocol(self.buffer.len());
             self.buffer.clear();
             return Ok(());
         }
@@ -420,10 +371,10 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         match msg_result {
             Ok(_) => {
                 self.pending_inits.insert(src, init);
-                self.send_to(src)
+                self.coms.send_to(src, &mut self.buffer)
             }
             Err(err) => {
-                self.traffic.count_invalid_protocol(self.buffer.len());
+                self.coms.traffic.count_invalid_protocol(self.buffer.len());
                 Err(err)
             }
         }
@@ -440,10 +391,10 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         for addr in del {
             info!("Forgot peer {} due to timeout", addr_nice(addr));
             self.peers.remove(&addr);
-            self.table.remove_claims(addr);
+            self.coms.remove_peer(&addr);
             self.connect_sock(addr)?; // Try to reconnect
         }
-        self.table.housekeep();
+        self.coms.table.housekeep();
         self.crypto_housekeep()?;
         // Periodically extend the port-forwarding
         //TODO: extra thread
@@ -456,7 +407,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             debug!("Send peer list to all peers");
             let info = self.create_node_info();
             info.encode(&mut self.buffer);
-            self.broadcast_msg(MESSAGE_TYPE_NODE_INFO)?;
+            self.coms.broadcast_msg(MESSAGE_TYPE_NODE_INFO, &mut self.buffer)?;
             // Reschedule for next update
             let min_peer_timeout = self.peers.iter().map(|p| p.1.peer_timeout).min().unwrap_or(DEFAULT_PEER_TIMEOUT);
             let interval = min(self.update_freq as u16, max(min_peer_timeout / 2 - 60, 1));
@@ -470,7 +421,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             //TODO: extra thread
             self.send_stats_to_statsd()?;
             self.next_stats_out = now + STATS_INTERVAL;
-            self.traffic.period(Some(5));
+            self.coms.traffic.period(Some(5));
         }
         if let Some(peers) = self.beacon_serializer.get_cmd_results() {
             debug!("Loaded beacon with peers: {:?}", peers);
@@ -483,9 +434,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             self.load_beacon()?;
             self.next_beacon = now + Time::from(self.config.beacon_interval);
         }
-        self.table.sync();
-        self.traffic.sync();
-        self.peer_crypto.store(&self.peers);
+        self.coms.sync()?;
         // Periodically reset own peers
         if self.next_own_address_reset <= now {
             self.reset_own_addresses().map_err(|err| Error::SocketIo("Failed to get own addresses", err))?;
@@ -502,14 +451,14 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             if self.pending_inits.get_mut(&addr).unwrap().every_second(&mut self.buffer).is_err() {
                 del.push(addr)
             } else if !self.buffer.is_empty() {
-                self.send_to(addr)?
+                self.coms.send_to(addr, &mut self.buffer)?
             }
         }
         for addr in self.peers.keys().copied().collect::<SmallVec<[SocketAddr; 16]>>() {
             self.buffer.clear();
             self.peers.get_mut(&addr).unwrap().crypto.every_second(&mut self.buffer);
             if !self.buffer.is_empty() {
-                self.send_to(addr)?
+                self.coms.send_to(addr, &mut self.buffer)?
             }
         }
         for addr in del {
@@ -523,7 +472,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
 
     fn reset_own_addresses(&mut self) -> io::Result<()> {
         self.own_addresses.clear();
-        let socket_addr = self.socket.address().map(mapped_addr)?;
+        let socket_addr = self.coms.get_address()?;
         // 1) Specified advertise addresses
         for addr in &self.config.advertise_addresses {
             self.own_addresses.push(parse_listen(addr, socket_addr.port()));
@@ -601,9 +550,9 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
                 )?;
             }
             writeln!(f)?;
-            self.table.write_out(f)?;
+            self.coms.table.write_out(f)?;
             writeln!(f)?;
-            self.traffic.write_out(f)?;
+            self.coms.traffic.write_out(f)?;
             writeln!(f)?;
         }
         Ok(())
@@ -612,15 +561,15 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
     /// Sends the statistics to a statsd endpoint
     fn send_stats_to_statsd(&mut self) -> Result<(), Error> {
         if let Some(ref endpoint) = self.statsd_server {
-            let peer_traffic = self.traffic.total_peer_traffic();
-            let payload_traffic = self.traffic.total_payload_traffic();
-            let dropped = &self.traffic.dropped();
+            let peer_traffic = self.coms.traffic.total_peer_traffic();
+            let payload_traffic = self.coms.traffic.total_payload_traffic();
+            let dropped = &self.coms.traffic.dropped();
             let prefix = self.config.statsd_prefix.as_ref().map(|s| s as &str).unwrap_or("vpncloud");
             let msg = StatsdMsg::new()
                 .with_ns(prefix, |msg| {
                     msg.add("peer_count", self.peers.len(), "g");
-                    msg.add("table_cache_entries", self.table.cache_len(), "g");
-                    msg.add("table_claims", self.table.claim_len(), "g");
+                    msg.add("table_cache_entries", self.coms.table.cache_len(), "g");
+                    msg.add("table_claims", self.coms.table.claim_len(), "g");
                     msg.with_ns("traffic", |msg| {
                         msg.with_ns("protocol", |msg| {
                             msg.with_ns("inbound", |msg| {
@@ -653,14 +602,9 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
                     });
                 })
                 .build();
-            let msg_data = msg.as_bytes();
             let addrs = resolve(endpoint)?;
             if let Some(addr) = addrs.first() {
-                match self.socket.send(msg_data, *addr) {
-                    Ok(written) if written == msg_data.len() => Ok(()),
-                    Ok(_) => Err(Error::Socket("Sent out truncated packet")),
-                    Err(e) => Err(Error::SocketIo("IOError when sending", e)),
-                }?
+                self.coms.send_raw(msg.as_bytes(), *addr)?;
             } else {
                 error!("Failed to resolve statsd server {}", endpoint);
             }
@@ -722,8 +666,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
     }
 
     pub fn iteration(&mut self) -> bool {
-        if let Ok(src) = self.socket.receive(&mut self.buffer)
-        {
+        if let Ok(src) = self.coms.receive(&mut self.buffer) {
             match self.handle_message(src) {
                 Err(e @ Error::CryptoInitFatal(_)) => {
                     debug!("Fatal crypto init error from {}: {}", src, e);

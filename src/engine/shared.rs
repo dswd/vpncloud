@@ -49,6 +49,18 @@ impl SharedPeerCrypto {
         Ok(())
     }
 
+    pub fn add(&mut self, addr: SocketAddr, crypto: Option<Arc<CryptoCore>>) {
+        self.cache.insert(addr, crypto.clone());
+        let mut peers = self.peers.lock();
+        peers.insert(addr, crypto);
+    }
+
+    pub fn remove(&mut self, addr: &SocketAddr) {
+        self.cache.remove(addr);
+        let mut peers = self.peers.lock();
+        peers.remove(addr);
+    }
+
     pub fn store(&mut self, data: &HashMap<SocketAddr, PeerData, Hash>) {
         self.cache.clear();
         self.cache.extend(data.iter().map(|(k, v)| (*k, v.crypto.get_core())));
@@ -135,6 +147,12 @@ impl SharedTraffic {
 
     pub fn dropped(&self) -> TrafficEntry {
         self.traffic.lock().dropped.clone()
+    }
+}
+
+impl Default for SharedTraffic {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
