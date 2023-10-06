@@ -6,6 +6,7 @@ This project follows [semantic versioning](http://semver.org).
 
 - [changed] Changed Rust version to 1.73.0
 - [changed] Updated dependencies
+- [fixed] Fix error when IPv6 is not available
 
 ### v2.3.0 (2021-12-23)
 
