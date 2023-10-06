@@ -48,7 +48,6 @@ use std::{
     process,
     str::FromStr,
     sync::Mutex,
-    thread,
 };
 
 use crate::{
@@ -114,7 +113,7 @@ impl log::Log for DualLogger {
 
 fn run_script(script: &str, ifname: &str) {
     let mut cmd = process::Command::new("sh");
-    cmd.arg("-c").arg(&script).env("IFNAME", ifname);
+    cmd.arg("-c").arg(script).env("IFNAME", ifname);
     debug!("Running script: {:?}", cmd);
     match cmd.status() {
         Ok(status) => {
@@ -212,8 +211,6 @@ fn run<P: Protocol, S: Socket>(config: Config, socket: S) {
         }
         if let Some(pid_file) = config.pid_file {
             daemonize = daemonize.pid_file(pid_file).chown_pid_file(true);
-            // Give child process some time to write PID file
-            daemonize = daemonize.exit_action(|| thread::sleep(std::time::Duration::from_millis(10)));
         }
         try_fail!(daemonize.start(), "Failed to daemonize: {}");
     } else if config.user.is_some() || config.group.is_some() {

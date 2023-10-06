@@ -228,7 +228,7 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
         let beacon = format!("{}{}{}", begin, data, end);
         debug!("Calling beacon command: {}", cmd);
         let process = Command::new("sh")
-            .args(&["-c", cmd])
+            .args(["-c", cmd])
             .env("begin", begin)
             .env("data", data)
             .env("end", end)
@@ -281,7 +281,7 @@ impl<TS: TimeSource> BeaconSerializer<TS> {
         let end = self.end();
         debug!("Calling beacon command: {}", cmd);
         let process = Command::new("sh")
-            .args(&["-c", cmd])
+            .args(["-c", cmd])
             .env("begin", begin)
             .env("end", end)
             .stdout(Stdio::piped())

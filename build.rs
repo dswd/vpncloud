@@ -12,12 +12,12 @@ fn main() {
     fs::create_dir_all(&out_dir).unwrap();
     fs::copy("vpncloud.adoc", Path::new(&out_dir).join("vpncloud.adoc")).unwrap();
     match Command::new("asciidoctor")
-        .args(&["-b", "manpage", "vpncloud.adoc"])
-        .current_dir(&Path::new(&out_dir))
+        .args(["-b", "manpage", "vpncloud.adoc"])
+        .current_dir(Path::new(&out_dir))
         .status()
     {
         Ok(_) => {
-            Command::new("gzip").args(&["vpncloud.1"]).current_dir(&Path::new(&out_dir)).status().unwrap();
+            Command::new("gzip").args(["vpncloud.1"]).current_dir(Path::new(&out_dir)).status().unwrap();
             fs::copy(Path::new(&out_dir).join("vpncloud.1.gz"), "target/vpncloud.1.gz").unwrap();
         }
         Err(err) => {

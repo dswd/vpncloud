@@ -23,7 +23,7 @@ fn str_opt(s: String) -> Option<String> {
     }
 }
 
-fn configure_connectivity(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), io::Error> {
+fn configure_connectivity(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), dialoguer::Error> {
     if mode >= MODE_ADVANCED {
         config.listen =
             Input::with_theme(theme).with_prompt("Listen address").default(config.listen.clone()).interact_text()?;
@@ -60,7 +60,7 @@ fn configure_connectivity(config: &mut Config, mode: usize, theme: &ColorfulThem
     Ok(())
 }
 
-fn configure_crypto(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), io::Error> {
+fn configure_crypto(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), dialoguer::Error> {
     if (config.crypto.password.is_some() || config.crypto.private_key.is_some())
         && !Confirm::with_theme(theme).with_prompt("Create new crypto config?").default(false).interact()?
     {
@@ -151,7 +151,7 @@ fn configure_crypto(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> 
     Ok(())
 }
 
-fn configure_device(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), io::Error> {
+fn configure_device(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), dialoguer::Error> {
     if mode >= MODE_ADVANCED {
         config.device_type = match Select::with_theme(theme)
             .with_prompt("Device type")
@@ -204,7 +204,7 @@ fn configure_device(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> 
     Ok(())
 }
 
-fn configure_addresses(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), io::Error> {
+fn configure_addresses(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), dialoguer::Error> {
     config.ip = str_opt(
         Input::with_theme(theme)
             .with_prompt("Virtual IP address (e.g. 10.0.0.1, leave empty for none)")
@@ -250,7 +250,7 @@ fn configure_addresses(config: &mut Config, mode: usize, theme: &ColorfulTheme) 
     Ok(())
 }
 
-fn configure_beacon(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), io::Error> {
+fn configure_beacon(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), dialoguer::Error> {
     if mode == MODE_EXPERT
         && Confirm::with_theme(theme)
             .with_prompt("Configure beacons?")
@@ -332,7 +332,7 @@ fn configure_beacon(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> 
     Ok(())
 }
 
-fn configure_stats(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), io::Error> {
+fn configure_stats(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), dialoguer::Error> {
     if mode >= MODE_ADVANCED {
         config.stats_file = str_opt(
             Input::with_theme(theme)
@@ -369,7 +369,7 @@ fn configure_stats(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> R
     Ok(())
 }
 
-fn configure_process(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), io::Error> {
+fn configure_process(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), dialoguer::Error> {
     if mode == MODE_EXPERT {
         config.user = str_opt(
             Input::with_theme(theme)
@@ -396,7 +396,7 @@ fn configure_process(config: &mut Config, mode: usize, theme: &ColorfulTheme) ->
     Ok(())
 }
 
-fn configure_hooks(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), io::Error> {
+fn configure_hooks(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> Result<(), dialoguer::Error> {
     if mode == MODE_EXPERT {
         if Confirm::with_theme(theme)
             .with_prompt("Set hooks to react on events?")
@@ -439,7 +439,7 @@ fn configure_hooks(config: &mut Config, mode: usize, theme: &ColorfulTheme) -> R
     Ok(())
 }
 
-pub fn configure(name: Option<String>) -> Result<(), io::Error> {
+pub fn configure(name: Option<String>) -> Result<(), dialoguer::Error> {
     let theme = ColorfulTheme::default();
 
     let name = if let Some(name) = name {
@@ -467,7 +467,7 @@ pub fn configure(name: Option<String>) -> Result<(), io::Error> {
         config.merge_file(config_file);
     }
     if file.parent().unwrap().metadata()?.permissions().readonly() {
-        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "Config file not writable"));
+        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "Config file not writable").into());
     }
 
     loop {

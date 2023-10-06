@@ -450,7 +450,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             self.broadcast_msg(MESSAGE_TYPE_NODE_INFO, &mut buffer)?;
             // Reschedule for next update
             let min_peer_timeout = self.peers.iter().map(|p| p.1.peer_timeout).min().unwrap_or(DEFAULT_PEER_TIMEOUT);
-            let interval = min(self.update_freq as u16, max(min_peer_timeout / 2 - 60, 1));
+            let interval = min(self.update_freq, max(min_peer_timeout / 2 - 60, 1));
             self.next_peers = now + Time::from(interval);
         }
         self.reconnect_to_peers()?;
@@ -491,7 +491,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
                     .map_err(|e| Error::BeaconIo("Failed to call beacon command", e))?;
             } else {
                 self.beacon_serializer
-                    .write_to_file(&peers, &path)
+                    .write_to_file(&peers, path)
                     .map_err(|e| Error::BeaconIo("Failed to write beacon to file", e))?;
             }
         }
@@ -510,7 +510,7 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
             } else {
                 peers = self
                     .beacon_serializer
-                    .read_from_file(&path, Some(50))
+                    .read_from_file(path, Some(50))
                     .map_err(|e| Error::BeaconIo("Failed to read beacon from file", e))?;
             }
         } else {

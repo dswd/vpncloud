@@ -12,35 +12,36 @@ readme = "README.md"
 edition = "2018"
 
 [package.metadata]
-toolchain = "1.57.0"
+toolchain = "1.73.0"
 upx_version = "3.96"
 
 [dependencies]
 chrono = { version = "0.4", features = ["std", "clock"], default_features = false}
 structopt = "0.3"
 serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.8"
+serde_yaml = "0.9"
 log = { version = "0.4", features = ["std"] }
 signal = "0.7"
 libc = "0.2"
 rand = "0.8"
 fnv = "1"
 yaml-rust = "0.4"
-daemonize = "0.4"
-ring = "0.16"
+daemonize = "0.5"
+#ring = "0.17"
+ring = { git = "https://github.com/briansmith/ring", rev = "2afc921" } # https://github.com/briansmith/ring/issues/1707
 privdrop = "0.5"
 byteorder = "1.4"
 thiserror = "1.0"
 smallvec = "1.7"
-dialoguer = { version = "0.9", optional = true }
-tungstenite = { version = "0.16", optional = true, default-features = false }
+dialoguer = { version = "0.11", optional = true }
+tungstenite = { version = "0.20", optional = true }
 url = { version = "2.2", optional = true }
 igd = { version = "0.12", optional = true }
 
 
 [dev-dependencies]
 tempfile = "3"
-criterion = { version = "0.3", features = ["html_reports"] }
+criterion = { version = "0.5", features = ["html_reports"] }
 iai = "0.1"
 
 [features]
