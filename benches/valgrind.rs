@@ -17,7 +17,7 @@ use util::{MockTimeSource, MsgBuffer};
 use config::Config;
 use types::{Address, Range};
 use device::Type;
-use table::{ClaimTable};
+use table::ClaimTable;
 use payload::{Packet, Frame, Protocol};
 use crypto::core::{create_dummy_pair, EXTRA_LEN};
 use tests::common::{TunSimulator, TapSimulator};
@@ -26,7 +26,7 @@ fn udp_send() {
     let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
     let data = [0; 1400];
     let addr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 1);
-    sock.send_to(&data, &black_box(addr)).unwrap();
+    sock.send_to(&data, black_box(addr)).unwrap();
 }
 
 fn decode_ipv4() {
