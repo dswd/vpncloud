@@ -1,43 +1,44 @@
+use std::time::Duration;
+
 use super::{common::SPACE_BEFORE, coms::Coms, shared::SharedConfig};
 use crate::{
-    device::Device,
     error::Error,
     net::Socket,
-    util::{MsgBuffer, Time, TimeSource},
+    util::{MsgBuffer, TimeSource, Time},
     Protocol,
 };
 
-pub struct DeviceThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
-    // Device-only fields
+const MAX_RECONNECT_INTERVAL: u16 = 3600;
+const RESOLVE_INTERVAL: Time = 300;
+const OWN_ADDRESS_RESET_INTERVAL: Time = 300;
+pub const STATS_INTERVAL: Time = 60;
+
+pub struct ExtrasThread<S: Socket, P: Protocol, TS: TimeSource> {
     config: SharedConfig,
     coms: Coms<S, TS, P>,
-    pub device: D,
     next_housekeep: Time,
     buffer: MsgBuffer,
 }
 
-impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS> {
-    pub fn new(config: SharedConfig, device: D, coms: Coms<S, TS, P>) -> Self {
+impl<S: Socket, P: Protocol, TS: TimeSource> ExtrasThread<S, P, TS> {
+    pub fn new(config: SharedConfig, coms: Coms<S, TS, P>) -> Self {
         Self {
             config,
-            device,
+            coms,
             next_housekeep: TS::now(),
             buffer: MsgBuffer::new(SPACE_BEFORE),
-            coms,
         }
     }
 
     pub fn housekeep(&mut self) -> Result<(), Error> {
-        self.coms.sync()
+        let now = TS::now();
+        assert!(self.buffer.is_empty());
+        Ok(())
     }
 
+
     pub fn iteration(&mut self) -> bool {
-        if self.device.read(&mut self.buffer).is_ok() {
-            //try_fail!(result, "Failed to read from device: {}");
-            if let Err(e) = self.coms.forward_packet(&mut self.buffer) {
-                error!("{}", e);
-            }
-        }
+        std::thread::sleep(Duration::from_millis(100));
         let now = TS::now();
         if self.next_housekeep < now {
             if let Err(e) = self.housekeep() {
@@ -45,7 +46,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
             }
             self.next_housekeep = now + 1;
             if !self.config.is_running() {
-                debug!("Device: end");
+                debug!("Extras: end");
                 return false;
             }
         }

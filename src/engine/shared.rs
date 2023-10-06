@@ -1,6 +1,6 @@
 use crate::{
     config::Config,
-    crypto::CryptoCore,
+    crypto::{CryptoCore, PeerCrypto},
     engine::common::Hash,
     error::Error,
     table::ClaimTable,
@@ -13,34 +13,40 @@ use std::{
     collections::HashMap,
     io::{self, Write},
     net::SocketAddr,
-    sync::Arc,
+    ops::DerefMut,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 use super::common::PeerData;
 
 #[derive(Clone)]
 #[allow(clippy::type_complexity)]
-pub struct SharedPeerCrypto {
-    peers: Arc<Mutex<HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash>>>,
+pub struct SharedCrypto {
+    peer_crypto: Arc<Mutex<HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash>>>,
     cache: HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash>, //TODO: local hashmap as cache
 }
 
-impl SharedPeerCrypto {
+impl SharedCrypto {
     pub fn new() -> Self {
-        SharedPeerCrypto { peers: Arc::new(Mutex::new(HashMap::default())), cache: HashMap::default() }
+        SharedCrypto { peer_crypto: Arc::new(Mutex::new(HashMap::default())), cache: HashMap::default() }
     }
 
     pub fn encrypt_for(&mut self, peer: SocketAddr, data: &mut MsgBuffer) -> Result<(), Error> {
-        let crypto = match self.cache.get(&peer) {
-            Some(crypto) => crypto,
-            None => {
-                let peers = self.peers.lock();
-                if let Some(crypto) = peers.get(&peer) {
-                    self.cache.insert(peer, crypto.clone());
-                    self.cache.get(&peer).unwrap()
-                } else {
-                    return Err(Error::InvalidCryptoState("No crypto found for peer"));
-                }
+        let cache = &mut self.cache;
+        let owned_crypto;
+        let crypto = if let Some(crypto) = cache.get(&peer) {
+            crypto
+        } else {
+            let peers = self.peer_crypto.lock();
+            if let Some(crypto) = peers.get(&peer) {
+                cache.insert(peer, crypto.clone());
+                owned_crypto = crypto.clone();
+                &owned_crypto
+            } else {
+                return Err(Error::InvalidCryptoState("No crypto found for peer"));
             }
         };
         if let Some(crypto) = crypto {
@@ -51,32 +57,36 @@ impl SharedPeerCrypto {
 
     pub fn add(&mut self, addr: SocketAddr, crypto: Option<Arc<CryptoCore>>) {
         self.cache.insert(addr, crypto.clone());
-        let mut peers = self.peers.lock();
+        let mut peers = self.peer_crypto.lock();
         peers.insert(addr, crypto);
     }
 
     pub fn remove(&mut self, addr: &SocketAddr) {
         self.cache.remove(addr);
-        let mut peers = self.peers.lock();
+        let mut peers = self.peer_crypto.lock();
         peers.remove(addr);
     }
 
-    pub fn store(&mut self, data: &HashMap<SocketAddr, PeerData, Hash>) {
+    pub fn store(&mut self, data: &HashMap<SocketAddr, PeerCrypto, Hash>) {
         self.cache.clear();
-        self.cache.extend(data.iter().map(|(k, v)| (*k, v.crypto.get_core())));
-        let mut peers = self.peers.lock();
+        self.cache.extend(data.iter().map(|(k, v)| (*k, v.get_core())));
+        let mut peers = self.peer_crypto.lock();
         peers.clear();
         peers.extend(self.cache.iter().map(|(k, v)| (*k, v.clone())));
     }
 
     pub fn load(&mut self) {
-        let peers = self.peers.lock();
+        let peers = self.peer_crypto.lock();
         self.cache.clear();
         self.cache.extend(peers.iter().map(|(k, v)| (*k, v.clone())));
     }
 
     pub fn get_snapshot(&mut self) -> &HashMap<SocketAddr, Option<Arc<CryptoCore>>, Hash> {
         &self.cache
+    }
+
+    pub fn contains(&self, addr: &SocketAddr) -> bool {
+        self.cache.contains_key(addr)
     }
 
     pub fn count(&self) -> usize {
@@ -214,5 +224,44 @@ impl<TS: TimeSource> SharedTable<TS> {
 
     pub fn claim_len(&self) -> usize {
         self.table.lock().claim_len()
+    }
+}
+
+#[derive(Clone)]
+pub struct SharedConfig {
+    config: Config,
+    running: Arc<AtomicBool>,
+}
+
+impl SharedConfig {
+    pub fn new(config: Config) -> Self {
+        Self { config, running: Arc::new(AtomicBool::new(true)) }
+    }
+
+    pub fn get_config(&self) -> &Config {
+        &self.config
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running.load(Ordering::Relaxed)
+    }
+
+    pub fn stop(&self) {
+        self.running.store(false, Ordering::Relaxed)
+    }
+}
+
+#[derive(Clone)]
+pub struct SharedPeers {
+    peers: Arc<Mutex<HashMap<SocketAddr, PeerData, Hash>>>,
+}
+
+impl SharedPeers {
+    pub fn new() -> Self {
+        Self { peers: Default::default() }
+    }
+
+    pub fn get_peers<'a>(&'a self) -> impl DerefMut<Target = HashMap<SocketAddr, PeerData, Hash>> + 'a {
+        self.peers.lock()
     }
 }

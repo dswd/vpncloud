@@ -1,9 +1,9 @@
-use super::{common::SPACE_BEFORE, coms::Coms};
+use super::{common::SPACE_BEFORE, coms::Coms, shared::SharedConfig};
 
 use crate::{
     beacon::BeaconSerializer,
     config::{DEFAULT_PEER_TIMEOUT, DEFAULT_PORT},
-    crypto::{is_init_message, Crypto, InitResult, InitState, MessageResult},
+    crypto::{is_init_message, Crypto, InitResult, InitState, MessageResult, PeerCrypto},
     device::{Device, Type},
     engine::common::{Hash, PeerData},
     error::Error,
@@ -15,12 +15,10 @@ use crate::{
     port_forwarding::PortForwarding,
     types::{Address, NodeId, Range, RangeList},
     util::{addr_nice, resolve, MsgBuffer, StatsdMsg, Time, TimeSource},
-    Config, Protocol,
+    Protocol,
 };
 use rand::{random, seq::SliceRandom, thread_rng};
 use smallvec::{smallvec, SmallVec};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::{
     cmp::{max, min},
     collections::HashMap,
@@ -30,7 +28,7 @@ use std::{
     io::{Cursor, Seek, SeekFrom, Write},
     marker::PhantomData,
     net::{SocketAddr, ToSocketAddrs},
-    str::FromStr,
+    str::FromStr, ops::Deref,
 };
 
 const MAX_RECONNECT_INTERVAL: u16 = 3600;
@@ -52,32 +50,32 @@ pub struct SocketThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
     // Read-only fields
     node_id: NodeId,
     claims: RangeList,
-    config: Config,
     peer_timeout_publish: u16,
     learning: bool,
     update_freq: u16,
     _dummy_ts: PhantomData<TS>,
     _dummy_p: PhantomData<P>,
     // Socket-only fields
+    config: SharedConfig,
     pub coms: Coms<S, TS, P>,
     device: D,
     next_housekeep: Time,
     pub own_addresses: AddrList,
     next_own_address_reset: Time,
     pending_inits: HashMap<SocketAddr, InitState<NodeInfo>, Hash>,
-    crypto: Crypto,
-    pub peers: HashMap<SocketAddr, PeerData, Hash>,
-    next_peers: Time,
-    next_stats_out: Time,
-    next_beacon: Time,
-    beacon_serializer: BeaconSerializer<TS>,
-    stats_file: Option<File>,
-    statsd_server: Option<String>,
-    pub reconnect_peers: SmallVec<[ReconnectEntry; 3]>,
+    crypto: Crypto,                                     // TODO 2nd: move to config
+    //pub peers: HashMap<SocketAddr, PeerData, Hash>,     // TODO 1st: move to shared peers
+    peer_crypto: HashMap<SocketAddr, PeerCrypto, Hash>,
+    next_peers: Time,                                   // TODO: split off
+    next_stats_out: Time,                               // TODO: split off
+    next_beacon: Time,                                  // TODO: split off
+    beacon_serializer: BeaconSerializer<TS>,            // TODO: split off
+    stats_file: Option<File>,                           // TODO: split off
+    statsd_server: Option<String>,                      // TODO: split off
+    pub reconnect_peers: SmallVec<[ReconnectEntry; 3]>, // TODO: move to shared config
     buffer: MsgBuffer,
     // Shared fields
     //table: SharedTable<TS>,
-    running: Arc<AtomicBool>,
     // Should not be here
     port_forwarding: Option<PortForwarding>, // TODO: 3rd thread
 }
@@ -85,14 +83,14 @@ pub struct SocketThread<S: Socket, D: Device, P: Protocol, TS: TimeSource> {
 impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        config: Config, coms: Coms<S, TS, P>, device: D,
-        port_forwarding: Option<PortForwarding>, stats_file: Option<File>, running: Arc<AtomicBool>,
+        config: SharedConfig, coms: Coms<S, TS, P>, device: D, port_forwarding: Option<PortForwarding>,
+        stats_file: Option<File>,
     ) -> Self {
-        let mut claims = SmallVec::with_capacity(config.claims.len());
-        for s in &config.claims {
+        let mut claims = SmallVec::with_capacity(config.get_config().claims.len());
+        for s in &config.get_config().claims {
             claims.push(try_fail!(Range::from_str(s), "Invalid subnet format: {} ({})", s));
         }
-        if device.get_type() == Type::Tun && config.auto_claim {
+        if device.get_type() == Type::Tun && config.get_config().auto_claim {
             match device.get_ip() {
                 Ok(ip) => {
                     let range = Range { base: Address::from_ipv4(ip), prefix_len: 32 };
@@ -106,9 +104,9 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             }
         }
         let now = TS::now();
-        let update_freq = config.get_keepalive() as u16;
+        let update_freq = config.get_config().get_keepalive() as u16;
         let node_id = random();
-        let beacon_key = config.beacon_password.as_ref().map(|s| s.as_bytes()).unwrap_or(&[]);
+        let beacon_key = config.get_config().beacon_password.as_ref().map(|s| s.as_bytes()).unwrap_or(&[]);
         Self {
             _dummy_p: PhantomData,
             _dummy_ts: PhantomData,
@@ -116,7 +114,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             claims,
             device,
             coms,
-            learning: config.is_learning(),
+            learning: config.get_config().is_learning(),
             next_housekeep: now,
             next_beacon: now,
             next_peers: now,
@@ -125,23 +123,22 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             pending_inits: HashMap::default(),
             reconnect_peers: SmallVec::new(),
             own_addresses: SmallVec::new(),
-            peers: HashMap::default(),
-            peer_timeout_publish: config.peer_timeout as u16,
+            peer_timeout_publish: config.get_config().peer_timeout as u16,
             beacon_serializer: BeaconSerializer::new(beacon_key),
             port_forwarding,
             stats_file,
             update_freq,
-            statsd_server: config.statsd_server.clone(),
-            crypto: Crypto::new(node_id, &config.crypto).unwrap(),
+            statsd_server: config.get_config().statsd_server.clone(),
+            crypto: Crypto::new(node_id, &config.get_config().crypto).unwrap(),
+            peer_crypto: Default::default(),
             config,
             buffer: MsgBuffer::new(SPACE_BEFORE),
-            running,
         }
     }
 
     fn connect_sock(&mut self, addr: SocketAddr) -> Result<(), Error> {
         let addr = mapped_addr(addr);
-        if self.peers.contains_key(&addr)
+        if self.coms.has_peer(&addr)
             || self.own_addresses.contains(&addr)
             || self.pending_inits.contains_key(&addr)
         {
@@ -159,7 +156,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         let addrs = resolve(&addr)?.into_iter().map(mapped_addr).collect::<SmallVec<[SocketAddr; 3]>>();
         for addr in &addrs {
             if self.own_addresses.contains(addr)
-                || self.peers.contains_key(addr)
+                || self.coms.has_peer(addr)
                 || self.pending_inits.contains_key(addr)
             {
                 return Ok(());
@@ -175,7 +172,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
 
     fn create_node_info(&self) -> NodeInfo {
         let mut peers = smallvec![];
-        for peer in self.peers.values() {
+        for peer in self.coms.get_peers().values() {
             peers.push(PeerInfo { node_id: Some(peer.node_id), addrs: peer.addrs.clone() })
         }
         if peers.len() > 20 {
@@ -193,9 +190,9 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
     }
 
     fn update_peer_info(&mut self, addr: SocketAddr, info: Option<NodeInfo>) -> Result<(), Error> {
-        if let Some(peer) = self.peers.get_mut(&addr) {
+        if let Some(peer) = self.coms.get_peers().get_mut(&addr) {
             peer.last_seen = TS::now();
-            peer.timeout = TS::now() + self.config.peer_timeout as Time;
+            peer.timeout = TS::now() + self.config.get_config().peer_timeout as Time;
             if let Some(info) = &info {
                 // Update peer addresses, always add seen address
                 peer.addrs.clear();
@@ -226,14 +223,13 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             let crypto = init.finish(&mut self.buffer);
             let peer_data = PeerData {
                 addrs: info.addrs.clone(),
-                crypto,
                 node_id: info.node_id,
                 peer_timeout: info.peer_timeout.unwrap_or(DEFAULT_PEER_TIMEOUT),
                 last_seen: TS::now(),
-                timeout: TS::now() + self.config.peer_timeout as Time,
+                timeout: TS::now() + self.config.get_config().peer_timeout as Time,
             };
-            self.coms.add_peer(addr, &peer_data);
-            self.peers.insert(addr, peer_data);
+            self.coms.add_peer(addr,  peer_data,&crypto);
+            self.peer_crypto.insert(addr, crypto);
             self.update_peer_info(addr, Some(info))?;
             if !self.buffer.is_empty() {
                 self.coms.send_to(addr, &mut self.buffer)?;
@@ -247,7 +243,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
     fn connect_to_peers(&mut self, peers: &[PeerInfo]) -> Result<(), Error> {
         'outer: for peer in peers {
             for addr in &peer.addrs {
-                if self.peers.contains_key(addr) {
+                if self.own_addresses.contains(addr) {
                     // Check addresses and add addresses that we don't know to own addresses
                     for addr in &peer.addrs {
                         if !self.own_addresses.contains(addr) {
@@ -261,7 +257,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
                 if self.node_id == node_id {
                     continue 'outer;
                 }
-                for p in self.peers.values() {
+                for p in self.coms.get_peers().values() {
                     if p.node_id == node_id {
                         continue 'outer;
                     }
@@ -273,10 +269,8 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
     }
 
     fn remove_peer(&mut self, addr: SocketAddr) {
-        if let Some(_peer) = self.peers.remove(&addr) {
-            info!("Closing connection to {}", addr_nice(addr));
-            self.coms.remove_peer(&addr);
-        }
+        self.coms.remove_peer(&addr);
+        self.peer_crypto.remove(&addr);
     }
 
     fn handle_payload_from(&mut self, peer: SocketAddr) -> Result<(), Error> {
@@ -339,7 +333,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         debug!("Received {} bytes from {}", self.buffer.len(), src);
         let buffer = &mut self.buffer;
         self.coms.traffic.count_in_traffic(src, buffer.len());
-        if let Some(result) = self.peers.get_mut(&src).map(|peer| peer.crypto.handle_message(buffer)) {
+        if let Some(result) = self.peer_crypto.get_mut(&src).map(|crypto| crypto.handle_message(buffer)) {
             return self.process_message(src, result?);
         }
         let is_init = is_init_message(buffer.message());
@@ -383,14 +377,13 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
     pub fn housekeep(&mut self) -> Result<(), Error> {
         let now = TS::now();
         let mut del: SmallVec<[SocketAddr; 3]> = SmallVec::new();
-        for (&addr, data) in &self.peers {
+        for (&addr, data) in self.coms.get_peers().deref() {
             if data.timeout < now {
                 del.push(addr);
             }
         }
         for addr in del {
             info!("Forgot peer {} due to timeout", addr_nice(addr));
-            self.peers.remove(&addr);
             self.coms.remove_peer(&addr);
             self.connect_sock(addr)?; // Try to reconnect
         }
@@ -409,7 +402,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             info.encode(&mut self.buffer);
             self.coms.broadcast_msg(MESSAGE_TYPE_NODE_INFO, &mut self.buffer)?;
             // Reschedule for next update
-            let min_peer_timeout = self.peers.iter().map(|p| p.1.peer_timeout).min().unwrap_or(DEFAULT_PEER_TIMEOUT);
+            let min_peer_timeout = self.coms.get_peers().iter().map(|p| p.1.peer_timeout).min().unwrap_or(DEFAULT_PEER_TIMEOUT);
             let interval = min(self.update_freq as u16, max(min_peer_timeout / 2 - 60, 1));
             self.next_peers = now + Time::from(interval);
         }
@@ -432,7 +425,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         if self.next_beacon < now {
             self.store_beacon()?;
             self.load_beacon()?;
-            self.next_beacon = now + Time::from(self.config.beacon_interval);
+            self.next_beacon = now + Time::from(self.config.get_config().beacon_interval);
         }
         self.coms.sync()?;
         // Periodically reset own peers
@@ -454,16 +447,17 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
                 self.coms.send_to(addr, &mut self.buffer)?
             }
         }
-        for addr in self.peers.keys().copied().collect::<SmallVec<[SocketAddr; 16]>>() {
+        for (addr, crypto) in self.peer_crypto.iter_mut() {
             self.buffer.clear();
-            self.peers.get_mut(&addr).unwrap().crypto.every_second(&mut self.buffer);
+            crypto.every_second(&mut self.buffer);
             if !self.buffer.is_empty() {
-                self.coms.send_to(addr, &mut self.buffer)?
+                self.coms.send_to(*addr, &mut self.buffer)?
             }
         }
         for addr in del {
             self.pending_inits.remove(&addr);
-            if self.peers.remove(&addr).is_some() {
+            self.peer_crypto.remove(&addr);
+            if self.coms.remove_peer(&addr) {
                 self.connect_sock(addr)?;
             }
         }
@@ -474,7 +468,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         self.own_addresses.clear();
         let socket_addr = self.coms.get_address()?;
         // 1) Specified advertise addresses
-        for addr in &self.config.advertise_addresses {
+        for addr in &self.config.get_config().advertise_addresses {
             self.own_addresses.push(parse_listen(addr, socket_addr.port()));
         }
         // 2) Address of UDP socket
@@ -491,7 +485,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
 
     /// Stores the beacon
     fn store_beacon(&mut self) -> Result<(), Error> {
-        if let Some(ref path) = self.config.beacon_store {
+        if let Some(ref path) = self.config.get_config().beacon_store {
             let peers: SmallVec<[SocketAddr; 3]> =
                 self.own_addresses.choose_multiple(&mut thread_rng(), 3).cloned().collect();
             if let Some(path) = path.strip_prefix('|') {
@@ -510,7 +504,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
     /// Loads the beacon
     fn load_beacon(&mut self) -> Result<(), Error> {
         let peers;
-        if let Some(ref path) = self.config.beacon_load {
+        if let Some(ref path) = self.config.get_config().beacon_load {
             if let Some(path) = path.strip_prefix('|') {
                 self.beacon_serializer
                     .read_from_cmd(path, Some(50))
@@ -540,13 +534,13 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             f.set_len(0)?;
             writeln!(f, "peers:")?;
             let now = TS::now();
-            for (addr, data) in &self.peers {
+            for (addr, data) in self.coms.get_peers().iter() {
                 writeln!(
                     f,
                     "  - \"{}\": {{ ttl_secs: {}, crypto: {} }}",
                     addr_nice(*addr),
                     data.timeout - now,
-                    data.crypto.algorithm_name()
+                    self.peer_crypto.get(addr).unwrap().algorithm_name()
                 )?;
             }
             writeln!(f)?;
@@ -564,10 +558,10 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             let peer_traffic = self.coms.traffic.total_peer_traffic();
             let payload_traffic = self.coms.traffic.total_payload_traffic();
             let dropped = &self.coms.traffic.dropped();
-            let prefix = self.config.statsd_prefix.as_ref().map(|s| s as &str).unwrap_or("vpncloud");
+            let prefix = self.config.get_config().statsd_prefix.as_ref().map(|s| s as &str).unwrap_or("vpncloud");
             let msg = StatsdMsg::new()
                 .with_ns(prefix, |msg| {
-                    msg.add("peer_count", self.peers.len(), "g");
+                    msg.add("peer_count", self.coms.get_peers().len(), "g");
                     msg.add("table_cache_entries", self.coms.table.cache_len(), "g");
                     msg.add("table_claims", self.coms.table.claim_len(), "g");
                     msg.with_ns("traffic", |msg| {
@@ -624,7 +618,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         for entry in &mut self.reconnect_peers {
             // Schedule for next second if node is connected
             for addr in &entry.resolved {
-                if self.peers.contains_key(addr) {
+                if self.coms.get_peers().contains_key(addr) {
                     entry.tries = 0;
                     entry.timeout = 1;
                     entry.next = now + 1;
@@ -693,7 +687,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
                 error!("{}", e)
             }
             self.next_housekeep = now + 1;
-            if !self.running.load(Ordering::SeqCst) {
+            if !self.config.is_running() {
                 debug!("Socket: end");
                 return false;
             }

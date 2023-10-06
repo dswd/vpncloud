@@ -1,5 +1,3 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::thread;
 use std::{fs::File, hash::BuildHasherDefault};
 
@@ -8,12 +6,14 @@ use fnv::FnvHasher;
 use crate::util::CtrlC;
 use crate::{
     config::Config,
-    crypto::PeerCrypto,
     device::Device,
     engine::{
+        coms::Coms,
         device_thread::DeviceThread,
+        extras_thread::ExtrasThread,
+        housekeep_thread::HousekeepThread,
+        shared::SharedConfig,
         socket_thread::{ReconnectEntry, SocketThread},
-        coms::Coms
     },
     error::Error,
     messages::AddrList,
@@ -36,13 +36,15 @@ pub struct PeerData {
     pub timeout: Time,
     pub peer_timeout: u16,
     pub node_id: NodeId,
-    pub crypto: PeerCrypto,
+    //pub crypto: PeerCrypto,
 }
 
 pub struct GenericCloud<D: Device, P: Protocol, S: Socket, TS: TimeSource> {
+    config: SharedConfig,
     socket_thread: SocketThread<S, D, P, TS>,
     device_thread: DeviceThread<S, D, P, TS>,
-    running: Arc<AtomicBool>,
+    housekeep_thread: HousekeepThread<S, P, TS>,
+    extras_thread: ExtrasThread<S, P, TS>,
 }
 
 impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS> {
@@ -50,23 +52,18 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
     pub fn new(
         config: &Config, socket: S, device: D, port_forwarding: Option<PortForwarding>, stats_file: Option<File>,
     ) -> Result<Self, Error> {
-        let running = Arc::new(AtomicBool::new(true));
-        let coms = Coms::<S, TS, P>::new(config, socket.try_clone().map_err(|e| Error::SocketIo("Failed to clone socket", e))?);
-        let device_thread = DeviceThread::<S, D, P, TS>::new(
-            device.duplicate()?,
-            coms.try_clone()?,
-            running.clone(),
+        let config = SharedConfig::new(config.clone());
+        let coms = Coms::<S, TS, P>::new(
+            config.get_config(),
+            socket.try_clone().map_err(|e| Error::SocketIo("Failed to clone socket", e))?,
         );
-        let mut socket_thread = SocketThread::<S, D, P, TS>::new(
-            config.clone(),
-            coms,
-            device,
-            port_forwarding,
-            stats_file,
-            running.clone(),
-        );
+        let device_thread = DeviceThread::<S, D, P, TS>::new(config.clone(), device.duplicate()?, coms.try_clone()?);
+        let housekeep_thread = HousekeepThread::<S, P, TS>::new(config.clone(), coms.try_clone()?);
+        let extras_thread = ExtrasThread::<S, P, TS>::new(config.clone(), coms.try_clone()?);
+        let mut socket_thread =
+            SocketThread::<S, D, P, TS>::new(config.clone(), coms, device, port_forwarding, stats_file);
         socket_thread.housekeep()?;
-        Ok(Self { socket_thread, device_thread, running })
+        Ok(Self { socket_thread, device_thread, config, housekeep_thread, extras_thread })
     }
 
     pub fn add_peer(&mut self, addr: String) -> Result<(), Error> {
@@ -84,17 +81,23 @@ impl<D: Device, P: Protocol, S: Socket, TS: TimeSource> GenericCloud<D, P, S, TS
 
     pub fn run(self) {
         debug!("Starting threads");
-        let running = self.running.clone();
+        let config = self.config;
         let device = self.device_thread;
         let device_thread_handle = thread::spawn(move || device.run());
         let socket = self.socket_thread;
         let socket_thread_handle = thread::spawn(move || socket.run());
+        let housekeep = self.housekeep_thread;
+        let housekeep_thread_handle = thread::spawn(move || housekeep.run());
+        let extras = self.extras_thread;
+        let extras_thread_handle = thread::spawn(move || extras.run());
         let ctrlc = CtrlC::new();
         ctrlc.wait();
-        running.store(false, Ordering::SeqCst);
+        config.stop();
         debug!("Waiting for threads to end");
         device_thread_handle.join().unwrap();
         socket_thread_handle.join().unwrap();
+        housekeep_thread_handle.join().unwrap();
+        extras_thread_handle.join().unwrap();
         debug!("Threads stopped");
     }
 }
@@ -136,7 +139,7 @@ impl<P: Protocol> GenericCloud<MockDevice, P, MockSocket, MockTimeSource> {
     }
 
     pub fn is_connected(&self, addr: &SocketAddr) -> bool {
-        self.socket_thread.peers.contains_key(addr)
+        self.socket_thread.coms.has_peer(addr)
     }
 
     pub fn own_addresses(&self) -> &[SocketAddr] {

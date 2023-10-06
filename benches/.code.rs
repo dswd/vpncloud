@@ -18,6 +18,9 @@ mod engine {
     pub mod common {
         include!("../src/engine/common.rs");
     }
+    pub mod coms {
+        include!("../src/engine/coms.rs");
+    }
     mod shared {
         include!("../src/engine/shared.rs");
     }
@@ -26,6 +29,12 @@ mod engine {
     }
     mod socket_thread {
         include!("../src/engine/socket_thread.rs");
+    }
+    mod housekeep_thread {
+        include!("../src/engine/housekeep_thread.rs");
+    }
+    mod extras_thread {
+        include!("../src/engine/extras_thread.rs");
     }
 }
 mod config {

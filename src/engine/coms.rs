@@ -1,23 +1,26 @@
-use std::{net::SocketAddr, marker::PhantomData, io};
+use std::{collections::HashMap, io, marker::PhantomData, net::SocketAddr, ops::DerefMut};
 
 use crate::{
     config::Config,
+    crypto::PeerCrypto,
     error::Error,
     messages::MESSAGE_TYPE_DATA,
-    net::{Socket, mapped_addr},
-    util::{MsgBuffer, TimeSource}, payload::Protocol,
+    net::{mapped_addr, Socket},
+    payload::Protocol,
+    util::{MsgBuffer, TimeSource, addr_nice},
 };
 
 use super::{
-    common::{SPACE_BEFORE, PeerData},
-    shared::{SharedPeerCrypto, SharedTable, SharedTraffic},
+    common::{Hash, PeerData, SPACE_BEFORE},
+    shared::{SharedCrypto, SharedPeers, SharedTable, SharedTraffic},
 };
 
 pub struct Coms<S: Socket, TS: TimeSource, P: Protocol> {
     _dummy_p: PhantomData<P>,
     broadcast: bool,
     broadcast_buffer: MsgBuffer,
-    peer_crypto: SharedPeerCrypto,
+    crypto: SharedCrypto,
+    peers: SharedPeers,
     pub table: SharedTable<TS>,
     pub traffic: SharedTraffic,
     pub socket: S,
@@ -30,7 +33,8 @@ impl<S: Socket, TS: TimeSource, P: Protocol> Coms<S, TS, P> {
             broadcast: config.is_broadcasting(),
             broadcast_buffer: MsgBuffer::new(SPACE_BEFORE),
             traffic: SharedTraffic::new(),
-            peer_crypto: SharedPeerCrypto::new(),
+            crypto: SharedCrypto::new(),
+            peers: SharedPeers::new(),
             table: SharedTable::<TS>::new(config),
             socket,
         }
@@ -42,14 +46,15 @@ impl<S: Socket, TS: TimeSource, P: Protocol> Coms<S, TS, P> {
             broadcast: self.broadcast,
             broadcast_buffer: MsgBuffer::new(SPACE_BEFORE),
             traffic: self.traffic.clone(),
-            peer_crypto: self.peer_crypto.clone(),
+            crypto: self.crypto.clone(),
             table: self.table.clone(),
+            peers: self.peers.clone(),
             socket: self.socket.try_clone().map_err(|e| Error::SocketIo("Failed to clone socket", e))?,
         })
     }
 
     pub fn sync(&mut self) -> Result<(), Error> {
-        self.peer_crypto.load();
+        self.crypto.load();
         self.table.sync();
         self.traffic.sync();
         Ok(())
@@ -67,6 +72,7 @@ impl<S: Socket, TS: TimeSource, P: Protocol> Coms<S, TS, P> {
         }
     }
 
+    //TODO: move back to socket thread
     pub fn receive(&mut self, buffer: &mut MsgBuffer) -> Result<SocketAddr, io::Error> {
         self.socket.receive(buffer)
     }
@@ -87,17 +93,17 @@ impl<S: Socket, TS: TimeSource, P: Protocol> Coms<S, TS, P> {
     pub fn send_msg(&mut self, addr: SocketAddr, type_: u8, data: &mut MsgBuffer) -> Result<(), Error> {
         debug!("Sending msg with {} bytes to {}", data.len(), addr);
         data.prepend_byte(type_);
-        self.peer_crypto.encrypt_for(addr, data)?;
+        self.crypto.encrypt_for(addr, data)?;
         self.send_to(addr, data)
     }
 
     #[inline]
     pub fn broadcast_msg(&mut self, type_: u8, data: &mut MsgBuffer) -> Result<(), Error> {
         let size = data.len();
-        debug!("Broadcasting message type {}, {:?} bytes to {} peers", type_, size, self.peer_crypto.count());
+        debug!("Broadcasting message type {}, {:?} bytes to {} peers", type_, size, self.crypto.count());
         let traffic = &mut self.traffic;
         let socket = &mut self.socket;
-        let peers = self.peer_crypto.get_snapshot();
+        let peers = self.crypto.get_snapshot();
         for (addr, crypto) in peers {
             self.broadcast_buffer.set_start(data.get_start());
             self.broadcast_buffer.set_length(data.len());
@@ -140,13 +146,27 @@ impl<S: Socket, TS: TimeSource, P: Protocol> Coms<S, TS, P> {
         Ok(())
     }
 
-    pub fn add_peer(&mut self, addr: SocketAddr, peer: &PeerData) {
-        self.peer_crypto.add(addr, peer.crypto.get_core());
+    pub fn get_peers<'a>(&'a self) -> impl DerefMut<Target = HashMap<SocketAddr, PeerData, Hash>> + 'a {
+        self.peers.get_peers()
     }
 
-    pub fn remove_peer(&mut self, addr: &SocketAddr) {
-        self.table.remove_claims(*addr);
-        self.peer_crypto.remove(addr);
+    pub fn add_peer(&mut self, addr: SocketAddr, peer_data: PeerData, peer_crypto: &PeerCrypto) {
+        self.crypto.add(addr, peer_crypto.get_core());
+        self.peers.get_peers().insert(addr, peer_data);
     }
 
+    pub fn remove_peer(&mut self, addr: &SocketAddr) -> bool {
+        if let Some(_peer) = self.peers.get_peers().remove(addr) {
+            info!("Closing connection to {}", addr_nice(*addr));    
+            self.table.remove_claims(*addr);
+            self.crypto.remove(addr);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn has_peer(&self, addr: &SocketAddr) -> bool {
+        self.crypto.contains(addr)
+    }
 }
