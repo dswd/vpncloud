@@ -54,6 +54,7 @@ impl<S: Socket, P: Protocol, TS: TimeSource> ExtrasThread<S, P, TS> {
     }
 
     pub fn run(mut self) {
+        panic!();
         while self.iteration() {}
     }
 }

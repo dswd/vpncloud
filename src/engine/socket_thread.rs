@@ -149,7 +149,9 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         let mut init = self.crypto.peer_instance(payload);
         init.send_ping(&mut self.buffer);
         self.pending_inits.insert(addr, init);
-        self.coms.send_to(addr, &mut self.buffer)
+        self.coms.send_to(addr, &mut self.buffer)?;
+        self.buffer.clear();
+        Ok(())
     }
 
     pub fn connect<Addr: ToSocketAddrs + fmt::Debug + Clone>(&mut self, addr: Addr) -> Result<(), Error> {
@@ -233,6 +235,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             self.update_peer_info(addr, Some(info))?;
             if !self.buffer.is_empty() {
                 self.coms.send_to(addr, &mut self.buffer)?;
+                self.buffer.clear();
             }
         } else {
             error!("No init for new peer {}", addr_nice(addr));
@@ -320,7 +323,10 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
                     return Err(Error::Message("Unknown message type"));
                 }
             },
-            MessageResult::Reply => self.coms.send_to(src, &mut self.buffer)?,
+            MessageResult::Reply => {
+                self.coms.send_to(src, &mut self.buffer)?;
+                self.buffer.clear();
+            },
             MessageResult::None => {
                 self.buffer.clear();
             }
@@ -347,7 +353,8 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             }
         }) {
             if !buffer.is_empty() {
-                self.coms.send_to(src, &mut self.buffer)?
+                self.coms.send_to(src, &mut self.buffer)?;
+                self.buffer.clear();
             }
             if let InitResult::Success { peer_payload, .. } = result? {
                 self.add_new_peer(src, peer_payload)?
@@ -365,7 +372,9 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
         match msg_result {
             Ok(_) => {
                 self.pending_inits.insert(src, init);
-                self.coms.send_to(src, &mut self.buffer)
+                self.coms.send_to(src, &mut self.buffer)?;
+                self.buffer.clear();
+                Ok(())
             }
             Err(err) => {
                 self.coms.traffic.count_invalid_protocol(self.buffer.len());
@@ -401,9 +410,10 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             let info = self.create_node_info();
             info.encode(&mut self.buffer);
             self.coms.broadcast_msg(MESSAGE_TYPE_NODE_INFO, &mut self.buffer)?;
+            self.buffer.clear();
             // Reschedule for next update
             let min_peer_timeout = self.coms.get_peers().iter().map(|p| p.1.peer_timeout).min().unwrap_or(DEFAULT_PEER_TIMEOUT);
-            let interval = min(self.update_freq as u16, max(min_peer_timeout / 2 - 60, 1));
+            let interval = min(self.update_freq, max(min_peer_timeout / 2 - 60, 1));
             self.next_peers = now + Time::from(interval);
         }
         self.reconnect_to_peers()?;
@@ -444,14 +454,16 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
             if self.pending_inits.get_mut(&addr).unwrap().every_second(&mut self.buffer).is_err() {
                 del.push(addr)
             } else if !self.buffer.is_empty() {
-                self.coms.send_to(addr, &mut self.buffer)?
+                self.coms.send_to(addr, &mut self.buffer)?;
+                self.buffer.clear();
             }
         }
         for (addr, crypto) in self.peer_crypto.iter_mut() {
             self.buffer.clear();
             crypto.every_second(&mut self.buffer);
             if !self.buffer.is_empty() {
-                self.coms.send_to(*addr, &mut self.buffer)?
+                self.coms.send_to(*addr, &mut self.buffer)?;
+                self.buffer.clear();
             }
         }
         for addr in del {
@@ -697,6 +709,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> SocketThread<S, D, P, TS
     }
 
     pub fn run(mut self) {
+        panic!();
         while self.iteration() {}
     }
 }

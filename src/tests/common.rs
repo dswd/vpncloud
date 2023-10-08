@@ -31,13 +31,16 @@ pub fn init_debug_logger() {
     })
 }
 
-static CURRENT_NODE: AtomicUsize = AtomicUsize::new(0);
+thread_local! {
+    static CURRENT_NODE: AtomicUsize = AtomicUsize::new(0);
+}
+static COLORS: [yansi::Style; 6] = [yansi::Style::new(), yansi::Style::new().red(), yansi::Style::new().blue(), yansi::Style::new().green(), yansi::Style::new().magenta(), yansi::Style::new().yellow()];
 
 struct DebugLogger;
 
 impl DebugLogger {
     pub fn set_node(node: usize) {
-        CURRENT_NODE.store(node, Ordering::SeqCst);
+        CURRENT_NODE.with(|n| n.store(node, Ordering::SeqCst));
     }
 }
 
@@ -50,7 +53,8 @@ impl log::Log for DebugLogger {
     #[inline]
     fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
-            eprintln!("Node {} - {} - {}", CURRENT_NODE.load(Ordering::SeqCst), record.level(), record.args());
+            let node = CURRENT_NODE.with(|n| n.load(Ordering::SeqCst));
+            eprintln!("{}Node {} - {} - {}{}", COLORS[node].prefix(), node, record.level(), record.args(), COLORS[node].suffix());
         }
     }
 
@@ -90,7 +94,6 @@ impl<P: Protocol> Simulator<P> {
         DebugLogger::set_node(self.next_port as usize);
         self.next_port += 1;
         let node = TestNode::new(&config, MockSocket::new(addr), MockDevice::new(), None, None).unwrap();
-
         DebugLogger::set_node(0);
         self.nodes.insert(addr, node);
         addr
@@ -99,7 +102,7 @@ impl<P: Protocol> Simulator<P> {
     #[allow(dead_code)]
     pub fn get_node(&mut self, addr: SocketAddr) -> &mut TestNode<P> {
         let node = self.nodes.get_mut(&addr).unwrap();
-        DebugLogger::set_node(node.get_num());
+        //DebugLogger::set_node(node.get_num());
         node
     }
 

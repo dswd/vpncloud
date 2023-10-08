@@ -62,6 +62,7 @@ impl<S: Socket, P: Protocol, TS: TimeSource> HousekeepThread<S, P, TS> {
     }
 
     pub fn run(mut self) {
+        panic!();
         while self.iteration() {}
     }
 }

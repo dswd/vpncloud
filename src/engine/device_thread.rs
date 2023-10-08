@@ -53,6 +53,7 @@ impl<S: Socket, D: Device, P: Protocol, TS: TimeSource> DeviceThread<S, D, P, TS
     }
 
     pub fn run(mut self) {
+        panic!();
         while self.iteration() {}
     }
 }
