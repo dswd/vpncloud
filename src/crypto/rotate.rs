@@ -137,10 +137,10 @@ impl RotationState {
     }
 
     fn derive_key(private_key: EcdhPrivateKey, public_key: EcdhPublicKey) -> Key {
-        agree_ephemeral(private_key, &public_key, (), |k| {
+        agree_ephemeral(private_key, &public_key, |k| {
             let mut vec = Key::new();
             vec.extend_from_slice(k);
-            Ok(vec)
+            vec
         })
         .unwrap()
     }

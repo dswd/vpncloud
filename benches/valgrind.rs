@@ -28,7 +28,7 @@ fn udp_send() {
     let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
     let data = [0; 1400];
     let addr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 1);
-    sock.send_to(&data, &black_box(addr)).unwrap();
+    sock.send_to(&data, black_box(addr)).unwrap();
 }
 
 fn decode_ipv4() {

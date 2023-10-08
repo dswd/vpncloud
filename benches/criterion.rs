@@ -31,7 +31,7 @@ fn udp_send(c: &mut Criterion) {
     let mut g = c.benchmark_group("udp_send");
     g.throughput(Throughput::Bytes(1400));
     g.bench_function("udp_send", |b| {
-        b.iter(|| sock.send_to(&data, &addr).unwrap());
+        b.iter(|| sock.send_to(&data, addr).unwrap());
     });
     g.finish();
 }

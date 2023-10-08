@@ -473,8 +473,8 @@ impl<P: Payload> InitState<P> {
     }
 
     fn derive_master_key(&self, algo: &'static Algorithm, privk: EcdhPrivateKey, pubk: &EcdhPublicKey) -> LessSafeKey {
-        agree_ephemeral(privk, pubk, (), |k| {
-            UnboundKey::new(algo, &k[..algo.key_len()]).map(LessSafeKey::new).map_err(|_| ())
+        agree_ephemeral(privk, pubk, |k| {
+            UnboundKey::new(algo, &k[..algo.key_len()]).map(LessSafeKey::new).unwrap()
         })
         .unwrap()
     }

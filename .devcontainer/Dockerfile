@@ -11,8 +11,8 @@ RUN chown vscode: -R /usr/local/rustup /usr/local/cargo
 
 USER vscode
 
-RUN rustup default 1.70.0 \
-    && rustup component add clippy rust-src rustfmt
+RUN rustup default 1.73.0 \
+ && rustup component add clippy rust-src rustfmt
 
 RUN cargo install cargo-outdated cargo-cache cargo-criterion \
     && cargo cache -a

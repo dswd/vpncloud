@@ -26,7 +26,7 @@ pub fn mapped_addr(addr: SocketAddr) -> SocketAddr {
 }
 
 pub fn get_ip() -> IpAddr {
-    let s = std::net::UdpSocket::bind("[::]:0").unwrap();
+    let s = UdpSocket::bind("[::]:0").unwrap();
     s.connect("8.8.8.8:0").unwrap();
     s.local_addr().unwrap().ip()
 }
