@@ -82,25 +82,25 @@ impl TrafficStats {
     #[inline]
     pub fn count_out_traffic(&mut self, peer: SocketAddr, bytes: usize) {
         // HOT PATH
-        self.peers.entry(peer).or_insert_with(TrafficEntry::default).count_out(bytes);
+        self.peers.entry(peer).or_default().count_out(bytes);
     }
 
     #[inline]
     pub fn count_in_traffic(&mut self, peer: SocketAddr, bytes: usize) {
         // HOT PATH
-        self.peers.entry(peer).or_insert_with(TrafficEntry::default).count_in(bytes);
+        self.peers.entry(peer).or_default().count_in(bytes);
     }
 
     #[inline]
     pub fn count_out_payload(&mut self, remote: Address, local: Address, bytes: usize) {
         // HOT PATH
-        self.payload.entry((remote, local)).or_insert_with(TrafficEntry::default).count_out(bytes);
+        self.payload.entry((remote, local)).or_default().count_out(bytes);
     }
 
     #[inline]
     pub fn count_in_payload(&mut self, remote: Address, local: Address, bytes: usize) {
         // HOT PATH
-        self.payload.entry((remote, local)).or_insert_with(TrafficEntry::default).count_in(bytes);
+        self.payload.entry((remote, local)).or_default().count_in(bytes);
     }
 
     pub fn count_invalid_protocol(&mut self, bytes: usize) {

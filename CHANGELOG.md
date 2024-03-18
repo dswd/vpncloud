@@ -4,7 +4,7 @@ This project follows [semantic versioning](http://semver.org).
 
 ### UNRELEASED
 
-- [changed] Changed Rust version to 1.73.0
+- [changed] Changed Rust version to 1.75.0
 - [changed] Updated dependencies
 - [fixed] Fix error when IPv6 is not available
 

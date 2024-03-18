@@ -18,7 +18,6 @@ pub use crate::{
     device::{MockDevice, Type},
     net::MockSocket,
     payload::{Frame, Packet, Protocol},
-    types::Range,
     util::{MockTimeSource, Time, TimeSource},
 };
 

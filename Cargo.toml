@@ -12,7 +12,7 @@ readme = "README.md"
 edition = "2018"
 
 [package.metadata]
-toolchain = "1.73.0"
+toolchain = "1.75.0"
 upx_version = "3.96"
 
 [dependencies]
@@ -27,14 +27,13 @@ rand = "0.8"
 fnv = "1"
 yaml-rust = "0.4"
 daemonize = "0.5"
-#ring = "0.17"
-ring = { git = "https://github.com/briansmith/ring", rev = "2afc921" } # https://github.com/briansmith/ring/issues/1707
+ring = "0.17"
 privdrop = "0.5"
 byteorder = "1.4"
 thiserror = "1.0"
 smallvec = "1.7"
 dialoguer = { version = "0.11", optional = true }
-tungstenite = { version = "0.20", optional = true }
+tungstenite = { version = "0.21", optional = true }
 url = { version = "2.2", optional = true }
 igd = { version = "0.12", optional = true }
 
