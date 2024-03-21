@@ -159,6 +159,18 @@ $MASK build-armel-packages
 $MASK build-armel-static
 ```
 
+## sign
+
+> Sign the packages.
+
+```sh
+set -e
+VERSION=$(grep -e '^version =' Cargo.toml | sed -e 's/version = "\(.*\)"/\1/')
+cd dist
+sha256sum vpncloud_${VERSION}_static_* vpncloud_${VERSION}*.rpm vpncloud_${VERSION}*.deb  > vpncloud_${VERSION}_SHA256SUMS.txt
+gpg --armor --output vpncloud_${VERSION}_SHA256SUMS.txt.asc --detach-sig vpncloud_${VERSION}_SHA256SUMS.txt
+```
+
 ## test
 
 > Test the project.
@@ -180,6 +192,7 @@ VERSION=$(grep -e '^version =' Cargo.toml | sed -e 's/version = "\(.*\)"/\1/')
 nano CHANGELOG.md
 nano assets/changelog.txt
 $MASK build
+$MASK sign
 git commit -a
 cargo publish
 git tag v$VERSION
